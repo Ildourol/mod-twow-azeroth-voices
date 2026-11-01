@@ -103,26 +103,138 @@ namespace AzerothVoices
 
     void DeliveryTimeline::Clear()
     {
-        m_nextEligible.clear();
+        m_lanes.clear();
     }
 
     size_t DeliveryTimeline::Size() const
     {
-        return m_nextEligible.size();
+        return m_lanes.size();
     }
 
-    bool DeliveryTimeline::CanDeliver(std::string const& key, TimePoint now) const
+    bool DeliveryTimeline::CanDeliver(std::string const& key, TimePoint now, ExchangeId const& requester) const
     {
         if (key.empty())
             return true;
-        auto found = m_nextEligible.find(key);
-        return found == m_nextEligible.end() || found->second <= now;
+        auto found = m_lanes.find(key);
+        if (found == m_lanes.end())
+            return true;
+
+        LaneState const& lane = found->second;
+        if (lane.hasActiveOwner)
+        {
+            if (requester.IsValid() && lane.activeOwner == requester)
+                return true;
+            return false;
+        }
+
+        return now >= lane.quietDeadline;
+    }
+
+    DeliveryTimeline::TimePoint DeliveryTimeline::NextEligible(std::string const& key, TimePoint now, ExchangeId const& requester) const
+    {
+        if (key.empty())
+            return now;
+        auto found = m_lanes.find(key);
+        if (found == m_lanes.end())
+            return now;
+
+        LaneState const& lane = found->second;
+        if (lane.hasActiveOwner)
+        {
+            if (requester.IsValid() && lane.activeOwner == requester)
+                return now;
+            return std::max(now, lane.quietDeadline);
+        }
+
+        return std::max(now, lane.quietDeadline);
     }
 
     DeliveryTimeline::TimePoint DeliveryTimeline::NextEligible(std::string const& key) const
     {
-        auto found = m_nextEligible.find(key);
-        return found == m_nextEligible.end() ? TimePoint() : found->second;
+        if (key.empty())
+            return TimePoint{};
+        auto found = m_lanes.find(key);
+        if (found == m_lanes.end())
+            return TimePoint{};
+        return found->second.quietDeadline;
+    }
+
+    bool DeliveryTimeline::Acquire(std::string const& key, ExchangeId const& owner, TimePoint now,
+                                   uint32_t minimumGapMilliseconds)
+    {
+        if (key.empty())
+            return true;
+
+        if (!CanDeliver(key, now, owner))
+            return false;
+
+        LaneState& lane = m_lanes[key];
+        lane.activeOwner = owner;
+        lane.hasActiveOwner = true;
+        lane.anyLineDelivered = false;
+        lane.lastDelivered = now;
+        lane.minimumGapMilliseconds = minimumGapMilliseconds;
+        lane.quietDeadline = now + std::chrono::milliseconds(minimumGapMilliseconds);
+        return true;
+    }
+
+    void DeliveryTimeline::OnLineDelivered(std::string const& key, ExchangeId const& owner, TimePoint now)
+    {
+        if (!owner.IsValid())
+            return;
+        if (!key.empty())
+        {
+            auto found = m_lanes.find(key);
+            if (found != m_lanes.end() && found->second.hasActiveOwner && found->second.activeOwner == owner)
+            {
+                found->second.anyLineDelivered = true;
+                found->second.lastDelivered = now;
+                found->second.quietDeadline = now + std::chrono::milliseconds(found->second.minimumGapMilliseconds);
+            }
+            return;
+        }
+        for (auto& pair : m_lanes)
+        {
+            if (pair.second.hasActiveOwner && pair.second.activeOwner == owner)
+            {
+                pair.second.anyLineDelivered = true;
+                pair.second.lastDelivered = now;
+                pair.second.quietDeadline = now + std::chrono::milliseconds(pair.second.minimumGapMilliseconds);
+            }
+        }
+    }
+
+    void DeliveryTimeline::Release(std::string const& key, ExchangeId const& owner, TimePoint now,
+                                   bool lineDelivered)
+    {
+        if (!owner.IsValid())
+            return;
+        auto handleLane = [&](LaneState& lane) {
+            if (lane.hasActiveOwner && lane.activeOwner == owner)
+            {
+                if (lineDelivered || lane.anyLineDelivered)
+                {
+                    lane.quietDeadline = std::max(lane.quietDeadline,
+                        now + std::chrono::milliseconds(lane.minimumGapMilliseconds));
+                }
+                else
+                {
+                    lane.quietDeadline = lane.lastDelivered <= now ? lane.lastDelivered : now;
+                }
+                lane.hasActiveOwner = false;
+                lane.activeOwner = ExchangeId{};
+            }
+        };
+
+        if (!key.empty())
+        {
+            auto found = m_lanes.find(key);
+            if (found != m_lanes.end())
+                handleLane(found->second);
+            return;
+        }
+        for (auto& pair : m_lanes)
+            handleLane(pair.second);
     }
 
     void DeliveryTimeline::Reserve(std::string const& key, TimePoint now,
@@ -132,26 +244,34 @@ namespace AzerothVoices
             return;
         TimePoint candidate = now + std::chrono::milliseconds(
             static_cast<int64_t>(durationMilliseconds) + static_cast<int64_t>(minimumGapMilliseconds));
-        auto found = m_nextEligible.find(key);
-        if (found == m_nextEligible.end() || found->second < candidate)
-            m_nextEligible[key] = candidate;
+        LaneState& lane = m_lanes[key];
+        if (lane.quietDeadline < candidate)
+            lane.quietDeadline = candidate;
+        lane.minimumGapMilliseconds = minimumGapMilliseconds;
     }
 
     void DeliveryTimeline::Prune(TimePoint now)
     {
-        for (auto it = m_nextEligible.begin(); it != m_nextEligible.end(); )
-            it = it->second <= now ? m_nextEligible.erase(it) : std::next(it);
+        for (auto it = m_lanes.begin(); it != m_lanes.end(); )
+        {
+            if (!it->second.hasActiveOwner && it->second.quietDeadline <= now)
+                it = m_lanes.erase(it);
+            else
+                ++it;
+        }
     }
 
     std::string DeliveryTimeline::Describe(TimePoint now) const
     {
         std::ostringstream text;
-        for (auto const& entry : m_nextEligible)
+        for (auto const& entry : m_lanes)
         {
             if (text.tellp() > 0)
                 text << ',';
-            uint64_t const remaining = MillisecondsBetween(entry.second, now);
+            uint64_t const remaining = MillisecondsBetween(entry.second.quietDeadline, now);
             text << entry.first << '=' << (remaining / 1000);
+            if (entry.second.hasActiveOwner)
+                text << "(active)";
         }
         return text.str();
     }

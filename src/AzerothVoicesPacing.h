@@ -38,21 +38,37 @@ namespace AzerothVoices
     public:
         using TimePoint = std::chrono::steady_clock::time_point;
 
+        struct LaneState
+        {
+            ExchangeId activeOwner{};
+            bool hasActiveOwner = false;
+            bool anyLineDelivered = false;
+            TimePoint quietDeadline{};
+            TimePoint lastDelivered{};
+            uint32_t minimumGapMilliseconds = 0;
+        };
+
         void Clear();
         size_t Size() const;
 
-        bool CanDeliver(std::string const& key, TimePoint now) const;
+        bool CanDeliver(std::string const& key, TimePoint now, ExchangeId const& requester = {}) const;
+        TimePoint NextEligible(std::string const& key, TimePoint now, ExchangeId const& requester = {}) const;
         TimePoint NextEligible(std::string const& key) const;
+
+        bool Acquire(std::string const& key, ExchangeId const& owner, TimePoint now,
+                     uint32_t minimumGapMilliseconds);
+        void OnLineDelivered(std::string const& key, ExchangeId const& owner, TimePoint now);
+        void Release(std::string const& key, ExchangeId const& owner, TimePoint now,
+                     bool lineDelivered = false);
 
         void Reserve(std::string const& key, TimePoint now, uint32_t durationMilliseconds,
                      uint32_t minimumGapMilliseconds);
         void Prune(TimePoint now);
 
-        // Deterministic, secret-free summary used by tests and status output,
-        // for example "world:world|zone:12=4,channel:general=0".
+        // Deterministic, secret-free summary used by tests and status output.
         std::string Describe(TimePoint now) const;
 
     private:
-        std::map<std::string, TimePoint> m_nextEligible;
+        std::map<std::string, LaneState> m_lanes;
     };
 }

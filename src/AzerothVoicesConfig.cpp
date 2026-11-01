@@ -596,14 +596,10 @@ namespace AzerothVoices
         c.proximityPacingEnabled = sConfig.GetBoolDefault("AzerothVoices.Proximity.Pacing.Enable", true);
         c.proximityPlayerDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.Proximity.PlayerDistance", 10.0f));
         c.proximityInterNpcDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.Proximity.InterNpcDistance", 10.0f));
-        c.proximityReplyDelayMinSeconds = Bounded("AzerothVoices.Proximity.Pacing.ReplyDelayMinSeconds",
-            Bounded("AzerothVoices.Proximity.ReplyDelayMinSeconds", 4, 1, 120), 1, 120);
-        c.proximityReplyDelayMaxSeconds = Bounded("AzerothVoices.Proximity.Pacing.ReplyDelayMaxSeconds",
-            Bounded("AzerothVoices.Proximity.ReplyDelayMaxSeconds", 9, c.proximityReplyDelayMinSeconds, 120), c.proximityReplyDelayMinSeconds, 120);
-        c.proximityMinimumGapSeconds = Bounded("AzerothVoices.Proximity.Pacing.MinimumGapSeconds",
-            Bounded("AzerothVoices.Proximity.MinimumGapSeconds", 45, 0, 86400), 0, 86400);
-        c.proximityPauseDuringPlayerChatSeconds = Bounded("AzerothVoices.Proximity.Pacing.PauseDuringPlayerChatSeconds",
-            Bounded("AzerothVoices.Proximity.PauseDuringPlayerChatSeconds", 45, 0, 3600), 0, 3600);
+        c.proximityReplyDelayMinSeconds = Bounded("AzerothVoices.Proximity.Pacing.ReplyDelayMinSeconds", 4, 1, 120);
+        c.proximityReplyDelayMaxSeconds = Bounded("AzerothVoices.Proximity.Pacing.ReplyDelayMaxSeconds", 9, c.proximityReplyDelayMinSeconds, 120);
+        c.proximityMinimumGapSeconds = Bounded("AzerothVoices.Proximity.Pacing.MinimumGapSeconds", 45, 0, 86400);
+        c.proximityPauseDuringPlayerChatSeconds = Bounded("AzerothVoices.Proximity.Pacing.PauseDuringPlayerChatSeconds", 45, 0, 3600);
         c.proximityOutdoorScanSeconds = Positive("AzerothVoices.Proximity.ScanSecondsOutdoor",
             Positive("AzerothVoices.Proximity.OutdoorScanSeconds", 30, 5), 5);
         c.proximityInstanceScanSeconds = Positive("AzerothVoices.Proximity.ScanSecondsInstance",
@@ -646,16 +642,11 @@ namespace AzerothVoices
 
         c.groupChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.GroupChatter.Enable", true);
         c.groupPacingEnabled = sConfig.GetBoolDefault("AzerothVoices.GroupChatter.Pacing.Enable", true);
-        c.groupChatMinimumGapSeconds = Bounded("AzerothVoices.GroupChatter.Pacing.MinimumGapSeconds",
-            Bounded("AzerothVoices.GroupChatter.MinimumGapSeconds", 30, 0, 86400), 0, 86400);
-        c.groupReplyDelayMinSeconds = Bounded("AzerothVoices.GroupChatter.Pacing.ReplyDelayMinSeconds",
-            Bounded("AzerothVoices.GroupChatter.ReplyDelayMinSeconds", 4, 1, 120), 1, 120);
-        c.groupReplyDelayMaxSeconds = Bounded("AzerothVoices.GroupChatter.Pacing.ReplyDelayMaxSeconds",
-            Bounded("AzerothVoices.GroupChatter.ReplyDelayMaxSeconds", 8, c.groupReplyDelayMinSeconds, 120), c.groupReplyDelayMinSeconds, 120);
-        c.groupBotSpeakerCooldownSeconds = Bounded("AzerothVoices.GroupChatter.Pacing.BotSpeakerCooldownSeconds",
-            Bounded("AzerothVoices.GroupChatter.BotSpeakerCooldownSeconds", 60, 0, 86400), 0, 86400);
-        c.groupPauseDuringPlayerChatSeconds = Bounded("AzerothVoices.GroupChatter.Pacing.PauseDuringPlayerChatSeconds",
-            Bounded("AzerothVoices.GroupChatter.PauseDuringPlayerChatSeconds", 30, 0, 3600), 0, 3600);
+        c.groupChatMinimumGapSeconds = Bounded("AzerothVoices.GroupChatter.Pacing.MinimumGapSeconds", 30, 0, 86400);
+        c.groupReplyDelayMinSeconds = Bounded("AzerothVoices.GroupChatter.Pacing.ReplyDelayMinSeconds", 4, 1, 120);
+        c.groupReplyDelayMaxSeconds = Bounded("AzerothVoices.GroupChatter.Pacing.ReplyDelayMaxSeconds", 8, c.groupReplyDelayMinSeconds, 120);
+        c.groupBotSpeakerCooldownSeconds = Bounded("AzerothVoices.GroupChatter.Pacing.BotSpeakerCooldownSeconds", 60, 0, 86400);
+        c.groupPauseDuringPlayerChatSeconds = Bounded("AzerothVoices.GroupChatter.Pacing.PauseDuringPlayerChatSeconds", 30, 0, 3600);
         c.raidChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.RaidChatter.Enable", true);
         c.groupChatterScanSeconds = Positive("AzerothVoices.GroupChatter.ScanSeconds", 180, 5);
         c.groupCategoryWeights = ParseCategoryWeights(sConfig.GetStringDefault(
@@ -733,16 +724,11 @@ namespace AzerothVoices
 
         c.guildChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.GuildChatter.Enable", true);
         c.guildPacingEnabled = sConfig.GetBoolDefault("AzerothVoices.GuildChatter.Pacing.Enable", true);
-        c.guildChatMinimumGapSeconds = Bounded("AzerothVoices.GuildChatter.Pacing.MinimumGapSeconds",
-            Bounded("AzerothVoices.GuildChatter.MinimumGapSeconds", 60, 0, 86400), 0, 86400);
-        c.guildReplyDelayMinSeconds = Bounded("AzerothVoices.GuildChatter.Pacing.ReplyDelayMinSeconds",
-            Bounded("AzerothVoices.GuildChatter.ReplyDelayMinSeconds", 4, 1, 120), 1, 120);
-        c.guildReplyDelayMaxSeconds = Bounded("AzerothVoices.GuildChatter.Pacing.ReplyDelayMaxSeconds",
-            Bounded("AzerothVoices.GuildChatter.ReplyDelayMaxSeconds", 10, c.guildReplyDelayMinSeconds, 120), c.guildReplyDelayMinSeconds, 120);
-        c.guildBotSpeakerCooldownSeconds = Bounded("AzerothVoices.GuildChatter.Pacing.BotSpeakerCooldownSeconds",
-            Bounded("AzerothVoices.GuildChatter.BotSpeakerCooldownSeconds", 90, 0, 86400), 0, 86400);
-        c.guildPauseDuringPlayerChatSeconds = Bounded("AzerothVoices.GuildChatter.Pacing.PauseDuringPlayerChatSeconds",
-            Bounded("AzerothVoices.GuildChatter.PauseDuringPlayerChatSeconds", 60, 0, 3600), 0, 3600);
+        c.guildChatMinimumGapSeconds = Bounded("AzerothVoices.GuildChatter.Pacing.MinimumGapSeconds", 60, 0, 86400);
+        c.guildReplyDelayMinSeconds = Bounded("AzerothVoices.GuildChatter.Pacing.ReplyDelayMinSeconds", 4, 1, 120);
+        c.guildReplyDelayMaxSeconds = Bounded("AzerothVoices.GuildChatter.Pacing.ReplyDelayMaxSeconds", 10, c.guildReplyDelayMinSeconds, 120);
+        c.guildBotSpeakerCooldownSeconds = Bounded("AzerothVoices.GuildChatter.Pacing.BotSpeakerCooldownSeconds", 90, 0, 86400);
+        c.guildPauseDuringPlayerChatSeconds = Bounded("AzerothVoices.GuildChatter.Pacing.PauseDuringPlayerChatSeconds", 60, 0, 3600);
         c.guildChatterScanSeconds = Positive("AzerothVoices.GuildChatter.ScanSeconds", 60, 5);
         c.guildAmbientChance = Percent("AzerothVoices.GuildChatter.AmbientChance", 5);
         c.guildAmbientCooldownSeconds = Positive("AzerothVoices.GuildChatter.AmbientCooldownSeconds", 900);

@@ -137,7 +137,8 @@ namespace AzerothVoices
         PartyGatePolicy policy,
         std::chrono::steady_clock::time_point requestedTime,
         std::chrono::steady_clock::time_point now,
-        uint32_t maxFillerDelaySeconds)
+        uint32_t maxFillerDelaySeconds,
+        ExchangeId const& owner)
     {
         if (policy == PartyGatePolicy::Bypass || partyKey.empty())
             return requestedTime;
@@ -148,7 +149,7 @@ namespace AzerothVoices
             return requestedTime;
         }
 
-        auto nextEligible = timeline.NextEligible(partyKey);
+        auto nextEligible = timeline.NextEligible(partyKey, now, owner);
         auto scheduled = std::max(requestedTime, nextEligible);
 
         if (policy == PartyGatePolicy::Filler)

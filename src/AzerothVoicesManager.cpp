@@ -1232,6 +1232,7 @@ namespace AzerothVoices
         InitializeDatabaseStorage();
         LoadRag();
         LoadInstanceLore();
+        ++m_epoch;
         m_stopping = false;
         m_started = true;
         m_lastErrorLog = Clock::time_point();
@@ -1352,6 +1353,7 @@ namespace AzerothVoices
         m_nextGeneralConversationId = 1;
         m_generalLastPlayerChat.clear();
         m_generalPacing.Clear();
+        m_partyPacing.Clear();
         m_guildPacing.Clear();
         m_proximityPacing.Clear();
         m_guildSpeakerTracker.Clear();
@@ -1478,17 +1480,14 @@ namespace AzerothVoices
         m_generalSpeakerTracker.Prune(nowSec, m_config->generalBotSpeakerCooldownSeconds);
 
         auto const now = Clock::now();
-        for (auto it = m_generalConversations.begin(); it != m_generalConversations.end(); )
+        std::vector<ExchangeId> expiredGeneral;
+        for (auto const& pair : m_generalConversations)
         {
-            if (now > it->second.expires)
-            {
-                for (uint64_t guid : it->second.speakers)
-                    m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
-                it = m_generalConversations.erase(it);
-            }
-            else
-                ++it;
+            if (now > pair.second.expires)
+                expiredGeneral.push_back(pair.second.exchangeId);
         }
+        for (auto const& exId : expiredGeneral)
+            TerminateExchange(exId, "expired");
     }
 
     bool Manager::PopRequest(ChatRequest& request)
@@ -1878,6 +1877,7 @@ namespace AzerothVoices
         {
             request.generalConversation = true;
             request.generalConversationId = conversationId;
+            request.exchangeId = ExchangeId{ m_epoch, 0, conversationId };
         }
         request.generalInitialDelaySeconds = initialDelaySeconds;
         if (!continuityPrompt.empty())
@@ -2058,6 +2058,7 @@ namespace AzerothVoices
             request.proximityConversation = scene->conversation;
             request.sceneId = scene->id;
             request.sceneLineIndex = scene->deliveredLines;
+            request.exchangeId = scene->exchangeId.IsValid() ? scene->exchangeId : ExchangeId{ m_epoch, 3, scene->id };
             if (actor.kind == ActorKind::Creature && actor.instance)
                 request.bossLoreContext = BuildInstanceLoreContext(actor.mapId, actor.map,
                     actor.area, m_instanceLore);
@@ -2080,6 +2081,7 @@ namespace AzerothVoices
             request.groupConversation = groupScene->conversation;
             request.groupConversationId = groupScene->id;
             request.groupId = groupScene->groupId;
+            request.exchangeId = groupScene->exchangeId.IsValid() ? groupScene->exchangeId : ExchangeId{ m_epoch, groupScene->guild ? 2u : 1u, groupScene->id };
         }
         else if (request.groupChatter || scope == ChatScope::Party || scope == ChatScope::Raid)
         {
@@ -3602,6 +3604,12 @@ namespace AzerothVoices
                 scene.theme = theme;
                 scene.effectiveZone = effectiveZone;
                 scene.expires = now + std::chrono::minutes(5);
+                scene.exchangeId = ExchangeId{ m_epoch, 0, scene.id };
+
+                std::string const pacingKey = NormalizePacingKey(scope, channel, 0, 0, zoneId, false);
+                if (m_config->generalChatPacingEnabled &&
+                    !m_generalPacing.Acquire(pacingKey, scene.exchangeId, now, m_config->generalChatMinimumGapSeconds * 1000))
+                    continue;
 
                 for (size_t i = 0; i < participantCount; ++i)
                     scene.speakers.push_back(eligibleBots[i]->GetObjectGuid().GetRawValue());
@@ -3612,7 +3620,7 @@ namespace AzerothVoices
                 if (!QueueGeneralDialogue(SnapshotBot(opener), audienceSnapshot, channel,
                         "ambient", topic, scene.id, 0, 0, ""))
                 {
-                    m_generalConversations.erase(scene.id);
+                    TerminateExchange(scene.exchangeId, "admission_failed");
                 }
             }
 
@@ -4617,28 +4625,38 @@ namespace AzerothVoices
             }
             if (!current || now > completion.request.expires)
             {
-                if (completion.request.barrensScene)
-                    HandleBarrensTerminalDrop(completion.request, "superseded_or_expired");
-                if (completion.request.generalConversation)
-                    OnGeneralDeliveryFailed(completion.request);
-                if (completion.request.groupConversation)
-                    OnGroupDeliveryFailed(completion.request);
-                if (completion.request.proximityScene)
-                    OnProximityDeliveryFailed(completion.request);
+                if (completion.request.exchangeId.IsValid())
+                    TerminateExchange(completion.request.exchangeId, "superseded_or_expired");
+                else
+                {
+                    if (completion.request.barrensScene)
+                        HandleBarrensTerminalDrop(completion.request, "superseded_or_expired");
+                    if (completion.request.generalConversation)
+                        OnGeneralDeliveryFailed(completion.request);
+                    if (completion.request.groupConversation)
+                        OnGroupDeliveryFailed(completion.request);
+                    if (completion.request.proximityScene)
+                        OnProximityDeliveryFailed(completion.request);
+                }
                 ++m_dropped;
                 continue;
             }
 
             if (!completion.success)
             {
-                if (completion.request.barrensScene)
-                    HandleBarrensTerminalDrop(completion.request, "provider_error");
-                if (completion.request.generalConversation)
-                    OnGeneralDeliveryFailed(completion.request);
-                if (completion.request.groupConversation)
-                    OnGroupDeliveryFailed(completion.request);
-                if (completion.request.proximityScene)
-                    OnProximityDeliveryFailed(completion.request);
+                if (completion.request.exchangeId.IsValid())
+                    TerminateExchange(completion.request.exchangeId, "provider_error");
+                else
+                {
+                    if (completion.request.barrensScene)
+                        HandleBarrensTerminalDrop(completion.request, "provider_error");
+                    if (completion.request.generalConversation)
+                        OnGeneralDeliveryFailed(completion.request);
+                    if (completion.request.groupConversation)
+                        OnGroupDeliveryFailed(completion.request);
+                    if (completion.request.proximityScene)
+                        OnProximityDeliveryFailed(completion.request);
+                }
                 ++m_failed;
                 if (m_config->debug || m_lastErrorLog == Clock::time_point() ||
                     now - m_lastErrorLog >= std::chrono::seconds(30))
@@ -4791,7 +4809,8 @@ namespace AzerothVoices
                     size_t const firstIndex = m_scheduled.size() - linesAdded;
                     auto const requestedTime = m_scheduled[firstIndex].due;
                     auto const scheduledTime = CalculatePartyScheduledTime(
-                        m_partyPacing, partyKey, policy, requestedTime, now, m_config->partyGateMaxFillerDelaySeconds);
+                        m_partyPacing, partyKey, policy, requestedTime, now, m_config->partyGateMaxFillerDelaySeconds,
+                        completion.request.exchangeId);
                     auto const shift = scheduledTime - requestedTime;
                     if (shift != std::chrono::milliseconds(0))
                     {
@@ -5054,15 +5073,19 @@ namespace AzerothVoices
             }
             if (!delivered)
             {
-                if (it->request.barrensScene)
-                    OnBarrensDeliveryFailed(it->request);
-                if (it->request.generalConversation)
-                    OnGeneralDeliveryFailed(it->request);
-                if (it->request.groupConversation)
-                    OnGroupDeliveryFailed(it->request);
-                if (it->request.proximityScene)
-                    OnProximityDeliveryFailed(it->request);
-
+                if (it->request.exchangeId.IsValid())
+                    TerminateExchange(it->request.exchangeId, "delivery_failed");
+                else
+                {
+                    if (it->request.barrensScene)
+                        OnBarrensDeliveryFailed(it->request);
+                    if (it->request.generalConversation)
+                        OnGeneralDeliveryFailed(it->request);
+                    if (it->request.groupConversation)
+                        OnGroupDeliveryFailed(it->request);
+                    if (it->request.proximityScene)
+                        OnProximityDeliveryFailed(it->request);
+                }
             }
             if (!delivered && m_config->debug)
                 sLog.outDebug("[AzerothVoices] Reply discarded because actor %s is unavailable.",
@@ -7361,6 +7384,13 @@ namespace AzerothVoices
             for (uint32_t i = 0; i < participants; ++i)
                 scene.speakers.push_back(eligibleBots[i]->GetObjectGuid().GetRawValue());
 
+            std::string const partyKey = PartyPacingKey(groupId, -1);
+            ExchangeId const exchangeId{ m_epoch, 1, scene.id };
+            scene.exchangeId = exchangeId;
+            if (m_config->groupPacingEnabled &&
+                !m_partyPacing.Acquire(partyKey, exchangeId, now, m_config->groupChatMinimumGapSeconds * 1000))
+                return false;
+
             m_groupConversations[std::to_string(scene.id)] = scene;
         }
 
@@ -7373,7 +7403,7 @@ namespace AzerothVoices
                 RequestPriority::Group, false, false, 0, nullptr, nullptr, false, scenePtr))
         {
             if (scenePtr)
-                m_groupConversations.erase(std::to_string(scene.id));
+                TerminateExchange(scene.exchangeId, "admission_failed");
             return false;
         }
         NoteGroupTrigger(groupId, trigger, 0);
@@ -7405,6 +7435,17 @@ namespace AzerothVoices
         auto const now = Clock::now();
         uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
 
+        if (scene.guild)
+        {
+            std::string const guildKey = NormalizeGuildPacingKey(scene.groupId);
+            m_guildPacing.OnLineDelivered(guildKey, scene.exchangeId, now);
+        }
+        else
+        {
+            std::string const partyKey = PartyPacingKey(scene.groupId, -1);
+            m_partyPacing.OnLineDelivered(partyKey, scene.exchangeId, now);
+        }
+
         if (!budget.CanContinue(scene.deliveredLines, scene.replyTurns) || now > scene.expires)
         {
             for (uint64_t guid : scene.speakers)
@@ -7414,7 +7455,7 @@ namespace AzerothVoices
                 else
                     m_groupSpeakerTracker.RecordSpeech(guid, nowSec);
             }
-            m_groupConversations.erase(found);
+            TerminateExchange(scene.exchangeId, "finished");
             return;
         }
 
@@ -7424,7 +7465,7 @@ namespace AzerothVoices
             {
                 for (uint64_t guid : scene.speakers)
                     m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
-                m_groupConversations.erase(found);
+                TerminateExchange(scene.exchangeId, "no_audience");
                 return;
             }
 
@@ -7456,7 +7497,7 @@ namespace AzerothVoices
             {
                 for (uint64_t guid : scene.speakers)
                     m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
-                m_groupConversations.erase(found);
+                TerminateExchange(scene.exchangeId, "next_speaker_unavailable");
                 return;
             }
 
@@ -7465,7 +7506,7 @@ namespace AzerothVoices
             {
                 for (uint64_t guid : scene.speakers)
                     m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
-                m_groupConversations.erase(found);
+                TerminateExchange(scene.exchangeId, "anchor_unavailable");
                 return;
             }
 
@@ -7500,7 +7541,7 @@ namespace AzerothVoices
             {
                 for (uint64_t guid : scene.speakers)
                     m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
-                m_groupConversations.erase(found);
+                TerminateExchange(scene.exchangeId, "followup_failed");
             }
             return;
         }
@@ -7511,7 +7552,7 @@ namespace AzerothVoices
         {
             for (uint64_t guid : scene.speakers)
                 m_groupSpeakerTracker.RecordSpeech(guid, nowSec);
-            m_groupConversations.erase(found);
+            TerminateExchange(scene.exchangeId, "anchor_unavailable");
             return;
         }
 
@@ -7544,7 +7585,7 @@ namespace AzerothVoices
         {
             for (uint64_t guid : scene.speakers)
                 m_groupSpeakerTracker.RecordSpeech(guid, nowSec);
-            m_groupConversations.erase(found);
+            TerminateExchange(scene.exchangeId, "next_speaker_unavailable");
             return;
         }
 
@@ -7580,7 +7621,7 @@ namespace AzerothVoices
         {
             for (uint64_t guid : scene.speakers)
                 m_groupSpeakerTracker.RecordSpeech(guid, nowSec);
-            m_groupConversations.erase(found);
+            TerminateExchange(scene.exchangeId, "followup_failed");
         }
     }
 
@@ -8394,10 +8435,12 @@ namespace AzerothVoices
                 scene.guild = true;
                 scene.locationName = !area.empty() ? area : (!zone.empty() ? zone : mapName);
                 scene.nextTurn = now;
-                scene.expires = now + std::chrono::seconds(
-                    m_config->groupConversationReplyWindowSeconds +
-                    static_cast<int64_t>(m_config->groupConversationTurnGapSeconds) *
-                        scene.maximumLines);
+
+                // F6: Guild reply budget derived as guildMaximumLines - 1, and expiry calculated using 64-bit bounded arithmetic
+                uint64_t const guildExpirySeconds = static_cast<uint64_t>(scene.maximumLines) * m_config->requestTtlSeconds +
+                    (scene.maximumLines > 1 ? static_cast<uint64_t>(scene.maximumLines - 1) * m_config->guildReplyDelayMaxSeconds : 0);
+                scene.expires = now + std::chrono::seconds(std::min<uint64_t>(guildExpirySeconds, 1800));
+
                 uint32_t const maxParticipants = std::max<uint32_t>(2, m_config->guildMaximumParticipants);
                 uint32_t const participants = std::min<uint32_t>(
                     maxParticipants,
@@ -8407,10 +8450,11 @@ namespace AzerothVoices
                 for (uint32_t i = 0; i < participants; ++i)
                     scene.speakers.push_back(shuffled[i]->GetObjectGuid().GetRawValue());
 
-                uint32_t const avgDelayMs = ((m_config->guildReplyDelayMinSeconds + m_config->guildReplyDelayMaxSeconds) / 2) * 1000;
-                uint32_t const estimatedDurationMs = EstimateExchangeMilliseconds(scene.maximumLines, avgDelayMs, 3000);
-                if (m_config->guildPacingEnabled)
-                    m_guildPacing.Reserve(guildPacingKey, now, estimatedDurationMs, m_config->guildChatMinimumGapSeconds * 1000);
+                ExchangeId const exchangeId{ m_epoch, 2, scene.id };
+                scene.exchangeId = exchangeId;
+                if (m_config->guildPacingEnabled &&
+                    !m_guildPacing.Acquire(guildPacingKey, exchangeId, now, m_config->guildChatMinimumGapSeconds * 1000))
+                    continue;
 
                 m_groupConversations[std::to_string(scene.id)] = scene;
             }
@@ -8425,7 +8469,7 @@ namespace AzerothVoices
                     std::make_pair(speaker->GetObjectGuid().GetRawValue(), now);
             }
             else if (conversation)
-                m_groupConversations.erase(std::to_string(scene.id));
+                TerminateExchange(scene.exchangeId, "admission_failed");
         }
     }
 
@@ -8441,22 +8485,14 @@ namespace AzerothVoices
         }
         for (auto it = m_groupTriggerCooldowns.begin(); it != m_groupTriggerCooldowns.end(); )
             it = it->second <= now ? m_groupTriggerCooldowns.erase(it) : std::next(it);
-        for (auto it = m_groupConversations.begin(); it != m_groupConversations.end(); )
+        std::vector<ExchangeId> expiredGroups;
+        for (auto const& pair : m_groupConversations)
         {
-            if (it->second.expires <= now)
-            {
-                for (uint64_t guid : it->second.speakers)
-                {
-                    if (it->second.guild)
-                        m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
-                    else
-                        m_groupSpeakerTracker.RecordSpeech(guid, nowSec);
-                }
-                it = m_groupConversations.erase(it);
-            }
-            else
-                ++it;
+            if (pair.second.expires <= now)
+                expiredGroups.push_back(pair.second.exchangeId);
         }
+        for (auto const& exId : expiredGroups)
+            TerminateExchange(exId, "expired");
         for (auto it = m_guildGreetingCooldowns.begin(); it != m_guildGreetingCooldowns.end(); )
             it = it->second <= now ? m_guildGreetingCooldowns.erase(it) : std::next(it);
         for (auto it = m_guildReplyDebounce.begin(); it != m_guildReplyDebounce.end(); )
@@ -8916,25 +8952,26 @@ namespace AzerothVoices
             : "the area around them";
 
         std::string const sceneKey = std::to_string(scene.id);
+        ExchangeId const exchangeId{ m_epoch, 3, scene.id };
+        scene.exchangeId = exchangeId;
+
+        if (m_config->proximityPacingEnabled &&
+            !m_proximityPacing.Acquire(proxKey, exchangeId, now, m_config->proximityMinimumGapSeconds * 1000))
+        {
+            return false;
+        }
+
         m_proximityScenes[sceneKey] = scene;
         ProximityScene& stored = m_proximityScenes[sceneKey];
-
-        if (m_config->proximityPacingEnabled)
-        {
-            uint32_t const avgDelayMs = ((m_config->proximityReplyDelayMinSeconds + m_config->proximityReplyDelayMaxSeconds) / 2) * 1000;
-            uint32_t const estimatedDurationMs = EstimateExchangeMilliseconds(scene.maximumLines, avgDelayMs, 3000);
-            m_proximityPacing.Reserve(proxKey, now, estimatedDurationMs, m_config->proximityMinimumGapSeconds * 1000);
-        }
 
         if (!QueueDialogue(actor, SnapshotSpeaker(anchor), ChatScope::Say, "", "proximity",
                 topic, RequestPriority::Ambient, true, false, 0, &stored))
         {
-            m_proximityScenes.erase(sceneKey);
+            TerminateExchange(exchangeId, "admission_failed");
             return false;
         }
 
-        m_proximitySpeakerCooldowns[first->GetObjectGuid().GetRawValue()] = now +
-            std::chrono::seconds(m_config->proximityEntityCooldownSeconds);
+        // F3: Immediate cooldown on 'first' REMOVED! Cooldown is only applied to deliveredSpeakers upon actual delivery.
         if (m_config->debug)
             sLog.outDebug("[AzerothVoices] Proximity scene %llu queued with %u speaker(s) on map %u:%u.",
                 static_cast<unsigned long long>(scene.id),
@@ -8951,14 +8988,17 @@ namespace AzerothVoices
             return;
         ProximityScene& scene = found->second;
         ++scene.deliveredLines;
+        scene.deliveredSpeakers.insert(request.actor.guid);
 
         auto const now = Clock::now();
+        std::string const proxKey = NormalizeProximityPacingKey(
+            scene.mapId, scene.instanceId, scene.zoneId, scene.instance);
+        m_proximityPacing.OnLineDelivered(proxKey, scene.exchangeId, now);
+
         if (!scene.conversation || scene.deliveredLines >= scene.maximumLines ||
             scene.replyTurns >= m_config->proximityMaximumReplyTurns || now > scene.expires)
         {
-            for (uint64_t guid : scene.speakers)
-                m_proximitySpeakerCooldowns[guid] = now + std::chrono::seconds(m_config->proximityEntityCooldownSeconds);
-            m_proximityScenes.erase(found);
+            TerminateExchange(scene.exchangeId, "finished");
             return;
         }
 
@@ -8967,9 +9007,7 @@ namespace AzerothVoices
             anchor->GetMapId() != scene.mapId ||
             CurrentInstanceId(anchor) != scene.instanceId)
         {
-            for (uint64_t guid : scene.speakers)
-                m_proximitySpeakerCooldowns[guid] = now + std::chrono::seconds(m_config->proximityEntityCooldownSeconds);
-            m_proximityScenes.erase(found);
+            TerminateExchange(scene.exchangeId, "anchor_unavailable");
             return;
         }
 
@@ -9011,9 +9049,7 @@ namespace AzerothVoices
 
         if (!next)
         {
-            for (uint64_t guid : scene.speakers)
-                m_proximitySpeakerCooldowns[guid] = now + std::chrono::seconds(m_config->proximityEntityCooldownSeconds);
-            m_proximityScenes.erase(found);
+            TerminateExchange(scene.exchangeId, "next_speaker_unavailable");
             return;
         }
 
@@ -9047,26 +9083,21 @@ namespace AzerothVoices
         }
         else
         {
-            for (uint64_t guid : scene.speakers)
-                m_proximitySpeakerCooldowns[guid] = now + std::chrono::seconds(m_config->proximityEntityCooldownSeconds);
-            m_proximityScenes.erase(found);
+            TerminateExchange(scene.exchangeId, "followup_failed");
         }
     }
 
     void Manager::PruneProximityScenes()
     {
         auto const now = Clock::now();
-        for (auto it = m_proximityScenes.begin(); it != m_proximityScenes.end(); )
+        std::vector<ExchangeId> expiredScenes;
+        for (auto const& pair : m_proximityScenes)
         {
-            if (it->second.expires <= now)
-            {
-                for (uint64_t guid : it->second.speakers)
-                    m_proximitySpeakerCooldowns[guid] = now + std::chrono::seconds(m_config->proximityEntityCooldownSeconds);
-                it = m_proximityScenes.erase(it);
-            }
-            else
-                ++it;
+            if (pair.second.expires <= now)
+                expiredScenes.push_back(pair.second.exchangeId);
         }
+        for (auto const& exId : expiredScenes)
+            TerminateExchange(exId, "expired");
         for (auto it = m_proximitySpeakerCooldowns.begin(); it != m_proximitySpeakerCooldowns.end(); )
             it = it->second <= now ? m_proximitySpeakerCooldowns.erase(it) : std::next(it);
         for (auto it = m_activeSayConversations.begin(); it != m_activeSayConversations.end(); )
@@ -10098,18 +10129,15 @@ namespace AzerothVoices
         uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
             now.time_since_epoch()).count());
 
+        std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
+        m_generalPacing.OnLineDelivered(pacingKey, scene.exchangeId, now);
+
         if (scene.deliveredLines >= scene.maximumLines || now > scene.expires)
         {
             for (uint64_t guid : scene.speakers)
                 m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
 
-            if (m_config->generalChatPacingEnabled)
-            {
-                std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
-                m_generalPacing.Reserve(pacingKey, now, 0, m_config->generalChatMinimumGapSeconds * 1000);
-            }
-
-            m_generalConversations.erase(it);
+            TerminateExchange(scene.exchangeId, "finished");
             return;
         }
 
@@ -10119,12 +10147,7 @@ namespace AzerothVoices
         {
             for (uint64_t guid : scene.speakers)
                 m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
-            if (m_config->generalChatPacingEnabled)
-            {
-                std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
-                m_generalPacing.Reserve(pacingKey, now, 0, m_config->generalChatMinimumGapSeconds * 1000);
-            }
-            m_generalConversations.erase(it);
+            TerminateExchange(scene.exchangeId, "too_few_speakers");
             return;
         }
 
@@ -10134,12 +10157,7 @@ namespace AzerothVoices
         {
             for (uint64_t guid : scene.speakers)
                 m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
-            if (m_config->generalChatPacingEnabled)
-            {
-                std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
-                m_generalPacing.Reserve(pacingKey, now, 0, m_config->generalChatMinimumGapSeconds * 1000);
-            }
-            m_generalConversations.erase(it);
+            TerminateExchange(scene.exchangeId, "speaker_dead_or_offline");
             return;
         }
 
@@ -10169,12 +10187,7 @@ namespace AzerothVoices
         {
             for (uint64_t guid : scene.speakers)
                 m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
-            if (m_config->generalChatPacingEnabled)
-            {
-                std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
-                m_generalPacing.Reserve(pacingKey, now, 0, m_config->generalChatMinimumGapSeconds * 1000);
-            }
-            m_generalConversations.erase(it);
+            TerminateExchange(scene.exchangeId, "dialogue_enqueue_failed");
         }
         else if (m_config->generalChatPacingEnabled)
         {
@@ -10184,8 +10197,114 @@ namespace AzerothVoices
         }
     }
 
+    void Manager::TerminateExchange(ExchangeId const& exchangeId, char const* reason)
+    {
+        if (!exchangeId.IsValid())
+            return;
+
+        auto const now = Clock::now();
+        uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
+
+        if (m_config && m_config->debug)
+        {
+            sLog.outDebug("[AzerothVoices] Terminating exchange d=%u id=%llu reason=%s",
+                exchangeId.domain, static_cast<unsigned long long>(exchangeId.id), reason ? reason : "unspecified");
+        }
+
+        switch (exchangeId.domain)
+        {
+            case 0: // General
+            {
+                auto it = m_generalConversations.find(exchangeId.id);
+                if (it != m_generalConversations.end())
+                {
+                    GeneralConversation const& scene = it->second;
+                    for (uint64_t guid : scene.speakers)
+                        m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
+                    bool const delivered = scene.deliveredLines > 0;
+                    std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
+                    m_generalPacing.Release(pacingKey, exchangeId, now, delivered);
+                    m_generalConversations.erase(it);
+                }
+                else
+                {
+                    m_generalPacing.Release("", exchangeId, now, false);
+                }
+                break;
+            }
+            case 1: // Group / Party
+            {
+                auto it = m_groupConversations.find(std::to_string(exchangeId.id));
+                if (it != m_groupConversations.end())
+                {
+                    GroupConversation const& scene = it->second;
+                    for (uint64_t guid : scene.speakers)
+                        m_groupSpeakerTracker.RecordSpeech(guid, nowSec);
+                    bool const delivered = scene.deliveredLines > 0;
+                    std::string const partyKey = PartyPacingKey(scene.groupId, -1);
+                    m_partyPacing.Release(partyKey, exchangeId, now, delivered);
+                    m_groupConversations.erase(it);
+                }
+                else
+                {
+                    m_partyPacing.Release("", exchangeId, now, false);
+                }
+                break;
+            }
+            case 2: // Guild
+            {
+                auto it = m_groupConversations.find(std::to_string(exchangeId.id));
+                if (it != m_groupConversations.end())
+                {
+                    GroupConversation const& scene = it->second;
+                    for (uint64_t guid : scene.speakers)
+                        m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
+                    bool const delivered = scene.deliveredLines > 0;
+                    std::string const guildKey = NormalizeGuildPacingKey(scene.groupId);
+                    m_guildPacing.Release(guildKey, exchangeId, now, delivered);
+                    m_groupConversations.erase(it);
+                }
+                else
+                {
+                    m_guildPacing.Release("", exchangeId, now, false);
+                }
+                break;
+            }
+            case 3: // Proximity
+            {
+                auto it = m_proximityScenes.find(std::to_string(exchangeId.id));
+                if (it != m_proximityScenes.end())
+                {
+                    ProximityScene const& scene = it->second;
+                    for (uint64_t guid : scene.deliveredSpeakers)
+                    {
+                        m_proximitySpeakerCooldowns[guid] = now +
+                            std::chrono::seconds(m_config->proximityEntityCooldownSeconds);
+                    }
+                    bool const delivered = scene.deliveredLines > 0;
+                    std::string const proxKey = NormalizeProximityPacingKey(
+                        scene.mapId, scene.instanceId, scene.zoneId, scene.instance);
+                    m_proximityPacing.Release(proxKey, exchangeId, now, delivered);
+                    m_proximityScenes.erase(it);
+                }
+                else
+                {
+                    m_proximityPacing.Release("", exchangeId, now, false);
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
     void Manager::OnGeneralDeliveryFailed(ChatRequest const& request)
     {
+        if (request.exchangeId.IsValid())
+        {
+            TerminateExchange(request.exchangeId, "delivery_failed");
+            return;
+        }
         if (!request.generalConversationId)
             return;
         auto it = m_generalConversations.find(request.generalConversationId);
@@ -10206,6 +10325,11 @@ namespace AzerothVoices
 
     void Manager::OnGroupDeliveryFailed(ChatRequest const& request)
     {
+        if (request.exchangeId.IsValid())
+        {
+            TerminateExchange(request.exchangeId, "delivery_failed");
+            return;
+        }
         if (!request.groupConversationId)
             return;
         auto it = m_groupConversations.find(std::to_string(request.groupConversationId));
@@ -10225,6 +10349,11 @@ namespace AzerothVoices
 
     void Manager::OnProximityDeliveryFailed(ChatRequest const& request)
     {
+        if (request.exchangeId.IsValid())
+        {
+            TerminateExchange(request.exchangeId, "delivery_failed");
+            return;
+        }
         if (!request.sceneId)
             return;
         auto it = m_proximityScenes.find(std::to_string(request.sceneId));

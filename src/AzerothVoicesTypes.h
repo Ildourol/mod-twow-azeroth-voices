@@ -13,6 +13,26 @@ namespace AzerothVoices
         Creature
     };
 
+    struct ExchangeId
+    {
+        uint32_t epoch = 0;
+        uint32_t domain = 0; // 0 = General, 1 = Party, 2 = Guild, 3 = Proximity
+        uint64_t id = 0;
+
+        bool operator==(ExchangeId const& other) const
+        {
+            return epoch == other.epoch && domain == other.domain && id == other.id;
+        }
+
+        bool operator!=(ExchangeId const& other) const
+        {
+            return !(*this == other);
+        }
+
+        bool IsValid() const { return id != 0; }
+    };
+
+
     enum class SpeakerKind : uint8_t
     {
         RealPlayer,
@@ -213,6 +233,7 @@ namespace AzerothVoices
         std::string historyKey;
         std::string scopeKey;
         std::string pacingKey;
+        ExchangeId exchangeId;
         // Progressive subsystem ownership: proximity scenes and boss dialogue
         // keep their own state instead of reusing generic ambient follow-ups.
         uint64_t sceneId = 0;

@@ -46,5 +46,6 @@ namespace AzerothVoices
         PartyGatePolicy policy,
         std::chrono::steady_clock::time_point requestedTime,
         std::chrono::steady_clock::time_point now,
-        uint32_t maxFillerDelaySeconds);
+        uint32_t maxFillerDelaySeconds,
+        ExchangeId const& owner = {});
 }

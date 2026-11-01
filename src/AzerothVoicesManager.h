@@ -217,6 +217,8 @@ namespace AzerothVoices
             uint32_t zoneId = 0;
             std::string zoneKey;
             std::vector<uint64_t> speakers;
+            std::set<uint64_t> deliveredSpeakers;
+            ExchangeId exchangeId{};
             uint32_t maximumLines = 4;
             uint32_t deliveredLines = 0;
             uint32_t replyTurns = 0;
@@ -284,6 +286,7 @@ namespace AzerothVoices
             std::string channel;
             uint64_t anchorPlayerGuid = 0;
             std::vector<uint64_t> speakers;
+            ExchangeId exchangeId{};
             uint32_t deliveredLines = 0;
             uint32_t maximumLines = 6;
             GeneralThemeType theme = GeneralThemeType::Game;
@@ -300,6 +303,7 @@ namespace AzerothVoices
             uint32_t instanceId = 0;
             uint64_t anchorPlayerGuid = 0;
             std::vector<uint64_t> speakers;
+            ExchangeId exchangeId{};
             uint32_t deliveredLines = 0;
             uint32_t replyTurns = 0;
             uint32_t maximumLines = 4;
@@ -620,6 +624,8 @@ namespace AzerothVoices
         std::map<GuildSessionKey, GuildSessionHistoryRing> m_guildSessionHistory;
         std::map<uint64_t, PendingGuildGreeting> m_pendingGuildGreetings;
         std::map<uint64_t, std::pair<uint32_t, std::string>> m_lastPlayerMap;
+        uint32_t m_epoch = 1;
+        void TerminateExchange(ExchangeId const& exchangeId, char const* reason);
         DeliveryTimeline m_generalPacing;
         DeliveryTimeline m_partyPacing;
         DeliveryTimeline m_guildPacing;
