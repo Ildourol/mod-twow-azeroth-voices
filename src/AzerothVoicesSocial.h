@@ -11,6 +11,7 @@
 namespace AzerothVoices
 {
     struct Config;
+    struct CategoryWeight;
     // Party/raid/guild chatter decisions, kept free of game headers so they can be
     // unit tested without a worldserver.
     enum class GroupTrigger : uint8_t
@@ -126,23 +127,22 @@ namespace AzerothVoices
                           std::vector<std::string> const& customBlacklist = {});
 
     // Dedicated General/World chatter decisions and tracking
-    enum class GeneralSubjectType : uint8_t
+    enum class GeneralThemeType : uint8_t
     {
-        Plain,
-        NpcGossip,
-        BotGossip,
-        Quest,
-        Loot,
-        Trade,
-        Spell
+        Game,
+        News,
+        Generic
     };
 
-    char const* GeneralSubjectTypeName(GeneralSubjectType type);
+    char const* GeneralThemeTypeName(GeneralThemeType type);
 
-    // Roll order: NPC gossip -> Bot gossip -> Plain
-    GeneralSubjectType SelectGeneralSubjectType(uint32_t npcGossipChance,
-                                               uint32_t botGossipChance,
-                                               uint32_t roll100);
+    GeneralThemeType SelectGeneralTheme(std::string const& mode,
+                                        std::vector<CategoryWeight> const& weights,
+                                        uint32_t roll100);
+
+    std::string BuildGeneralThemeInstruction(GeneralThemeType theme,
+                                             std::string const& zoneName,
+                                             bool isConversation);
 
     // Identifies Vanilla and Turtle WoW capital cities
     bool IsVanillaCapitalCityZone(uint32_t zoneId);

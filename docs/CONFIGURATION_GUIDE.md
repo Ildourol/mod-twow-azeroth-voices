@@ -2751,21 +2751,25 @@ Forget button and `.av memory forget` delete them.
 
 ---
 
-## 15. Automated World/custom-channel pacing
+## 15. Automated World/custom-channel pacing & general chatter
 
 | Setting Name | Type / Range | Default | Summary |
 | :--- | :--- | :--- | :--- |
-| [`AzerothVoices.GeneralChat.Pacing.Enable`](#azerothvoicesgeneralchatpacingenable) | Boolean (`0` or `1`) | `1` | Paces automated World and custom-channel chatter so concurrent exchanges ca... |
-| [`AzerothVoices.GeneralChat.MinimumGapSeconds`](#azerothvoicesgeneralchatminimumgapseconds) | Integer (Seconds, 0-86400; default 15) | `15` | Minimum gap after a reserved multi-line exchange on the same normalized cha... |
-| [`AzerothVoices.General.Enable`](#azerothvoicesgeneralenable) | Boolean (`0` or `1`) | `1` | Dedicated General/World ambient chatter system ported from mod-llm-chatter.... |
-| [`AzerothVoices.General.TriggerIntervalSeconds`](#azerothvoicesgeneraltriggerintervalseconds) | Integer (Seconds, minimum 5; default 30) | `30` | Interval between General chatter trigger evaluation passes across zones wit... |
-| [`AzerothVoices.General.TriggerChance`](#azerothvoicesgeneraltriggerchance) | Integer | `15` | Base percent chance per zone to trigger a chatter event during an evaluatio... |
-| [`AzerothVoices.General.CityMultiplier`](#azerothvoicesgeneralcitymultiplier) | Integer | `2` | Multiplier applied to trigger chance in major capital cities (Stormwind, Ir... |
-| [`AzerothVoices.General.ConversationChance`](#azerothvoicesgeneralconversationchance) | Integer | `40` | Chance that a triggered chatter event becomes a two-bot conversation instea... |
-| [`AzerothVoices.General.NpcGossipChance`](#azerothvoicesgeneralnpcgossipchance) | Integer | `5` | Chance that the chosen topic gossips about a nearby alive NPC in the zone. ... |
-| [`AzerothVoices.General.BotGossipChance`](#azerothvoicesgeneralbotgossipchance) | Integer | `5` | Chance that the chosen topic gossips about another bot in the same zone. (0... |
-| [`AzerothVoices.General.GossipTargetCooldownSeconds`](#azerothvoicesgeneralgossiptargetcooldownseconds) | Integer (Seconds; default 1800) | `1800` | Cooldown before the same NPC or bot can be picked as a gossip subject again... |
-| [`AzerothVoices.General.BotSpeakerCooldownSeconds`](#azerothvoicesgeneralbotspeakercooldownseconds) | Integer (Seconds; default 900) | `900` | Cooldown before the same bot can speak or participate in General channel am... |
+| [`AzerothVoices.GeneralChat.Pacing.Enable`](#azerothvoicesgeneralchatpacingenable) | Boolean (`0` or `1`) | `1` | Paces automated World and custom-channel chatter so concurrent exchanges cannot arrive as one wall of text. |
+| [`AzerothVoices.GeneralChat.MinimumGapSeconds`](#azerothvoicesgeneralchatminimumgapseconds) | Integer (Seconds, 0-86400) | `60` | Minimum seconds of silence required on a channel and zone after an ambient conversation finishes. Must be higher than TriggerIntervalSeconds. |
+| [`AzerothVoices.General.Enable`](#azerothvoicesgeneralenable) | Boolean (`0` or `1`) | `1` | Master toggle for the General/World ambient chatter system. |
+| [`AzerothVoices.General.TriggerIntervalSeconds`](#azerothvoicesgeneraltriggerintervalseconds) | Integer (Seconds, minimum 5) | `30` | Cadence in seconds between evaluation passes across populated zones. Must be lower than MinimumGapSeconds. |
+| [`AzerothVoices.General.TriggerChance`](#azerothvoicesgeneraltriggerchance) | Percentage (`0`-`100`) | `15` | Base percent chance per populated zone to start an ambient event. |
+| [`AzerothVoices.General.CityMultiplier`](#azerothvoicesgeneralcitymultiplier) | Integer (`1`-`10`) | `2` | Multiplier applied to TriggerChance in capital cities. |
+| [`AzerothVoices.General.ConversationChance`](#azerothvoicesgeneralconversationchance) | Percentage (`0`-`100`) | `70` | Percent chance that a triggered event becomes a multi-bot conversation instead of a solo observation. |
+| [`AzerothVoices.General.ConversationMaximumParticipants`](#azerothvoicesgeneralconversationmaximumparticipants) | Integer (`2`-`6`) | `3` | Maximum distinct bots locked into the conversation pool. Turns rotate strictly among these exact bots. |
+| [`AzerothVoices.General.ConversationMaximumLines`](#azerothvoicesgeneralconversationmaximumlines) | Integer (`1`-`10`) | `6` | Total messages/turns exchanged in the conversation across all bots combined. |
+| [`AzerothVoices.General.ReplyDelayMinSeconds`](#azerothvoicesgeneralreplydelayminseconds) | Integer (Seconds, `1`-`120`) | `5` | Minimum delay in seconds before the next bot types and sends its reply. |
+| [`AzerothVoices.General.ReplyDelayMaxSeconds`](#azerothvoicesgeneralreplydelaymaxseconds) | Integer (Seconds, `1`-`120`) | `14` | Maximum delay in seconds before the next bot types and sends its reply. |
+| [`AzerothVoices.General.ThemeMode`](#azerothvoicesgeneralthememode) | String (`auto`, `game`, `news`, `generic`) | `auto` | Theme selection mode: auto sampled from ThemeWeights, or fixed domain. |
+| [`AzerothVoices.General.ThemeWeights`](#azerothvoicesgeneralthemeweights) | Weight String | `game:40,news:30,generic:30` | Distribution weights across In-Game, News/Tech/Real-Life, and Generic banter. |
+| [`AzerothVoices.General.BotSpeakerCooldownSeconds`](#azerothvoicesgeneralbotspeakercooldownseconds) | Integer (Seconds) | `900` | Cooldown before participating bots can speak in ambient chatter again. Stamped only after dialogue completes. |
+| [`AzerothVoices.General.PauseDuringPlayerChatSeconds`](#azerothvoicesgeneralpauseduringplayerchatseconds) | Integer (Seconds, `0`-`300`) | `10` | Seconds to suppress ambient bot chatter after a real human speaks in World chat. |
 
 
 ### <a id="azerothvoicesgeneralchatpacingenable"></a>`AzerothVoices.GeneralChat.Pacing.Enable`
@@ -2777,73 +2781,101 @@ Forget button and `.av memory forget` delete them.
 
 ### <a id="azerothvoicesgeneralchatminimumgapseconds"></a>`AzerothVoices.GeneralChat.MinimumGapSeconds`
 
-- **Data Type**: Integer (Seconds, 0-86400; default 15)
-- **Default Value**: `15`
-- **Description**: Minimum gap after a reserved multi-line exchange on the same normalized channel plus zone or map/instance identity. (Seconds, 0-86400; default 15)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Data Type**: Integer (Seconds, 0-86400; default 60)
+- **Default Value**: `60`
+- **Description**: Minimum seconds of silence required on a channel and zone after an ambient conversation finishes before another can trigger. Must be HIGHER than `TriggerIntervalSeconds` (recommended 1:2 ratio, e.g. 60 vs 30) so the evaluation clock re-checks promptly once silence ends.
+- **Operator Guidance & Impact**: Guarantees breathing room between conversations so bots do not spam channels back-to-back.
 
 ### <a id="azerothvoicesgeneralenable"></a>`AzerothVoices.General.Enable`
 
 - **Data Type**: Boolean (`0` or `1`)
 - **Default Value**: `1`
-- **Description**: Dedicated General/World ambient chatter system ported from mod-llm-chatter. Enables periodic ambient chatter in General/World channels where real players are present. (Default 1)
+- **Description**: Dedicated General/World ambient chatter system. Enables periodic ambient chatter in General/World channels where real players are present. (Default 1)
 - **Operator Guidance & Impact**: Keep enabled (`1`) for standard functionality. Set to `0` to completely bypass this feature and eliminate its processing overhead.
 
 ### <a id="azerothvoicesgeneraltriggerintervalseconds"></a>`AzerothVoices.General.TriggerIntervalSeconds`
 
 - **Data Type**: Integer (Seconds, minimum 5; default 30)
 - **Default Value**: `30`
-- **Description**: Interval between General chatter trigger evaluation passes across zones with players. (Seconds, minimum 5; default 30)
-- **Operator Guidance & Impact**: Controls background evaluation frequency. Shorter intervals increase responsiveness at the cost of more frequent world-thread scans; longer intervals conserve server CPU.
+- **Description**: Interval between General chatter trigger evaluation passes across zones with players. Must be LOWER than `MinimumGapSeconds` (recommended ~half, e.g. 30 vs 60) to evaluate zones responsively and prevent double-wait dead air.
+- **Operator Guidance & Impact**: Determines the evaluation heartbeat of the realm-wide zone scanner.
 
 ### <a id="azerothvoicesgeneraltriggerchance"></a>`AzerothVoices.General.TriggerChance`
 
-- **Data Type**: Integer
+- **Data Type**: Percentage (`0`-`100`)
 - **Default Value**: `15`
 - **Description**: Base percent chance per zone to trigger a chatter event during an evaluation pass. (0-100; default 15)
-- **Operator Guidance & Impact**: Adjust this probability up for chattier, more responsive bots, or down to conserve LLM API tokens on high-population servers.
+- **Operator Guidance & Impact**: Adjust this probability up for chattier bots, or down to conserve LLM API tokens.
 
 ### <a id="azerothvoicesgeneralcitymultiplier"></a>`AzerothVoices.General.CityMultiplier`
 
-- **Data Type**: Integer
+- **Data Type**: Integer (`1`-`10`)
 - **Default Value**: `2`
 - **Description**: Multiplier applied to trigger chance in major capital cities (Stormwind, Ironforge, Orgrimmar, etc.). (1-10; default 2)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Operator Guidance & Impact**: Gives capital cities a livelier, bustling feel compared to remote wilderness zones.
 
 ### <a id="azerothvoicesgeneralconversationchance"></a>`AzerothVoices.General.ConversationChance`
 
-- **Data Type**: Integer
-- **Default Value**: `40`
-- **Description**: Chance that a triggered chatter event becomes a two-bot conversation instead of a solo observation. (0-100; default 40)
-- **Operator Guidance & Impact**: Adjust this probability up for chattier, more responsive bots, or down to conserve LLM API tokens on high-population servers.
+- **Data Type**: Percentage (`0`-`100`)
+- **Default Value**: `70`
+- **Description**: Percent chance that a triggered event becomes a multi-bot conversation instead of a solo observation. (0-100; default 70)
+- **Operator Guidance & Impact**: Set to higher values (e.g. 70-80) for lively multi-turn dialogues between bots.
 
-### <a id="azerothvoicesgeneralnpcgossipchance"></a>`AzerothVoices.General.NpcGossipChance`
+### <a id="azerothvoicesgeneralconversationmaximumparticipants"></a>`AzerothVoices.General.ConversationMaximumParticipants`
 
-- **Data Type**: Integer
+- **Data Type**: Integer (`2`-`6`)
+- **Default Value**: `3`
+- **Description**: Maximum distinct bots locked into the conversation pool. Turns rotate strictly among these exact same bots without outside bot hijacking.
+- **Operator Guidance & Impact**: Keeps conversations coherent and focused between a small group of characters.
+
+### <a id="azerothvoicesgeneralconversationmaximumlines"></a>`AzerothVoices.General.ConversationMaximumLines`
+
+- **Data Type**: Integer (`1`-`10`)
+- **Default Value**: `6`
+- **Description**: Total messages/turns exchanged in the conversation across all bots combined. Counts from the very first opening line.
+- **Operator Guidance & Impact**: Allows extended back-and-forth dialogue (e.g. 3 turns each with 2 bots).
+
+### <a id="azerothvoicesgeneralreplydelayminseconds"></a>`AzerothVoices.General.ReplyDelayMinSeconds`
+
+- **Data Type**: Integer (Seconds, `1`-`120`)
 - **Default Value**: `5`
-- **Description**: Chance that the chosen topic gossips about a nearby alive NPC in the zone. (0-100; default 5)
-- **Operator Guidance & Impact**: Adjust this probability up for chattier, more responsive bots, or down to conserve LLM API tokens on high-population servers.
+- **Description**: Minimum delay in seconds before the next bot types and sends its reply.
+- **Operator Guidance & Impact**: Recreates natural human reading and typing delays.
 
-### <a id="azerothvoicesgeneralbotgossipchance"></a>`AzerothVoices.General.BotGossipChance`
+### <a id="azerothvoicesgeneralreplydelaymaxseconds"></a>`AzerothVoices.General.ReplyDelayMaxSeconds`
 
-- **Data Type**: Integer
-- **Default Value**: `5`
-- **Description**: Chance that the chosen topic gossips about another bot in the same zone. (0-100; default 5)
-- **Operator Guidance & Impact**: Adjust this probability up for chattier, more responsive bots, or down to conserve LLM API tokens on high-population servers.
+- **Data Type**: Integer (Seconds, `1`-`120`)
+- **Default Value**: `14`
+- **Description**: Maximum delay in seconds before the next bot types and sends its reply.
+- **Operator Guidance & Impact**: Recreates natural human reading and typing delays matching Barrens Chat cadence.
 
-### <a id="azerothvoicesgeneralgossiptargetcooldownseconds"></a>`AzerothVoices.General.GossipTargetCooldownSeconds`
+### <a id="azerothvoicesgeneralthememode"></a>`AzerothVoices.General.ThemeMode`
 
-- **Data Type**: Integer (Seconds; default 1800)
-- **Default Value**: `1800`
-- **Description**: Cooldown before the same NPC or bot can be picked as a gossip subject again. (Seconds; default 1800)
-- **Operator Guidance & Impact**: Controls rate-limiting. Increasing this value prevents repetitive triggers and reduces API call frequency; setting to `0` removes time-based gating for this specific event.
+- **Data Type**: String (`auto`, `game`, `news`, `generic`)
+- **Default Value**: `auto`
+- **Description**: Theme selection mode: `auto` samples from `ThemeWeights`, or lock to a fixed topic domain (`game`, `news`, `generic`).
+- **Operator Guidance & Impact**: Allows server operators to enforce specific chat vibes or leave it dynamic.
+
+### <a id="azerothvoicesgeneralthemeweights"></a>`AzerothVoices.General.ThemeWeights`
+
+- **Data Type**: Weight String
+- **Default Value**: `game:40,news:30,generic:30`
+- **Description**: Distribution weights for conversation themes: `game` (WoW lore/specs/leveling), `news` (gaming news/PC hardware/coffee), and `generic` (humor/banter/quips).
+- **Operator Guidance & Impact**: Tune weights to customize server atmosphere.
 
 ### <a id="azerothvoicesgeneralbotspeakercooldownseconds"></a>`AzerothVoices.General.BotSpeakerCooldownSeconds`
 
 - **Data Type**: Integer (Seconds; default 900)
 - **Default Value**: `900`
-- **Description**: Cooldown before the same bot can speak or participate in General channel ambient chatter again. (Seconds; default 900)
-- **Operator Guidance & Impact**: Controls rate-limiting. Increasing this value prevents repetitive triggers and reduces API call frequency; setting to `0` removes time-based gating for this specific event.
+- **Description**: Cooldown before the same bot can speak or participate in General channel ambient chatter again. Applied only after the entire conversation finishes.
+- **Operator Guidance & Impact**: Prevents the same bots from dominating public channels.
+
+### <a id="azerothvoicesgeneralpauseduringplayerchatseconds"></a>`AzerothVoices.General.PauseDuringPlayerChatSeconds`
+
+- **Data Type**: Integer (Seconds, `0`-`300`)
+- **Default Value**: `10`
+- **Description**: Seconds to suppress ambient bot conversations after a real human speaks in World chat.
+- **Operator Guidance & Impact**: Respects human conversation and yields the channel to real players.
 
 ---
 

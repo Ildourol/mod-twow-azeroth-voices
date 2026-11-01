@@ -275,6 +275,21 @@ namespace AzerothVoices
             uint64_t createdUnix = 0;
         };
 
+        // Bounded General / World Chat ambient conversation.
+        struct GeneralConversation
+        {
+            uint64_t id = 0;
+            uint32_t zoneId = 0;
+            std::string channel;
+            uint64_t anchorPlayerGuid = 0;
+            std::vector<uint64_t> speakers;
+            uint32_t deliveredLines = 0;
+            uint32_t maximumLines = 6;
+            GeneralThemeType theme = GeneralThemeType::Game;
+            std::string effectiveZone;
+            std::chrono::steady_clock::time_point expires;
+        };
+
         // Bounded group/raid conversation, mirroring a proximity scene.
         struct GroupConversation
         {
@@ -446,6 +461,13 @@ namespace AzerothVoices
         void RunGeneralChatter();
         void ScheduleNextGeneralTrigger();
         void PruneGeneralChatter();
+        bool QueueGeneralDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
+                                  std::string const& channelName, std::string const& trigger,
+                                  std::string const& message, uint64_t conversationId = 0,
+                                  uint32_t turnIndex = 0, uint32_t initialDelaySeconds = 0,
+                                  std::string const& continuityPrompt = "");
+        void MaybeQueueGeneralTurn(ChatRequest const& request, std::string const& reply);
+        void OnGeneralDeliveryFailed(ChatRequest const& request);
         void RunGroupChatter();
         void RunGuildChatter();
         void PruneGroupAndGuildState();
@@ -600,6 +622,9 @@ namespace AzerothVoices
         std::chrono::steady_clock::time_point m_nextGeneralTrigger;
         GeneralSpeakerTracker m_generalSpeakerTracker;
         GossipTargetTracker m_gossipTargetTracker;
+        std::map<uint64_t, GeneralConversation> m_generalConversations;
+        uint64_t m_nextGeneralConversationId = 1;
+        std::unordered_map<std::string, Clock::time_point> m_generalLastPlayerChat;
         InstanceLoreRegistry m_instanceLore;
         std::vector<RagItem> m_rag;
         size_t m_ragFiles = 0;

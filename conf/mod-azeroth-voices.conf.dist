@@ -2073,79 +2073,104 @@ AzerothVoices.Random.WorldPrompts = Start a short topic about zones, dungeons, l
 AzerothVoices.Random.CategoryWeights = entertainment:30,toxic:25,reallife:25,lore:10,questions:10
 
 # --------------------------------------------
-# 15. AUTOMATED WORLD/CUSTOM-CHANNEL PACING
+# 15. AUTOMATED WORLD/CUSTOM-CHANNEL PACING & GENERAL CHATTER
 # --------------------------------------------
+# Controls automated ambient chatter across zones where real players are present.
+# Supports single observations and dynamic multi-bot conversations across three
+# AI theme domains: In-Game (WoW lore/specs/leveling), News/Real-Life (gaming
+# culture/tech/real life), and Generic (banter/debates/jokes).
+# In conversations, a fixed pool of bots is locked in and rotates back-and-forth
+# naturally across all turns with randomized delays matching Barrens Chat.
 
 # AzerothVoices.GeneralChat.Pacing.Enable
 #     Description: Paces automated World and custom-channel chatter so concurrent
-#                  exchanges cannot arrive as one wall of text. Only this module's
-#                  scheduled ambient World/custom-channel lines are paced; direct
-#                  player-directed replies stay immediate, and combat-start, event,
-#                  boss, and dungeon/raid reactions are never delayed by this timeline.
+#                  ambient exchanges cannot arrive as one wall of text. Direct
+#                  player-directed replies and combat reactions are never delayed.
 #     Default:     1
 AzerothVoices.GeneralChat.Pacing.Enable = 1
 
 # AzerothVoices.GeneralChat.MinimumGapSeconds
-#     Description: Minimum gap after a reserved multi-line exchange on the same
-#                  normalized channel plus zone or map/instance identity. (Seconds,
-#                  0-86400.)
-#     Default:     15
-AzerothVoices.GeneralChat.MinimumGapSeconds = 15
+#     Description: Minimum seconds of silence required on a channel and zone
+#                  after an ambient conversation finishes before another can trigger.
+#                  Must be HIGHER than TriggerIntervalSeconds (recommended 1:2 ratio,
+#                  e.g. 60 vs 30) so the evaluation clock re-checks promptly once silence ends.
+#     Default:     60
+AzerothVoices.GeneralChat.MinimumGapSeconds = 60
 
 # AzerothVoices.General.Enable
-#     Description: Dedicated General/World ambient chatter system ported from mod-llm-
-#                  chatter. Enables periodic ambient chatter in General/World channels
-#                  where real players are present.
+#     Description: Master toggle for the General/World ambient chatter system.
 #     Default:     1
 AzerothVoices.General.Enable = 1
 
 # AzerothVoices.General.TriggerIntervalSeconds
-#     Description: Interval between General chatter trigger evaluation passes across
-#                  zones with players. (Seconds, minimum 5.)
+#     Description: Cadence in seconds between evaluation passes across populated zones.
+#                  Must be LOWER than MinimumGapSeconds (recommended ~half, e.g. 30 vs 60)
+#                  to evaluate zones responsively and prevent double-wait dead air.
 #     Default:     30
 AzerothVoices.General.TriggerIntervalSeconds = 30
 
 # AzerothVoices.General.TriggerChance
-#     Description: Base percent chance per zone to trigger a chatter event during an
-#                  evaluation pass. (0-100.)
+#     Description: Base percent chance per populated zone to start an ambient event. (0-100)
 #     Default:     15
 AzerothVoices.General.TriggerChance = 15
 
 # AzerothVoices.General.CityMultiplier
-#     Description: Multiplier applied to trigger chance in major capital cities
-#                  (Stormwind, Ironforge, Orgrimmar, etc.). (1-10.)
+#     Description: Multiplier applied to TriggerChance in capital cities (Stormwind, Orgrimmar, etc.).
 #     Default:     2
 AzerothVoices.General.CityMultiplier = 2
 
 # AzerothVoices.General.ConversationChance
-#     Description: Chance that a triggered chatter event becomes a two-bot conversation
-#                  instead of a solo observation. (0-100.)
-#     Default:     40
-AzerothVoices.General.ConversationChance = 40
+#     Description: Percent chance that a triggered event becomes a multi-bot conversation
+#                  instead of a solo observation. (0-100)
+#     Default:     70
+AzerothVoices.General.ConversationChance = 70
 
-# AzerothVoices.General.NpcGossipChance
-#     Description: Chance that the chosen topic gossips about a nearby alive NPC in the
-#                  zone. (0-100.)
+# AzerothVoices.General.ConversationMaximumParticipants
+#     Description: Maximum distinct bots locked into the conversation pool. (2-6)
+#                  Turns rotate back-and-forth strictly among these exact same bots.
+#                  Outside bots cannot hijack the conversation.
+#     Default:     3
+AzerothVoices.General.ConversationMaximumParticipants = 3
+
+# AzerothVoices.General.ConversationMaximumLines
+#     Description: Total messages/turns exchanged in the conversation across all bots combined. (1-10)
+#                  Counts from the very first opening line.
+#     Default:     6
+AzerothVoices.General.ConversationMaximumLines = 6
+
+# AzerothVoices.General.ReplyDelayMinSeconds
+#     Description: Minimum delay in seconds before the next bot types and sends its reply. (1-120)
 #     Default:     5
-AzerothVoices.General.NpcGossipChance = 5
+AzerothVoices.General.ReplyDelayMinSeconds = 5
 
-# AzerothVoices.General.BotGossipChance
-#     Description: Chance that the chosen topic gossips about another bot in the same
-#                  zone. (0-100.)
-#     Default:     5
-AzerothVoices.General.BotGossipChance = 5
+# AzerothVoices.General.ReplyDelayMaxSeconds
+#     Description: Maximum delay in seconds before the next bot types and sends its reply. (1-120)
+#     Default:     14
+AzerothVoices.General.ReplyDelayMaxSeconds = 14
 
-# AzerothVoices.General.GossipTargetCooldownSeconds
-#     Description: Cooldown before the same NPC or bot can be picked as a gossip subject
-#                  again. (Seconds.)
-#     Default:     1800
-AzerothVoices.General.GossipTargetCooldownSeconds = 1800
+# AzerothVoices.General.ThemeMode
+#     Description: Theme selection mode: 'auto' (sampled from ThemeWeights), or fixed ('game', 'news', 'generic').
+#     Default:     auto
+AzerothVoices.General.ThemeMode = auto
+
+# AzerothVoices.General.ThemeWeights
+#     Description: Relative distribution weights for conversation themes in auto mode:
+#                    - game:    In-game lore, leveling, dungeons, loot, specs, PvP.
+#                    - news:    Real-world gaming news, technology, everyday life, coffee, fatigue.
+#                    - generic: Absurd banter, funny thoughts, open debate questions, casual quips.
+#     Default:     game:40,news:30,generic:30
+AzerothVoices.General.ThemeWeights = game:40,news:30,generic:30
 
 # AzerothVoices.General.BotSpeakerCooldownSeconds
-#     Description: Cooldown before the same bot can speak or participate in General
-#                  channel ambient chatter again. (Seconds.)
+#     Description: Cooldown in seconds before the participating bots can speak in General ambient chatter again.
+#                  Applied to the locked pool of bots only AFTER the entire conversation finishes.
 #     Default:     900
 AzerothVoices.General.BotSpeakerCooldownSeconds = 900
+
+# AzerothVoices.General.PauseDuringPlayerChatSeconds
+#     Description: Seconds to suppress ambient bot conversations after a real human speaks in World chat.
+#     Default:     10
+AzerothVoices.General.PauseDuringPlayerChatSeconds = 10
 
 # --------------------------------------------
 # 15B. WORLD CHAT - BARRENS CONVERSATIONS

@@ -818,18 +818,23 @@ namespace AzerothVoices
         }
 
         c.generalChatPacingEnabled = sConfig.GetBoolDefault("AzerothVoices.GeneralChat.Pacing.Enable", true);
-        c.generalChatMinimumGapSeconds = Bounded("AzerothVoices.GeneralChat.MinimumGapSeconds", 15, 0, 86400);
+        c.generalChatMinimumGapSeconds = Bounded("AzerothVoices.GeneralChat.MinimumGapSeconds", 60, 0, 86400);
 
         c.generalChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.General.Enable", true);
         c.generalTriggerIntervalSeconds = Positive("AzerothVoices.General.TriggerIntervalSeconds", 30, 5);
         c.generalTriggerChance = Percent("AzerothVoices.General.TriggerChance", 15);
         c.generalCityMultiplier = Bounded("AzerothVoices.General.CityMultiplier", 2, 1, 10);
-        c.generalConversationChance = Percent("AzerothVoices.General.ConversationChance", 40);
-        c.generalNpcGossipChance = Percent("AzerothVoices.General.NpcGossipChance", 5);
-        c.generalBotGossipChance = Percent("AzerothVoices.General.BotGossipChance", 5);
-        c.generalGossipTargetCooldownSeconds = Positive("AzerothVoices.General.GossipTargetCooldownSeconds", 1800, 0);
+        c.generalConversationChance = Percent("AzerothVoices.General.ConversationChance", 70);
+        c.generalConversationMaximumParticipants = Bounded("AzerothVoices.General.ConversationMaximumParticipants", 3, 2, 6);
+        c.generalConversationMaximumLines = Bounded("AzerothVoices.General.ConversationMaximumLines", 6, 1, 10);
+        c.generalReplyDelayMinSeconds = Bounded("AzerothVoices.General.ReplyDelayMinSeconds", 5, 1, 120);
+        c.generalReplyDelayMaxSeconds = Bounded("AzerothVoices.General.ReplyDelayMaxSeconds", 14, c.generalReplyDelayMinSeconds, 120);
+        c.generalThemeMode = Lower(Trim(sConfig.GetStringDefault("AzerothVoices.General.ThemeMode", "auto")));
+        c.generalThemeWeights = ParseCategoryWeights(sConfig.GetStringDefault(
+            "AzerothVoices.General.ThemeWeights", "game:40,news:30,generic:30"));
         c.generalBotSpeakerCooldownSeconds = Positive("AzerothVoices.BotSpeakerCooldownSeconds",
             Positive("AzerothVoices.General.BotSpeakerCooldownSeconds", 900, 0), 0);
+        c.generalPauseDuringPlayerChatSeconds = Bounded("AzerothVoices.General.PauseDuringPlayerChatSeconds", 10, 0, 300);
 
         c.environmentContextEnabled = sConfig.GetBoolDefault("AzerothVoices.Environment.Enable", true);
         c.environmentContextDistance = std::min(100.0f, std::max(1.0f,

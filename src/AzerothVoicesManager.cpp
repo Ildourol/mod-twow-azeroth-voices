@@ -1348,6 +1348,9 @@ namespace AzerothVoices
         m_guildReplyDebounce.clear();
         m_guildLastSpeaker.clear();
         m_nextGroupConversationId = 1;
+        m_generalConversations.clear();
+        m_nextGeneralConversationId = 1;
+        m_generalLastPlayerChat.clear();
         m_generalPacing.Clear();
         m_instanceLore.clear();
         m_instanceLoreLoaded = false;
@@ -1466,7 +1469,19 @@ namespace AzerothVoices
         uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
             Clock::now().time_since_epoch()).count());
         m_generalSpeakerTracker.Prune(nowSec, m_config->generalBotSpeakerCooldownSeconds);
-        m_gossipTargetTracker.Prune(nowSec, m_config->generalGossipTargetCooldownSeconds);
+
+        auto const now = Clock::now();
+        for (auto it = m_generalConversations.begin(); it != m_generalConversations.end(); )
+        {
+            if (now > it->second.expires)
+            {
+                for (uint64_t guid : it->second.speakers)
+                    m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
+                it = m_generalConversations.erase(it);
+            }
+            else
+                ++it;
+        }
     }
 
     bool Manager::PopRequest(ChatRequest& request)
@@ -1833,6 +1848,33 @@ namespace AzerothVoices
             request.systemPrompt += "\nEarlier, " + speaker.name + " mentioned: \"" + callbackTopic + "\". If relevant, naturally reference this.";
         if (followupQuestion)
             request.systemPrompt += "\nInclude a relevant question in your reply to keep the conversation flowing.";
+
+        if (Enqueue(std::move(request)))
+            return true;
+        RecordPreflightRejection(PreflightReason::Unavailable);
+        return false;
+    }
+
+    bool Manager::QueueGeneralDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
+                                       std::string const& channelName, std::string const& trigger,
+                                       std::string const& message, uint64_t conversationId,
+                                       uint32_t turnIndex, uint32_t initialDelaySeconds,
+                                       std::string const& continuityPrompt)
+    {
+        (void)turnIndex;
+        if (!PreflightDialogue(actor, speaker, ChatScope::World, channelName, trigger, RequestPriority::Ambient, false))
+            return false;
+
+        ChatRequest request = BuildRequest(actor, speaker, ChatScope::World, channelName, trigger,
+            message, RequestPriority::Ambient, false, false);
+        if (conversationId > 0)
+        {
+            request.generalConversation = true;
+            request.generalConversationId = conversationId;
+        }
+        request.generalInitialDelaySeconds = initialDelaySeconds;
+        if (!continuityPrompt.empty())
+            request.systemPrompt += "\n" + continuityPrompt;
 
         if (Enqueue(std::move(request)))
             return true;
@@ -3462,18 +3504,31 @@ namespace AzerothVoices
 
             std::shuffle(eligibleBots.begin(), eligibleBots.end(), RandomEngine());
 
+            std::string const channel = m_config->worldChannelName;
+            if (HasActiveBarrensScene(channel))
+                continue;
+
+            // Pause if a real player spoke recently in World chat
+            if (m_config->generalPauseDuringPlayerChatSeconds > 0)
+            {
+                auto lastPlayerIt = m_generalLastPlayerChat.find("world:" + Lower(channel));
+                if (lastPlayerIt != m_generalLastPlayerChat.end())
+                {
+                    auto const elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastPlayerIt->second).count();
+                    if (elapsed < static_cast<int64_t>(m_config->generalPauseDuringPlayerChatSeconds))
+                        continue;
+                }
+            }
+
             bool const isConversation = (eligibleBots.size() >= 2) && Roll(m_config->generalConversationChance);
+            size_t const totalLines = isConversation ? m_config->generalConversationMaximumLines : 1;
             Player* speaker1 = eligibleBots[0];
-            Player* speaker2 = isConversation ? eligibleBots[1] : nullptr;
             Player* anchor = realPlayerAnchorByZone[zoneId];
             if (!anchor)
                 anchor = speaker1;
 
-            std::string const channel = m_config->worldChannelName;
-            if (HasActiveBarrensScene(channel))
-                continue;
             ChatScope const scope = ChatScope::World;
-            if (!ReserveGeneralPacing(scope, channel, SnapshotBot(speaker1), isConversation ? 2 : 1))
+            if (!ReserveGeneralPacing(scope, channel, SnapshotBot(speaker1), totalLines))
                 continue;
 
             std::string area;
@@ -3486,106 +3541,52 @@ namespace AzerothVoices
             std::string const effectiveZone = zone.empty() ? (area.empty() ? mapName : area) : zone;
 
             uint32_t const roll100 = RandomUInt(1, 100);
-            GeneralSubjectType subjectType = SelectGeneralSubjectType(
-                m_config->generalNpcGossipChance, m_config->generalBotGossipChance, roll100);
+            GeneralThemeType const theme = SelectGeneralTheme(
+                m_config->generalThemeMode, m_config->generalThemeWeights, roll100);
 
-            std::string topic;
-
-            if (subjectType == GeneralSubjectType::NpcGossip)
-            {
-                std::string npcName;
-                float const distance = 80.0f;
-                MaNGOS::AllCreaturesInRange check(speaker1, distance);
-                std::list<Creature*> creatures;
-                MaNGOS::CreatureListSearcher<MaNGOS::AllCreaturesInRange> searcher(creatures, check);
-                Cell::VisitGridObjects(speaker1, searcher, distance);
-
-                for (Creature* creature : creatures)
-                {
-                    if (!creature || !creature->IsAlive())
-                        continue;
-                    std::string const name = creature->GetName();
-                    if (name.empty())
-                        continue;
-                    std::string gossipKey = "npc:" + std::to_string(zoneId) + ":" + name;
-                    if (!m_gossipTargetTracker.IsOnCooldown(gossipKey, nowSec, m_config->generalGossipTargetCooldownSeconds))
-                    {
-                        npcName = name;
-                        m_gossipTargetTracker.RecordTarget(gossipKey, nowSec);
-                        break;
-                    }
-                }
-
-                if (!npcName.empty())
-                    topic = "Casually talk or gossip about " + npcName + " in " + effectiveZone + ".";
-                else
-                    subjectType = GeneralSubjectType::Plain;
-            }
-
-            if (subjectType == GeneralSubjectType::BotGossip)
-            {
-                std::string otherBotName;
-                for (Player* bot : botIt->second)
-                {
-                    if (bot == speaker1 || bot == speaker2)
-                        continue;
-                    std::string gossipKey = "bot:" + std::to_string(zoneId) + ":" + bot->GetName();
-                    if (!m_gossipTargetTracker.IsOnCooldown(gossipKey, nowSec, m_config->generalGossipTargetCooldownSeconds))
-                    {
-                        otherBotName = bot->GetName();
-                        m_gossipTargetTracker.RecordTarget(gossipKey, nowSec);
-                        break;
-                    }
-                }
-
-                if (!otherBotName.empty())
-                    topic = "Casually talk or gossip about another adventurer named " + otherBotName + " in " + effectiveZone + ".";
-                else
-                    subjectType = GeneralSubjectType::Plain;
-            }
-
-            if (subjectType == GeneralSubjectType::Plain || topic.empty())
-            {
-                if (!m_config->randomCategoryWeights.empty())
-                {
-                    std::string cat = SampleCategory(m_config->randomCategoryWeights, "entertainment");
-                    topic = GetRandomPromptForCategory(cat, "world");
-                }
-                if (topic.empty())
-                {
-                    if (!m_config->worldPrompts.empty())
-                        topic = Pick(m_config->worldPrompts);
-                    else
-                        topic = "Make a short public observation or comment about " + effectiveZone + " that could start a conversation.";
-                }
-            }
-
-            m_generalSpeakerTracker.RecordSpeech(speaker1->GetObjectGuid().GetRawValue(), nowSec);
-            if (isConversation && speaker2)
-                m_generalSpeakerTracker.RecordSpeech(speaker2->GetObjectGuid().GetRawValue(), nowSec);
-
+            std::string const topic = BuildGeneralThemeInstruction(theme, effectiveZone, isConversation);
             SpeakerSnapshot audienceSnapshot = SnapshotSpeaker(anchor);
-            if (!isConversation || !speaker2)
+
+            if (!isConversation)
             {
-                QueueDialogue(SnapshotBot(speaker1), audienceSnapshot, scope, channel,
-                    "ambient", topic, RequestPriority::Ambient, true, true);
+                m_generalSpeakerTracker.RecordSpeech(speaker1->GetObjectGuid().GetRawValue(), nowSec);
+                QueueGeneralDialogue(SnapshotBot(speaker1), audienceSnapshot, channel,
+                    "ambient", topic, 0, 0, 0, "");
             }
             else
             {
-                QueueDialogue(SnapshotBot(speaker1), audienceSnapshot, scope, channel,
-                    "ambient", topic, RequestPriority::Ambient, true, true);
-                std::string replyInstruction = "Respond naturally to the previous comment about " + effectiveZone + ".";
-                QueueDialogue(SnapshotBot(speaker2), SnapshotSpeaker(speaker1), scope, channel,
-                    "conversation", replyInstruction, RequestPriority::Ambient, false, true);
+                size_t const maxParticipants = std::min<size_t>(
+                    eligibleBots.size(), m_config->generalConversationMaximumParticipants);
+                size_t const participantCount = std::max<size_t>(2, maxParticipants);
+
+                GeneralConversation scene;
+                scene.id = m_nextGeneralConversationId++;
+                scene.zoneId = zoneId;
+                scene.channel = channel;
+                scene.anchorPlayerGuid = anchor->GetObjectGuid().GetRawValue();
+                scene.deliveredLines = 0;
+                scene.maximumLines = m_config->generalConversationMaximumLines;
+                scene.theme = theme;
+                scene.effectiveZone = effectiveZone;
+                scene.expires = now + std::chrono::minutes(5);
+
+                for (size_t i = 0; i < participantCount; ++i)
+                    scene.speakers.push_back(eligibleBots[i]->GetObjectGuid().GetRawValue());
+
+                m_generalConversations[scene.id] = scene;
+
+                Player* opener = eligibleBots[0];
+                QueueGeneralDialogue(SnapshotBot(opener), audienceSnapshot, channel,
+                    "ambient", topic, scene.id, 0, 0, "");
             }
 
             if (m_config->debug)
             {
-                sLog.outDebug("[AzerothVoices] Queued General channel %s in %s (speaker: %s%s).",
+                sLog.outDebug("[AzerothVoices] Queued General channel %s in %s (theme: %s, speaker: %s).",
                     isConversation ? "conversation" : "statement",
                     effectiveZone.c_str(),
-                    speaker1->GetName(),
-                    speaker2 ? (", reply: " + std::string(speaker2->GetName())).c_str() : "");
+                    GeneralThemeTypeName(theme),
+                    speaker1->GetName());
             }
         }
     }
@@ -4366,7 +4367,7 @@ namespace AzerothVoices
 
     void Manager::MaybeQueueFollowup(ChatRequest const& request, std::string const& reply)
     {
-        if (request.barrensScene)
+        if (request.barrensScene || request.generalConversation)
             return;
         if (!request.allowFollowup || !m_config->randomChatterEnabled ||
             request.conversationDepth + 1 >= m_config->randomMaximumActors ||
@@ -4484,7 +4485,7 @@ namespace AzerothVoices
 
     void Manager::MaybeQueueBotQuestionAnswer(ChatRequest const& request, std::string const& questionText)
     {
-        if (request.barrensScene)
+        if (request.barrensScene || request.generalConversation)
             return;
         if (questionText.find('?') == std::string::npos || request.actor.kind != ActorKind::PlayerBot)
             return;
@@ -4689,6 +4690,8 @@ namespace AzerothVoices
                 cumulativeDelay += 2000;
             if (completion.request.guildInitialDelaySeconds > 0)
                 cumulativeDelay += static_cast<uint64_t>(completion.request.guildInitialDelaySeconds) * 1000;
+            if (completion.request.generalInitialDelaySeconds > 0)
+                cumulativeDelay += static_cast<uint64_t>(completion.request.generalInitialDelaySeconds) * 1000;
             for (size_t i = 0; i < lines.size(); ++i)
             {
                 uint64_t lineDelay = m_config->typingSimulationEnabled
@@ -4903,6 +4906,8 @@ namespace AzerothVoices
                     MaybeQueueProximityTurn(it->request, it->text);
                 if (it->request.groupConversation)
                     MaybeQueueGroupTurn(it->request, it->text);
+                if (it->request.generalConversation)
+                    MaybeQueueGeneralTurn(it->request, it->text);
                 else if (!it->request.groupChatter &&
                     (it->request.scope == ChatScope::Party || it->request.scope == ChatScope::Raid) &&
                     it->request.actor.kind == ActorKind::PlayerBot && !it->request.speaker.isBot)
@@ -4960,6 +4965,8 @@ namespace AzerothVoices
             {
                 if (it->request.barrensScene)
                     OnBarrensDeliveryFailed(it->request);
+                if (it->request.generalConversation)
+                    OnGeneralDeliveryFailed(it->request);
             }
             if (!delivered && m_config->debug)
                 sLog.outDebug("[AzerothVoices] Reply discarded because actor %s is unavailable.",
@@ -9630,7 +9637,7 @@ namespace AzerothVoices
         status.pendingGuildGreetings = m_pendingGuildGreetings.size();
         status.guildSessionHistories = m_guildSessionHistory.size();
         status.generalSpeakersOnCooldown = m_generalSpeakerTracker.Size();
-        status.gossipTargetsOnCooldown = m_gossipTargetTracker.Size();
+        status.gossipTargetsOnCooldown = 0;
         status.ragEntries = m_rag.size();
         status.ragFiles = m_ragFiles;
         status.ragParseFailures = m_ragParseFailures;
@@ -9713,6 +9720,96 @@ namespace AzerothVoices
             return static_cast<char>(std::tolower(c));
         });
         m_barrensLastPlayerChat["world:" + ch] = Clock::now();
+        m_generalLastPlayerChat["world:" + ch] = Clock::now();
+    }
+
+    void Manager::MaybeQueueGeneralTurn(ChatRequest const& request, std::string const& reply)
+    {
+        if (!m_config || !request.generalConversationId)
+            return;
+
+        auto it = m_generalConversations.find(request.generalConversationId);
+        if (it == m_generalConversations.end())
+            return;
+
+        GeneralConversation& scene = it->second;
+        ++scene.deliveredLines;
+
+        auto const now = Clock::now();
+        uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
+            now.time_since_epoch()).count());
+
+        if (scene.deliveredLines >= scene.maximumLines || now > scene.expires)
+        {
+            for (uint64_t guid : scene.speakers)
+                m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
+
+            m_generalConversations.erase(it);
+            return;
+        }
+
+        size_t const turn = scene.deliveredLines;
+        size_t const poolSize = scene.speakers.size();
+        if (poolSize < 2)
+        {
+            for (uint64_t guid : scene.speakers)
+                m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
+            m_generalConversations.erase(it);
+            return;
+        }
+
+        uint64_t const nextGuid = scene.speakers[turn % poolSize];
+        Player* nextSpeaker = ObjectAccessor::FindPlayer(ObjectGuid(nextGuid));
+        if (!nextSpeaker || !nextSpeaker->IsInWorld() || !nextSpeaker->IsAlive())
+        {
+            for (uint64_t guid : scene.speakers)
+                m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
+            m_generalConversations.erase(it);
+            return;
+        }
+
+        Player* anchor = ObjectAccessor::FindPlayer(ObjectGuid(scene.anchorPlayerGuid));
+        if (!anchor || !anchor->IsInWorld())
+            anchor = nextSpeaker;
+
+        ActorSnapshot actor = SnapshotBot(nextSpeaker);
+        SpeakerSnapshot prevSpeaker;
+        prevSpeaker.guid = request.actor.guid;
+        prevSpeaker.name = request.actor.name;
+        prevSpeaker.race = request.actor.race;
+        prevSpeaker.className = request.actor.className;
+        prevSpeaker.gender = request.actor.gender;
+        prevSpeaker.faction = request.actor.faction;
+        prevSpeaker.guild = request.actor.guild;
+        prevSpeaker.level = request.actor.level;
+        prevSpeaker.isBot = true;
+
+        uint32_t const delay = RandomUInt(m_config->generalReplyDelayMinSeconds, m_config->generalReplyDelayMaxSeconds);
+
+        std::string continuityPrompt = "Respond naturally to what " + request.actor.name +
+            " just said: \"" + reply + "\" to continue this casual conversation in " + scene.effectiveZone + ". Keep your response concise.";
+
+        if (!QueueGeneralDialogue(actor, prevSpeaker, scene.channel, "conversation",
+                reply, scene.id, static_cast<uint32_t>(turn), delay, continuityPrompt))
+        {
+            for (uint64_t guid : scene.speakers)
+                m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
+            m_generalConversations.erase(it);
+        }
+    }
+
+    void Manager::OnGeneralDeliveryFailed(ChatRequest const& request)
+    {
+        if (!request.generalConversationId)
+            return;
+        auto it = m_generalConversations.find(request.generalConversationId);
+        if (it == m_generalConversations.end())
+            return;
+        uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
+            Clock::now().time_since_epoch()).count());
+        for (uint64_t guid : it->second.speakers)
+            m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
+        m_generalConversations.erase(it);
     }
 
     void Manager::ScheduleNextBarrensCheck()

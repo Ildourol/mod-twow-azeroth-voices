@@ -429,17 +429,21 @@ namespace AzerothVoices
         std::vector<CategoryWeight> randomCategoryWeights;
 
         bool generalChatPacingEnabled = true;
-        uint32_t generalChatMinimumGapSeconds = 15;
+        uint32_t generalChatMinimumGapSeconds = 60;
 
         bool generalChatterEnabled = true;
         uint32_t generalTriggerIntervalSeconds = 30;
         uint32_t generalTriggerChance = 15;
         uint32_t generalCityMultiplier = 2;
-        uint32_t generalConversationChance = 40;
-        uint32_t generalNpcGossipChance = 5;
-        uint32_t generalBotGossipChance = 5;
-        uint32_t generalGossipTargetCooldownSeconds = 1800;
+        uint32_t generalConversationChance = 70;
+        uint32_t generalConversationMaximumParticipants = 3;
+        uint32_t generalConversationMaximumLines = 6;
+        uint32_t generalReplyDelayMinSeconds = 5;
+        uint32_t generalReplyDelayMaxSeconds = 14;
+        std::string generalThemeMode = "auto";
+        std::vector<CategoryWeight> generalThemeWeights;
         uint32_t generalBotSpeakerCooldownSeconds = 900;
+        uint32_t generalPauseDuringPlayerChatSeconds = 10;
 
         bool environmentContextEnabled = true;
         float environmentContextDistance = 25.0f;

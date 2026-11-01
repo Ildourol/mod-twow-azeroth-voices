@@ -247,6 +247,10 @@ namespace AzerothVoices
         std::string guildPlayerName;
         std::string guildCallbackTopic;
         uint32_t guildInitialDelaySeconds = 0;
+        // General ambient World Chat conversation fields
+        bool generalConversation = false;
+        uint64_t generalConversationId = 0;
+        uint32_t generalInitialDelaySeconds = 0;
         // Barrens World Chat conversation fields
         bool barrensScene = false;
         uint64_t barrensSceneId = 0;

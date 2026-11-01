@@ -486,30 +486,90 @@ namespace AzerothVoices
         return false;
     }
 
-    char const* GeneralSubjectTypeName(GeneralSubjectType type)
+    char const* GeneralThemeTypeName(GeneralThemeType type)
     {
         switch (type)
         {
-            case GeneralSubjectType::Plain: return "plain";
-            case GeneralSubjectType::NpcGossip: return "npc";
-            case GeneralSubjectType::BotGossip: return "bot";
-            case GeneralSubjectType::Quest: return "quest";
-            case GeneralSubjectType::Loot: return "loot";
-            case GeneralSubjectType::Trade: return "trade";
-            case GeneralSubjectType::Spell: return "spell";
+            case GeneralThemeType::Game: return "game";
+            case GeneralThemeType::News: return "news";
+            case GeneralThemeType::Generic: return "generic";
         }
-        return "plain";
+        return "game";
     }
 
-    GeneralSubjectType SelectGeneralSubjectType(uint32_t npcGossipChance,
-                                               uint32_t botGossipChance,
-                                               uint32_t roll100)
+    GeneralThemeType SelectGeneralTheme(std::string const& mode,
+                                        std::vector<CategoryWeight> const& weights,
+                                        uint32_t roll100)
     {
-        if (roll100 <= npcGossipChance)
-            return GeneralSubjectType::NpcGossip;
-        if (roll100 <= npcGossipChance + botGossipChance)
-            return GeneralSubjectType::BotGossip;
-        return GeneralSubjectType::Plain;
+        (void)roll100;
+        std::string lowerMode = mode;
+        std::transform(lowerMode.begin(), lowerMode.end(), lowerMode.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        if (lowerMode == "game")
+            return GeneralThemeType::Game;
+        if (lowerMode == "news")
+            return GeneralThemeType::News;
+        if (lowerMode == "generic")
+            return GeneralThemeType::Generic;
+
+        std::string cat = SampleCategory(weights, "game");
+        std::transform(cat.begin(), cat.end(), cat.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        if (cat == "news")
+            return GeneralThemeType::News;
+        if (cat == "generic")
+            return GeneralThemeType::Generic;
+        return GeneralThemeType::Game;
+    }
+
+    std::string BuildGeneralThemeInstruction(GeneralThemeType theme,
+                                             std::string const& zoneName,
+                                             bool isConversation)
+    {
+        std::string instruction;
+        switch (theme)
+        {
+            case GeneralThemeType::Game:
+            {
+                static const std::vector<std::string> gameTopics = {
+                    "Share a short observation or question about leveling, quests, or gear progression in " + zoneName + ".",
+                    "Ask or comment about class talents, dungeon strategies, or best specs while adventuring in " + zoneName + ".",
+                    "Comment on local enemy mobs, rare spawns, or dangerous areas in " + zoneName + ".",
+                    "Mention looking for a group or trading profession materials in " + zoneName + "."
+                };
+                instruction = gameTopics[SocialRandomUInt(0, static_cast<uint32_t>(gameTopics.size() - 1))];
+                break;
+            }
+            case GeneralThemeType::News:
+            {
+                static const std::vector<std::string> newsTopics = {
+                    "Casually mention real-world gaming culture, late-night gaming fatigue, or needing more coffee.",
+                    "Comment on PC hardware, graphics cards, internet lag, or gaming setups in a natural quip.",
+                    "Make a casual reference to gaming news, game patches, or everyday tech quirks.",
+                    "Joke about staying up too late playing when you have work or school in the morning."
+                };
+                instruction = newsTopics[SocialRandomUInt(0, static_cast<uint32_t>(newsTopics.size() - 1))];
+                break;
+            }
+            case GeneralThemeType::Generic:
+            {
+                static const std::vector<std::string> genericTopics = {
+                    "Ask a lighthearted debate question or funny thought to the channel.",
+                    "Make a witty observation or humorous quip about life and adventures in Azeroth.",
+                    "Share a humorous hot take or light banter that invites fellow adventurers to reply.",
+                    "Drop a casual, friendly greeting and ask how everyone's day or leveling is going."
+                };
+                instruction = genericTopics[SocialRandomUInt(0, static_cast<uint32_t>(genericTopics.size() - 1))];
+                break;
+            }
+        }
+
+        if (isConversation)
+            instruction += " Make it engaging so another player would naturally want to respond.";
+
+        return instruction;
     }
 
     bool IsVanillaCapitalCityZone(uint32_t zoneId)
