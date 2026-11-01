@@ -241,6 +241,7 @@ namespace AzerothVoices
         std::vector<std::string> commandIgnoreList;
 
         bool proximityEnabled = true;
+        bool proximityPacingEnabled = true;
         float proximityPlayerDistance = 10.0f;
         float proximityInterNpcDistance = 10.0f;
         uint32_t proximityReplyDelayMinSeconds = 4;

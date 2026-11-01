@@ -74,11 +74,6 @@ namespace AzerothVoices
         return key.str();
     }
 
-    std::string NormalizeProximityPacingKey(uint32_t mapId, uint32_t zoneId, uint32_t instanceId, bool instance)
-    {
-        return NormalizeProximityPacingKey(mapId, instanceId, zoneId, instance);
-    }
-
     uint32_t EstimateExchangeMilliseconds(size_t lines, uint32_t averageDelayMs,
                                           uint32_t speechDurationMs)
     {

@@ -3505,8 +3505,9 @@ namespace AzerothVoices
         if (realPlayerZones.empty())
             return;
 
+        auto const now = Clock::now();
         uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
-            Clock::now().time_since_epoch()).count());
+            now.time_since_epoch()).count());
 
         for (uint32_t zoneId : realPlayerZones)
         {
@@ -4801,10 +4802,9 @@ namespace AzerothVoices
             }
             if (m_config->guildPacingEnabled && linesAdded > 0 &&
                 (completion.request.scope == ChatScope::Guild || completion.request.trigger.compare(0, 6, "guild:") == 0) &&
-                (completion.request.actor.guildId != 0 || completion.request.speaker.guildId != 0 || completion.request.groupId != 0))
+                (completion.request.speaker.guildId != 0 || completion.request.groupId != 0))
             {
-                uint32_t const guildId = completion.request.actor.guildId ? completion.request.actor.guildId
-                    : (completion.request.speaker.guildId ? completion.request.speaker.guildId : completion.request.groupId);
+                uint32_t const guildId = completion.request.speaker.guildId ? completion.request.speaker.guildId : completion.request.groupId;
                 std::string const guildKey = NormalizeGuildPacingKey(guildId);
                 size_t const firstIndex = m_scheduled.size() - linesAdded;
                 auto const scheduledTime = m_scheduled[firstIndex].due;

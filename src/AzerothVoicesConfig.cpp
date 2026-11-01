@@ -593,12 +593,17 @@ namespace AzerothVoices
             c.commandBlacklist.insert(c.commandBlacklist.end(), c.commandIgnoreList.begin(), c.commandIgnoreList.end());
 
         c.proximityEnabled = sConfig.GetBoolDefault("AzerothVoices.Proximity.Enable", true);
+        c.proximityPacingEnabled = sConfig.GetBoolDefault("AzerothVoices.Proximity.Pacing.Enable", true);
         c.proximityPlayerDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.Proximity.PlayerDistance", 10.0f));
         c.proximityInterNpcDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.Proximity.InterNpcDistance", 10.0f));
-        c.proximityReplyDelayMinSeconds = Bounded("AzerothVoices.Proximity.ReplyDelayMinSeconds", 4, 1, 120);
-        c.proximityReplyDelayMaxSeconds = Bounded("AzerothVoices.Proximity.ReplyDelayMaxSeconds", 9, c.proximityReplyDelayMinSeconds, 120);
-        c.proximityMinimumGapSeconds = Bounded("AzerothVoices.Proximity.MinimumGapSeconds", 60, 0, 86400);
-        c.proximityPauseDuringPlayerChatSeconds = Bounded("AzerothVoices.Proximity.PauseDuringPlayerChatSeconds", 15, 0, 3600);
+        c.proximityReplyDelayMinSeconds = Bounded("AzerothVoices.Proximity.Pacing.ReplyDelayMinSeconds",
+            Bounded("AzerothVoices.Proximity.ReplyDelayMinSeconds", 4, 1, 120), 1, 120);
+        c.proximityReplyDelayMaxSeconds = Bounded("AzerothVoices.Proximity.Pacing.ReplyDelayMaxSeconds",
+            Bounded("AzerothVoices.Proximity.ReplyDelayMaxSeconds", 9, c.proximityReplyDelayMinSeconds, 120), c.proximityReplyDelayMinSeconds, 120);
+        c.proximityMinimumGapSeconds = Bounded("AzerothVoices.Proximity.Pacing.MinimumGapSeconds",
+            Bounded("AzerothVoices.Proximity.MinimumGapSeconds", 45, 0, 86400), 0, 86400);
+        c.proximityPauseDuringPlayerChatSeconds = Bounded("AzerothVoices.Proximity.Pacing.PauseDuringPlayerChatSeconds",
+            Bounded("AzerothVoices.Proximity.PauseDuringPlayerChatSeconds", 45, 0, 3600), 0, 3600);
         c.proximityOutdoorScanSeconds = Positive("AzerothVoices.Proximity.ScanSecondsOutdoor",
             Positive("AzerothVoices.Proximity.OutdoorScanSeconds", 30, 5), 5);
         c.proximityInstanceScanSeconds = Positive("AzerothVoices.Proximity.ScanSecondsInstance",

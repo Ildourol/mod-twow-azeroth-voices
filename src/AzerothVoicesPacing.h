@@ -19,7 +19,6 @@ namespace AzerothVoices
 
     std::string NormalizeGuildPacingKey(uint32_t guildId);
     std::string NormalizeProximityPacingKey(uint32_t mapId, uint32_t instanceId, uint32_t zoneId, bool instance = false);
-    std::string NormalizeProximityPacingKey(uint32_t mapId, uint32_t zoneId, uint32_t instanceId, bool instance);
 
     // Overloaded convenience helper for estimated exchange duration
     uint32_t EstimateExchangeMilliseconds(size_t lines, uint32_t averageDelayMs,
