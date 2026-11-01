@@ -41,10 +41,10 @@
 6. [PlayerBot-to-real-player sentiment](#playerbot-to-real-player-sentiment) (11 settings)
 7. [PlayerBot delivery scopes, response selection, and distances](#playerbot-delivery-scopes-response-selection-and-distances) (42 settings)
 8. [NPC dialogue: reactions, combat-start, and the ordered /say reply chain](#npc-dialogue-reactions-combat-start-and-the-ordered-say-reply-chain) (22 settings)
-9. [Dedicated proximity chatter (ordinary Say)](#dedicated-proximity-chatter-ordinary-say) (19 settings)
+9. [Dedicated proximity chatter (ordinary Say)](#dedicated-proximity-chatter-ordinary-say) (26 settings)
 10. [Boss and miniboss pre-aggro dialogue (dungeons and raids only)](#boss-and-miniboss-pre-aggro-dialogue-dungeons-and-raids-only) (18 settings)
-11. [Party and raid chatter](#party-and-raid-chatter) (64 settings)
-12. [Guild chatter](#guild-chatter) (38 settings)
+11. [Party and raid chatter](#party-and-raid-chatter) (70 settings)
+12. [Guild chatter](#guild-chatter) (44 settings)
 13. [Deterministic bot memory ledger](#deterministic-bot-memory-ledger) (17 settings)
 14. [Random nearby, guild, and world chatter](#random-nearby-guild-and-world-chatter) (12 settings)
 15. [Automated World/custom-channel pacing](#automated-worldcustom-channel-pacing) (11 settings)
@@ -1350,159 +1350,215 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 
 | Setting Name | Type / Range | Default | Summary |
 | :--- | :--- | :--- | :--- |
-| [`AzerothVoices.Proximity.Enable`](#azerothvoicesproximityenable) | Boolean (`0` or `1`) | `1` | Enables the proximity subsystem, which owns ordinary nearby NPC Say chatter... |
-| [`AzerothVoices.Proximity.ScanSecondsOutdoor`](#azerothvoicesproximityscansecondsoutdoor) | Integer (Seconds, 5-3600; default 30) | `30` | Delay between outdoor proximity scans. (Seconds, 5-3600; default 30) |
-| [`AzerothVoices.Proximity.ScanSecondsInstance`](#azerothvoicesproximityscansecondsinstance) | Integer (Seconds, 5-3600; default 30.) | `30` | Delay between dungeon/raid proximity scans. (Seconds, 5-3600; default 30.) |
-| [`AzerothVoices.Proximity.OutdoorChance`](#azerothvoicesproximityoutdoorchance) | Percentage (`0` - `100`) | `15` | Trigger chance per outdoor scan, before zone fatigue. (Percentage; default ... |
-| [`AzerothVoices.Proximity.InstanceChance`](#azerothvoicesproximityinstancechance) | Percentage (`0` - `100`) | `75` | Trigger chance per dungeon/raid scan, before zone fatigue. (Percentage; def... |
-| [`AzerothVoices.Proximity.IncludeInstances`](#azerothvoicesproximityincludeinstances) | Boolean (`0` or `1`) | `1` | Includes dungeons and raids; they are never required for outdoor chatter. (... |
-| [`AzerothVoices.Proximity.EntityCooldownSeconds`](#azerothvoicesproximityentitycooldownseconds) | Integer (Seconds, 0-86400; default 60) | `60` | Per-speaker cooldown after a delivered proximity line. (Seconds, 0-86400; d... |
-| [`AzerothVoices.Proximity.ZoneFatigueScenes`](#azerothvoicesproximityzonefatiguescenes) | Integer | `3` | Scenes a zone may produce before its trigger chance starts decaying. (Scene... |
-| [`AzerothVoices.Proximity.ZoneFatigueDecayPercent`](#azerothvoicesproximityzonefatiguedecaypercent) | Percentage (`0` - `100`) | `20` | Decay applied per scene beyond ZoneFatigueScenes and per scene-free scan, f... |
-| [`AzerothVoices.Proximity.MinimumSpeakers`](#azerothvoicesproximityminimumspeakers) | Integer | `1` | Minimum speakers selected per scene. (Speakers, 1-8; default 1) |
-| [`AzerothVoices.Proximity.MaximumSpeakers`](#azerothvoicesproximitymaximumspeakers) | Integer | `3` | Maximum speakers selected per scene; raised to MinimumSpeakers when set low... |
-| [`AzerothVoices.Proximity.ConversationChance`](#azerothvoicesproximityconversationchance) | Percentage (`0` - `100`) | `40` | Chance a scene becomes a multi-line conversation instead of one line. (Perc... |
-| [`AzerothVoices.Proximity.MaximumLines`](#azerothvoicesproximitymaximumlines) | Integer | `4` | Lines a single scene may deliver. (Lines, 1-12; default 4) |
-| [`AzerothVoices.Proximity.TurnGapSeconds`](#azerothvoicesproximityturngapseconds) | Integer (Seconds, 0-600; default 3) | `3` | Minimum gap between delivered lines of one conversation. (Seconds, 0-600; d... |
-| [`AzerothVoices.Proximity.ReplyWindowSeconds`](#azerothvoicesproximityreplywindowseconds) | Integer (Seconds, 1-600; default 30) | `30` | Window in which a conversation may continue after its first line. (Seconds,... |
-| [`AzerothVoices.Proximity.MaximumReplyTurns`](#azerothvoicesproximitymaximumreplyturns) | Integer | `5` | Generated reply turns allowed inside one scene. (Turns, 1-20; default 5) |
-| [`AzerothVoices.Proximity.Speaker.AllowEntries`](#azerothvoicesproximityspeakerallowentries) | String (Comma-separated list) | `# AzerothVoices.Proximity.Speaker.DenyEntries` | Creature entries allowed to speak in proximity scenes; empty means no entry... |
-| [`AzerothVoices.Proximity.Speaker.DenyEntries`](#azerothvoicesproximityspeakerdenyentries) | String (Comma-separated list) | `# AzerothVoices.Proximity.Speaker.AllowNonHumanoidEntries` | Creature entries that may never speak in proximity scenes, whatever else qu... |
-| [`AzerothVoices.Proximity.Speaker.AllowNonHumanoidEntries`](#azerothvoicesproximityspeakerallownonhumanoidentries) | String (Comma-separated list) | `# --------------------------------------------` | Non-humanoid creature entries explicitly allowed to speak; humanoids never ... |
+| [`AzerothVoices.Proximity.Enable`](#azerothvoicesproximityenable) | Boolean (`0` or `1`) | `1` | Enables the proximity subsystem, which owns ordinary nearby NPC Say chatter. |
+| [`AzerothVoices.Proximity.ScanSecondsOutdoor`](#azerothvoicesproximityscansecondsoutdoor) | Integer (Seconds, 5-3600) | `60` | Delay between outdoor proximity scans. |
+| [`AzerothVoices.Proximity.ScanSecondsInstance`](#azerothvoicesproximityscansecondsinstance) | Integer (Seconds, 5-3600) | `30` | Delay between dungeon/raid proximity scans. |
+| [`AzerothVoices.Proximity.OutdoorChance`](#azerothvoicesproximityoutdoorchance) | Percentage (`0` - `100`) | `10` | Trigger chance per outdoor scan, before zone fatigue. |
+| [`AzerothVoices.Proximity.InstanceChance`](#azerothvoicesproximityinstancechance) | Percentage (`0` - `100`) | `35` | Trigger chance per dungeon/raid scan, before zone fatigue. |
+| [`AzerothVoices.Proximity.IncludeInstances`](#azerothvoicesproximityincludeinstances) | Boolean (`0` or `1`) | `1` | Includes dungeons and raids in proximity chatter evaluations. |
+| [`AzerothVoices.Proximity.PlayerDistance`](#azerothvoicesproximityplayerdistance) | Float (Yards, > 0.0) | `10.0` | Maximum distance from anchor player to primary NPC to trigger proximity chat. |
+| [`AzerothVoices.Proximity.InterNpcDistance`](#azerothvoicesproximityinternpcdistance) | Float (Yards, > 0.0) | `10.0` | Maximum distance between NPCs for multi-NPC dialogue. |
+| [`AzerothVoices.Proximity.Pacing.Enable`](#azerothvoicesproximitypacingenable) | Boolean (`0` or `1`) | `1` | Enables per-area timeline pacing for proximity conversations. |
+| [`AzerothVoices.Proximity.Pacing.MinimumGapSeconds`](#azerothvoicesproximitypacingminimumgapseconds) | Integer (Seconds, 0-3600) | `45` | Minimum quiet gap between consecutive proximity scenes in the same zone/area. |
+| [`AzerothVoices.Proximity.Pacing.ReplyDelayMinSeconds`](#azerothvoicesproximitypacingreplydelayminseconds) | Integer (Seconds, 0-60) | `4` | Minimum randomized delay before the next NPC turn delivers. |
+| [`AzerothVoices.Proximity.Pacing.ReplyDelayMaxSeconds`](#azerothvoicesproximitypacingreplydelaymaxseconds) | Integer (Seconds, 0-60) | `9` | Maximum randomized delay before the next NPC turn delivers. |
+| [`AzerothVoices.Proximity.Pacing.PauseDuringPlayerChatSeconds`](#azerothvoicesproximitypacingpauseduringplayerchatseconds) | Integer (Seconds, 0-3600) | `45` | Suppresses ambient proximity chatter if a human player spoke in /say nearby. |
+| [`AzerothVoices.Proximity.EntityCooldownSeconds`](#azerothvoicesproximityentitycooldownseconds) | Integer (Seconds, 0-86400) | `300` | Per-speaker cooldown after a delivered proximity line (5 minutes). |
+| [`AzerothVoices.Proximity.ZoneFatigueScenes`](#azerothvoicesproximityzonefatiguescenes) | Integer (Scenes, 1-100) | `3` | Scenes a zone may produce before trigger chance decays. |
+| [`AzerothVoices.Proximity.ZoneFatigueDecayPercent`](#azerothvoicesproximityzonefatiguedecaypercent) | Percentage (`0` - `100`) | `20` | Decay applied per scene beyond ZoneFatigueScenes. |
+| [`AzerothVoices.Proximity.MinimumSpeakers`](#azerothvoicesproximityminimumspeakers) | Integer (Speakers, 1-8) | `1` | Minimum speakers selected per scene. |
+| [`AzerothVoices.Proximity.MaximumSpeakers`](#azerothvoicesproximitymaximumspeakers) | Integer (Speakers, 1-8) | `2` | Maximum speakers selected per scene. |
+| [`AzerothVoices.Proximity.ConversationChance`](#azerothvoicesproximityconversationchance) | Percentage (`0` - `100`) | `25` | Chance a scene becomes a multi-line conversation instead of one line. |
+| [`AzerothVoices.Proximity.MaximumLines`](#azerothvoicesproximitymaximumlines) | Integer (Lines, 1-12) | `3` | Lines a single scene may deliver. |
+| [`AzerothVoices.Proximity.TurnGapSeconds`](#azerothvoicesproximityturngapseconds) | Integer (Seconds, 0-600) | `3` | Minimum gap between delivered lines of one conversation. |
+| [`AzerothVoices.Proximity.ReplyWindowSeconds`](#azerothvoicesproximityreplywindowseconds) | Integer (Seconds, 1-600) | `30` | Window in which a conversation may continue after its first line. |
+| [`AzerothVoices.Proximity.MaximumReplyTurns`](#azerothvoicesproximitymaximumreplyturns) | Integer (Turns, 1-20) | `5` | Generated reply turns allowed inside one scene. |
+| [`AzerothVoices.Proximity.Speaker.AllowEntries`](#azerothvoicesproximityspeakerallowentries) | String (Comma-separated) | *empty* | Creature entries allowed to speak in proximity scenes. |
+| [`AzerothVoices.Proximity.Speaker.DenyEntries`](#azerothvoicesproximityspeakerdenyentries) | String (Comma-separated) | *empty* | Creature entries that may never speak in proximity scenes. |
+| [`AzerothVoices.Proximity.Speaker.AllowNonHumanoidEntries`](#azerothvoicesproximityspeakerallownonhumanoidentries) | String (Comma-separated) | *empty* | Non-humanoid creature entries explicitly allowed to speak. |
 
 
 ### <a id="azerothvoicesproximityenable"></a>`AzerothVoices.Proximity.Enable`
 
 - **Data Type**: Boolean (`0` or `1`)
 - **Default Value**: `1`
-- **Description**: Enables the proximity subsystem, which owns ordinary nearby NPC Say chatter. Battlegrounds and arenas are always excluded. (Default 1)
+- **Description**: Enables the proximity subsystem, which owns ordinary nearby NPC Say chatter. Battlegrounds and arenas are always excluded.
 - **Operator Guidance & Impact**: Keep enabled (`1`) for standard functionality. Set to `0` to completely bypass this feature and eliminate its processing overhead.
 
 ### <a id="azerothvoicesproximityscansecondsoutdoor"></a>`AzerothVoices.Proximity.ScanSecondsOutdoor`
 
-- **Data Type**: Integer (Seconds, 5-3600; default 30)
-- **Default Value**: `30`
-- **Description**: Delay between outdoor proximity scans. (Seconds, 5-3600; default 30)
-- **Operator Guidance & Impact**: Controls background evaluation frequency. Shorter intervals increase responsiveness at the cost of more frequent world-thread scans; longer intervals conserve server CPU.
+- **Data Type**: Integer (Seconds, 5-3600)
+- **Default Value**: `60`
+- **Description**: Delay between outdoor proximity scans around online real players.
+- **Operator Guidance & Impact**: Higher intervals (60s) provide relaxed cadence and conserve server CPU.
 
 ### <a id="azerothvoicesproximityscansecondsinstance"></a>`AzerothVoices.Proximity.ScanSecondsInstance`
 
-- **Data Type**: Integer (Seconds, 5-3600; default 30)
+- **Data Type**: Integer (Seconds, 5-3600)
 - **Default Value**: `30`
-- **Description**: Delay between dungeon/raid proximity scans. (Seconds, 5-3600; default 30)
-- **Operator Guidance & Impact**: Controls background evaluation frequency. Shorter intervals increase responsiveness at the cost of more frequent world-thread scans; longer intervals conserve server CPU.
+- **Description**: Delay between dungeon/raid proximity scans around online real players.
+- **Operator Guidance & Impact**: Controls evaluation cadence in instances.
 
 ### <a id="azerothvoicesproximityoutdoorchance"></a>`AzerothVoices.Proximity.OutdoorChance`
 
 - **Data Type**: Percentage (`0` - `100`)
-- **Default Value**: `15`
-- **Description**: Trigger chance per outdoor scan, before zone fatigue. (Percentage; default 15)
-- **Operator Guidance & Impact**: Adjust this probability up for chattier, more responsive bots, or down to conserve LLM API tokens on high-population servers.
+- **Default Value**: `10`
+- **Description**: Trigger chance per outdoor scan, before zone fatigue.
+- **Operator Guidance & Impact**: Lowered to 10% to prevent excessive chatter in populated quest hubs.
 
 ### <a id="azerothvoicesproximityinstancechance"></a>`AzerothVoices.Proximity.InstanceChance`
 
 - **Data Type**: Percentage (`0` - `100`)
-- **Default Value**: `75`
-- **Description**: Trigger chance per dungeon/raid scan, before zone fatigue. (Percentage; default 75)
-- **Operator Guidance & Impact**: Adjust this probability up for chattier, more responsive bots, or down to conserve LLM API tokens on high-population servers.
+- **Default Value**: `35`
+- **Description**: Trigger chance per dungeon/raid scan, before zone fatigue.
+- **Operator Guidance & Impact**: Balanced at 35% for immersive dungeon atmosphere without spamming.
 
 ### <a id="azerothvoicesproximityincludeinstances"></a>`AzerothVoices.Proximity.IncludeInstances`
 
 - **Data Type**: Boolean (`0` or `1`)
 - **Default Value**: `1`
-- **Description**: Includes dungeons and raids; they are never required for outdoor chatter. (Default 1)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Description**: Includes dungeons and raids in proximity chatter evaluations.
+- **Operator Guidance & Impact**: Set to `0` if dungeon NPC chatter is unwanted.
+
+### <a id="azerothvoicesproximityplayerdistance"></a>`AzerothVoices.Proximity.PlayerDistance`
+
+- **Data Type**: Float (Yards, > 0.0)
+- **Default Value**: `10.0`
+- **Description**: Maximum distance in yards from the anchor player to the primary NPC to trigger proximity chat.
+- **Operator Guidance & Impact**: Enforces the strict 10-yard proximity radius so NPCs only speak when players are truly close.
+
+### <a id="azerothvoicesproximityinternpcdistance"></a>`AzerothVoices.Proximity.InterNpcDistance`
+
+- **Data Type**: Float (Yards, > 0.0)
+- **Default Value**: `10.0`
+- **Description**: Maximum distance in yards between NPC 1 and NPC 2 for multi-NPC dialogue.
+- **Operator Guidance & Impact**: Ensures speaking NPCs are clustered together naturally within 10 yards of each other with mutual line-of-sight.
+
+### <a id="azerothvoicesproximitypacingenable"></a>`AzerothVoices.Proximity.Pacing.Enable`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Enables per-area timeline pacing for proximity conversations.
+- **Operator Guidance & Impact**: Prevents overlapping conversations in the same zone/instance.
+
+### <a id="azerothvoicesproximitypacingminimumgapseconds"></a>`AzerothVoices.Proximity.Pacing.MinimumGapSeconds`
+
+- **Data Type**: Integer (Seconds, 0-3600)
+- **Default Value**: `45`
+- **Description**: Minimum quiet gap between consecutive proximity scenes in the same zone/area.
+- **Operator Guidance & Impact**: Enforces 45 seconds of natural silence before another proximity dialogue can occur in the same area.
+
+### <a id="azerothvoicesproximitypacingreplydelayminseconds"></a>`AzerothVoices.Proximity.Pacing.ReplyDelayMinSeconds`
+
+- **Data Type**: Integer (Seconds, 0-60)
+- **Default Value**: `4`
+- **Description**: Minimum randomized delay before the next NPC turn delivers.
+- **Operator Guidance & Impact**: Simulates natural verbal cadence between conversational turns.
+
+### <a id="azerothvoicesproximitypacingreplydelaymaxseconds"></a>`AzerothVoices.Proximity.Pacing.ReplyDelayMaxSeconds`
+
+- **Data Type**: Integer (Seconds, 0-60)
+- **Default Value**: `9`
+- **Description**: Maximum randomized delay before the next NPC turn delivers.
+- **Operator Guidance & Impact**: Pairs with MinSeconds for randomized 4-9 second pauses between speaker lines.
+
+### <a id="azerothvoicesproximitypacingpauseduringplayerchatseconds"></a>`AzerothVoices.Proximity.Pacing.PauseDuringPlayerChatSeconds`
+
+- **Data Type**: Integer (Seconds, 0-3600)
+- **Default Value**: `45`
+- **Description**: Suppresses ambient proximity chatter if a human player spoke in /say nearby within this window.
+- **Operator Guidance & Impact**: Respects human player conversations and prevents immersion-breaking NPC chatter interruptions.
 
 ### <a id="azerothvoicesproximityentitycooldownseconds"></a>`AzerothVoices.Proximity.EntityCooldownSeconds`
 
-- **Data Type**: Integer (Seconds, 0-86400; default 60)
-- **Default Value**: `60`
-- **Description**: Per-speaker cooldown after a delivered proximity line. (Seconds, 0-86400; default 60)
-- **Operator Guidance & Impact**: Controls rate-limiting. Increasing this value prevents repetitive triggers and reduces API call frequency; setting to `0` removes time-based gating for this specific event.
+- **Data Type**: Integer (Seconds, 0-86400)
+- **Default Value**: `300`
+- **Description**: Per-speaker cooldown after a delivered proximity line (5 minutes).
+- **Operator Guidance & Impact**: Prevents the same NPC from speaking repeatedly.
 
 ### <a id="azerothvoicesproximityzonefatiguescenes"></a>`AzerothVoices.Proximity.ZoneFatigueScenes`
 
-- **Data Type**: Integer
+- **Data Type**: Integer (Scenes, 1-100)
 - **Default Value**: `3`
-- **Description**: Scenes a zone may produce before its trigger chance starts decaying. (Scenes, 1-100; default 3)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Description**: Scenes a zone may produce before its trigger chance starts decaying.
+- **Operator Guidance & Impact**: Dampens chatter in zones where players linger for extended periods.
 
 ### <a id="azerothvoicesproximityzonefatiguedecaypercent"></a>`AzerothVoices.Proximity.ZoneFatigueDecayPercent`
 
 - **Data Type**: Percentage (`0` - `100`)
 - **Default Value**: `20`
-- **Description**: Decay applied per scene beyond ZoneFatigueScenes and per scene-free scan, floored at 1 percent. (Percentage; default 20)
-- **Operator Guidance & Impact**: Adjust this probability up for chattier, more responsive bots, or down to conserve LLM API tokens on high-population servers.
+- **Description**: Decay applied per scene beyond ZoneFatigueScenes and per scene-free scan, floored at 1 percent.
+- **Operator Guidance & Impact**: Calibrates the rate of chatter decay in lingering zones.
 
 ### <a id="azerothvoicesproximityminimumspeakers"></a>`AzerothVoices.Proximity.MinimumSpeakers`
 
-- **Data Type**: Integer
+- **Data Type**: Integer (Speakers, 1-8)
 - **Default Value**: `1`
-- **Description**: Minimum speakers selected per scene. (Speakers, 1-8; default 1)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Description**: Minimum speakers selected per scene.
+- **Operator Guidance & Impact**: Standard baseline of 1 speaker.
 
 ### <a id="azerothvoicesproximitymaximumspeakers"></a>`AzerothVoices.Proximity.MaximumSpeakers`
 
-- **Data Type**: Integer
-- **Default Value**: `3`
-- **Description**: Maximum speakers selected per scene; raised to MinimumSpeakers when set lower. (Speakers, 1-8; default 3)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Data Type**: Integer (Speakers, 1-8)
+- **Default Value**: `2`
+- **Description**: Maximum speakers selected per scene.
+- **Operator Guidance & Impact**: Defaults to 2 for natural dual-NPC dialogue; set to 3 for occasional 3-way interactions.
 
 ### <a id="azerothvoicesproximityconversationchance"></a>`AzerothVoices.Proximity.ConversationChance`
 
 - **Data Type**: Percentage (`0` - `100`)
-- **Default Value**: `40`
-- **Description**: Chance a scene becomes a multi-line conversation instead of one line. (Percentage; default 40)
-- **Operator Guidance & Impact**: Adjust this probability up for chattier, more responsive bots, or down to conserve LLM API tokens on high-population servers.
+- **Default Value**: `25`
+- **Description**: Chance a scene becomes a multi-line conversation instead of a solo bark.
+- **Operator Guidance & Impact**: Balanced at 25% for occasional dialogue while keeping solo ambient barks common.
 
 ### <a id="azerothvoicesproximitymaximumlines"></a>`AzerothVoices.Proximity.MaximumLines`
 
-- **Data Type**: Integer
-- **Default Value**: `4`
-- **Description**: Lines a single scene may deliver. (Lines, 1-12; default 4)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Data Type**: Integer (Lines, 1-12)
+- **Default Value**: `3`
+- **Description**: Lines a single scene may deliver.
+- **Operator Guidance & Impact**: Keeps exchanges brief and punchy (up to 3 turns).
 
 ### <a id="azerothvoicesproximityturngapseconds"></a>`AzerothVoices.Proximity.TurnGapSeconds`
 
-- **Data Type**: Integer (Seconds, 0-600; default 3)
+- **Data Type**: Integer (Seconds, 0-600)
 - **Default Value**: `3`
-- **Description**: Minimum gap between delivered lines of one conversation. (Seconds, 0-600; default 3)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Description**: Minimum gap between delivered lines of one conversation.
+- **Operator Guidance & Impact**: Ensures lines do not deliver simultaneously.
 
 ### <a id="azerothvoicesproximityreplywindowseconds"></a>`AzerothVoices.Proximity.ReplyWindowSeconds`
 
-- **Data Type**: Integer (Seconds, 1-600; default 30)
+- **Data Type**: Integer (Seconds, 1-600)
 - **Default Value**: `30`
-- **Description**: Window in which a conversation may continue after its first line. (Seconds, 1-600; default 30)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Description**: Window in which a conversation may continue after its first line.
+- **Operator Guidance & Impact**: Expiration window for stalled scenes.
 
 ### <a id="azerothvoicesproximitymaximumreplyturns"></a>`AzerothVoices.Proximity.MaximumReplyTurns`
 
-- **Data Type**: Integer
+- **Data Type**: Integer (Turns, 1-20)
 - **Default Value**: `5`
-- **Description**: Generated reply turns allowed inside one scene. (Turns, 1-20; default 5)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Description**: Generated reply turns allowed inside one scene.
+- **Operator Guidance & Impact**: Hard cap on generated reply turns.
 
 ### <a id="azerothvoicesproximityspeakerallowentries"></a>`AzerothVoices.Proximity.Speaker.AllowEntries`
 
-- **Data Type**: String (Comma-separated list)
-- **Default Value**: `# AzerothVoices.Proximity.Speaker.DenyEntries`
-- **Description**: Creature entries allowed to speak in proximity scenes; empty means no entry restriction. The denylist below always wins. (Comma-separated creature entries; default # AzerothVoices.Proximity.Speaker.DenyEntries)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Data Type**: String (Comma-separated creature entries)
+- **Default Value**: *empty*
+- **Description**: Creature entries allowed to speak in proximity scenes; empty means no entry restriction.
+- **Operator Guidance & Impact**: Optional whitelist.
 
 ### <a id="azerothvoicesproximityspeakerdenyentries"></a>`AzerothVoices.Proximity.Speaker.DenyEntries`
 
-- **Data Type**: String (Comma-separated list)
-- **Default Value**: `# AzerothVoices.Proximity.Speaker.AllowNonHumanoidEntries`
-- **Description**: Creature entries that may never speak in proximity scenes, whatever else qualifies them. (Comma-separated creature entries; default # AzerothVoices.Proximity.Speaker.DenyEntries)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Data Type**: String (Comma-separated creature entries)
+- **Default Value**: *empty*
+- **Description**: Creature entries that may never speak in proximity scenes, whatever else qualifies them.
+- **Operator Guidance & Impact**: Use to silence specific problematic NPCs.
 
 ### <a id="azerothvoicesproximityspeakerallownonhumanoidentries"></a>`AzerothVoices.Proximity.Speaker.AllowNonHumanoidEntries`
 
-- **Data Type**: String (Comma-separated list)
-- **Default Value**: `# --------------------------------------------`
-- **Description**: Non-humanoid creature entries explicitly allowed to speak; humanoids never need to be listed. (Comma-separated creature entries; default # AzerothVoices.Proximity.Speaker.DenyEntries)
-- **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+- **Data Type**: String (Comma-separated creature entries)
+- **Default Value**: *empty*
+- **Description**: Non-humanoid creature entries explicitly allowed to speak; humanoids never need to be listed.
+- **Operator Guidance & Impact**: Whitelist non-humanoids (e.g. talking beasts or spirits).
 
 ---
 
@@ -1677,7 +1733,7 @@ conservative defaults below; raise only the ones you want.
 | [`AzerothVoices.GroupChatter.DungeonEntryCooldownSeconds`](#azerothvoicesgroupchatterdungeonentrycooldownseconds) | Integer (Seconds, 0-86400; default 300) | `300` | Cooldown after a dungeon-entry line. (Seconds, 0-86400; default 300) |
 | [`AzerothVoices.GroupChatter.ZoneChangeChance`](#azerothvoicesgroupchatterzonechangechance) | Percentage (`0` - `100`) | `15` | Chance the group comments on an outdoor zone change. (Percentage; default 1... |
 | [`AzerothVoices.GroupChatter.ZoneChangeCooldownSeconds`](#azerothvoicesgroupchatterzonechangecooldownseconds) | Integer (Seconds, 0-86400; default 300) | `300` | Cooldown after a zone-change line. (Seconds, 0-86400; default 300) |
-| [`AzerothVoices.GroupChatter.KillChance`](#azerothvoicesgroupchatterkillchance) | Percentage (`0` - `100`) | `4` | Chance the group reacts to an ordinary creature kill. (Percentage; default ... |
+| [`AzerothVoices.GroupChatter.KillChance`](#azerothvoicesgroupchatterkillchance) | Percentage (`0` - `100`) | `2` | Chance the group reacts to an ordinary creature kill. (Percentage; default ... |
 | [`AzerothVoices.GroupChatter.KillCooldownSeconds`](#azerothvoicesgroupchatterkillcooldownseconds) | Integer (Seconds, 0-86400; default 600) | `600` | Cooldown after a trash-kill line. (Seconds, 0-86400; default 600) |
 | [`AzerothVoices.GroupChatter.BossPullChance`](#azerothvoicesgroupchatterbosspullchance) | Percentage (`0` - `100`) | `50` | Chance the group reacts when a classified dungeon/raid boss is engaged. (Pe... |
 | [`AzerothVoices.GroupChatter.BossPullCooldownSeconds`](#azerothvoicesgroupchatterbosspullcooldownseconds) | Integer (Seconds, 0-86400; default 300) | `300` | Cooldown after a boss-pull line. (Seconds, 0-86400; default 300) |
@@ -1691,17 +1747,17 @@ conservative defaults below; raise only the ones you want.
 | [`AzerothVoices.GroupChatter.CorpseRunCooldownSeconds`](#azerothvoicesgroupchattercorpseruncooldownseconds) | Integer (Seconds, 0-86400; default 300) | `300` | Cooldown after a corpse-run line. (Seconds, 0-86400; default 300) |
 | [`AzerothVoices.GroupChatter.ResurrectChance`](#azerothvoicesgroupchatterresurrectchance) | Percentage (`0` - `100`) | `50` | Chance the group welcomes a member back after an observed resurrection. (Pe... |
 | [`AzerothVoices.GroupChatter.ResurrectCooldownSeconds`](#azerothvoicesgroupchatterresurrectcooldownseconds) | Integer (Seconds, 0-86400; default 120) | `120` | Cooldown after a resurrect line. (Seconds, 0-86400; default 120) |
-| [`AzerothVoices.GroupChatter.LootChanceGreen`](#azerothvoicesgroupchatterlootchancegreen) | Percentage (`0` - `100`) | `5` | Loot chatter chance by item quality; poor and common loot never triggers. (... |
-| [`AzerothVoices.GroupChatter.LootChanceBlue`](#azerothvoicesgroupchatterlootchanceblue) | Percentage (`0` - `100`) | `10` | Rare (blue) loot chatter chance. (Percentage; default 10) |
+| [`AzerothVoices.GroupChatter.LootChanceGreen`](#azerothvoicesgroupchatterlootchancegreen) | Percentage (`0` - `100`) | `0` | Loot chatter chance by item quality; poor and common loot never triggers. (... |
+| [`AzerothVoices.GroupChatter.LootChanceBlue`](#azerothvoicesgroupchatterlootchanceblue) | Percentage (`0` - `100`) | `5` | Rare (blue) loot chatter chance. (Percentage; default 10) |
 | [`AzerothVoices.GroupChatter.LootChancePurple`](#azerothvoicesgroupchatterlootchancepurple) | Percentage (`0` - `100`) | `20` | Epic (purple) loot chatter chance. (Percentage; default 20) |
 | [`AzerothVoices.GroupChatter.LootChanceOrange`](#azerothvoicesgroupchatterlootchanceorange) | Percentage (`0` - `100`) | `100` | Legendary (orange) loot chatter chance. (Percentage; default 100) |
 | [`AzerothVoices.GroupChatter.LootCooldownSeconds`](#azerothvoicesgroupchatterlootcooldownseconds) | Integer (Seconds, 0-86400; default 600) | `600` | Cooldown after a loot line. (Seconds, 0-86400; default 600) |
 | [`AzerothVoices.GroupChatter.QuestAcceptChance`](#azerothvoicesgroupchatterquestacceptchance) | Percentage (`0` - `100`) | `10` | Chance the group comments when a member picks up a quest. (Percentage; defa... |
-| [`AzerothVoices.GroupChatter.QuestObjectiveChance`](#azerothvoicesgroupchatterquestobjectivechance) | Percentage (`0` - `100`) | `10` | Chance the group comments when a quest objective advances. (Percentage; def... |
+| [`AzerothVoices.GroupChatter.QuestObjectiveChance`](#azerothvoicesgroupchatterquestobjectivechance) | Percentage (`0` - `100`) | `5` | Chance the group comments when a quest objective advances. (Percentage; def... |
 | [`AzerothVoices.GroupChatter.QuestCompleteChance`](#azerothvoicesgroupchatterquestcompletechance) | Percentage (`0` - `100`) | `20` | Chance the group comments when a member completes a quest. (Percentage; def... |
 | [`AzerothVoices.GroupChatter.QuestCooldownSeconds`](#azerothvoicesgroupchatterquestcooldownseconds) | Integer (Seconds, 0-86400; default 300) | `300` | Cooldown for quest accept/complete lines. (Seconds, 0-86400; default 300) |
 | [`AzerothVoices.GroupChatter.QuestObjectiveDebounceSeconds`](#azerothvoicesgroupchatterquestobjectivedebounceseconds) | Integer (Seconds, 0-3600; default 300) | `300` | Minimum gap between objective-progress lines, which are otherwise the chatt... |
-| [`AzerothVoices.GroupChatter.SpellCastChance`](#azerothvoicesgroupchatterspellcastchance) | Percentage (`0` - `100`) | `2` | Chance the group comments on a member's spell cast. This hook fires very of... |
+| [`AzerothVoices.GroupChatter.SpellCastChance`](#azerothvoicesgroupchatterspellcastchance) | Percentage (`0` - `100`) | `1` | Chance the group comments on a member's spell cast. This hook fires very of... |
 | [`AzerothVoices.GroupChatter.SpellCastCooldownSeconds`](#azerothvoicesgroupchatterspellcastcooldownseconds) | Integer (Seconds, 0-86400; default 600) | `600` | Cooldown after a spell-cast line. (Seconds, 0-86400; default 600) |
 | [`AzerothVoices.GroupChatter.LowHealthChance`](#azerothvoicesgroupchatterlowhealthchance) | Percentage (`0` - `100`) | `40` | Chance a member calls out low health, once per drop below the threshold. (P... |
 | [`AzerothVoices.GroupChatter.LowHealthThresholdPercent`](#azerothvoicesgroupchatterlowhealththresholdpercent) | Percentage (`0` - `100`) | `35` | Health percentage that counts as low for the callout. (Percentage, 1-99; de... |
@@ -1717,9 +1773,15 @@ conservative defaults below; raise only the ones you want.
 | [`AzerothVoices.GroupChatter.BotQuestionCooldownSeconds`](#azerothvoicesgroupchatterbotquestioncooldownseconds) | Integer (Seconds, 0-86400; default 600) | `600` | Cooldown after a bot question. (Seconds, 0-86400; default 600) |
 | [`AzerothVoices.GroupChatter.PlayerFollowupChance`](#azerothvoicesgroupchatterplayerfollowupchance) | Percentage (`0` - `100`) | `25` | Chance one other grouped bot adds a second line after a bot's reply to a re... |
 | [`AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds`](#azerothvoicesgroupchatterplayerfollowupcooldownseconds) | Integer (Seconds, 0-86400; default 60) | `60` | Cooldown after such a second line. (Seconds, 0-86400; default 60) |
-| [`AzerothVoices.GroupChatter.ConversationChance`](#azerothvoicesgroupchatterconversationchance) | Percentage (`0` - `100`) | `10` | Chance a group line becomes a short multi-line conversation instead of one ... |
-| [`AzerothVoices.GroupChatter.ConversationMaximumLines`](#azerothvoicesgroupchatterconversationmaximumlines) | Integer | `2` | Lines a group conversation may deliver. (Lines, 1-12; default 2) |
-| [`AzerothVoices.GroupChatter.ConversationMaximumParticipants`](#azerothvoicesgroupchatterconversationmaximumparticipants) | Integer | `2` | Participants a group conversation may use, capped by the number of grouped ... |
+| [`AzerothVoices.GroupChatter.Pacing.Enable`](#azerothvoicesgroupchatterpacingenable) | Boolean (`0` or `1`) | `1` | Enables per-party pacing timeline reservation for group conversations. |
+| [`AzerothVoices.GroupChatter.Pacing.MinimumGapSeconds`](#azerothvoicesgroupchatterpacingminimumgapseconds) | Integer (Seconds, 0-3600) | `30` | Minimum quiet gap between consecutive group conversations. |
+| [`AzerothVoices.GroupChatter.Pacing.ReplyDelayMinSeconds`](#azerothvoicesgroupchatterpacingreplydelayminseconds) | Integer (Seconds, 0-60) | `4` | Minimum randomized reply delay before the next group turn delivers. |
+| [`AzerothVoices.GroupChatter.Pacing.ReplyDelayMaxSeconds`](#azerothvoicesgroupchatterpacingreplydelaymaxseconds) | Integer (Seconds, 0-60) | `8` | Maximum randomized reply delay before the next group turn delivers. |
+| [`AzerothVoices.GroupChatter.Pacing.BotSpeakerCooldownSeconds`](#azerothvoicesgroupchatterpacingbotspeakercooldownseconds) | Integer (Seconds, 0-86400) | `60` | Cooldown applied to participant bots after completing a group conversation. |
+| [`AzerothVoices.GroupChatter.Pacing.PauseDuringPlayerChatSeconds`](#azerothvoicesgroupchatterpacingpauseduringplayerchatseconds) | Integer (Seconds, 0-3600) | `30` | Mutes group chatter if a human party member recently spoke in party/raid chat. |
+| [`AzerothVoices.GroupChatter.ConversationChance`](#azerothvoicesgroupchatterconversationchance) | Percentage (`0` - `100`) | `15` | Chance a group line becomes a short multi-line conversation instead of one ... |
+| [`AzerothVoices.GroupChatter.ConversationMaximumLines`](#azerothvoicesgroupchatterconversationmaximumlines) | Integer | `3` | Lines a group conversation may deliver. (Lines, 1-12; default 2) |
+| [`AzerothVoices.GroupChatter.ConversationMaximumParticipants`](#azerothvoicesgroupchatterconversationmaximumparticipants) | Integer | `3` | Participants a group conversation may use, capped by the number of grouped ... |
 | [`AzerothVoices.GroupChatter.ConversationTurnGapSeconds`](#azerothvoicesgroupchatterconversationturngapseconds) | Integer (Seconds, 0-600; default 8) | `8` | Minimum gap between delivered lines of one group conversation. (Seconds, 0-... |
 | [`AzerothVoices.GroupChatter.ConversationReplyWindowSeconds`](#azerothvoicesgroupchatterconversationreplywindowseconds) | Integer (Seconds, 1-600; default 30) | `30` | Window in which a group conversation may continue after its first line. (Se... |
 | [`AzerothVoices.GroupChatter.ConversationMaximumReplyTurns`](#azerothvoicesgroupchatterconversationmaximumreplyturns) | Integer | `2` | Generated reply turns allowed inside one group conversation. (Turns, 1-20; ... |
@@ -2071,6 +2133,48 @@ conservative defaults below; raise only the ones you want.
 - **Description**: Cooldown after such a second line. (Seconds, 0-86400; default 30)
 - **Operator Guidance & Impact**: Controls rate-limiting. Increasing this value prevents repetitive triggers and reduces API call frequency; setting to `0` removes time-based gating for this specific event.
 
+### <a id="azerothvoicesgroupchatterpacingenable"></a>`AzerothVoices.GroupChatter.Pacing.Enable`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Enables per-party pacing timeline reservation for group conversations.
+- **Operator Guidance & Impact**: Prevents overlapping or disjointed party conversations.
+
+### <a id="azerothvoicesgroupchatterpacingminimumgapseconds"></a>`AzerothVoices.GroupChatter.Pacing.MinimumGapSeconds`
+
+- **Data Type**: Integer (Seconds, 0-3600)
+- **Default Value**: `30`
+- **Description**: Minimum quiet gap between consecutive group conversations.
+- **Operator Guidance & Impact**: Enforces 30 seconds of quiet between party discussions.
+
+### <a id="azerothvoicesgroupchatterpacingreplydelayminseconds"></a>`AzerothVoices.GroupChatter.Pacing.ReplyDelayMinSeconds`
+
+- **Data Type**: Integer (Seconds, 0-60)
+- **Default Value**: `4`
+- **Description**: Minimum randomized reply delay before the next group turn delivers.
+- **Operator Guidance & Impact**: Simulates natural typing pauses before replies.
+
+### <a id="azerothvoicesgroupchatterpacingreplydelaymaxseconds"></a>`AzerothVoices.GroupChatter.Pacing.ReplyDelayMaxSeconds`
+
+- **Data Type**: Integer (Seconds, 0-60)
+- **Default Value**: `8`
+- **Description**: Maximum randomized reply delay before the next group turn delivers.
+- **Operator Guidance & Impact**: Randomized 4-8 second delay between party lines.
+
+### <a id="azerothvoicesgroupchatterpacingbotspeakercooldownseconds"></a>`AzerothVoices.GroupChatter.Pacing.BotSpeakerCooldownSeconds`
+
+- **Data Type**: Integer (Seconds, 0-86400)
+- **Default Value**: `60`
+- **Description**: Cooldown applied to participant bots after completing a group conversation.
+- **Operator Guidance & Impact**: Prevents the same bots from immediately starting another conversation.
+
+### <a id="azerothvoicesgroupchatterpacingpauseduringplayerchatseconds"></a>`AzerothVoices.GroupChatter.Pacing.PauseDuringPlayerChatSeconds`
+
+- **Data Type**: Integer (Seconds, 0-3600)
+- **Default Value**: `30`
+- **Description**: Mutes group chatter if a human party member recently spoke in party/raid chat.
+- **Operator Guidance & Impact**: Avoids talking over human party members.
+
 ### <a id="azerothvoicesgroupchatterconversationchance"></a>`AzerothVoices.GroupChatter.ConversationChance`
 
 - **Data Type**: Percentage (`0` - `100`)
@@ -2184,10 +2288,16 @@ conservative defaults below; raise only the ones you want.
 | :--- | :--- | :--- | :--- |
 | [`AzerothVoices.GuildChatter.Enable`](#azerothvoicesguildchatterenable) | Boolean (`0` or `1`) | `1` | Enables guild ambient conversation, login greetings and reply gating. Guild... |
 | [`AzerothVoices.GuildChatter.ScanSeconds`](#azerothvoicesguildchatterscanseconds) | Integer (Seconds, 5-3600; default 60) | `60` | Delay between guild ambient scans. (Seconds, 5-3600; default 60) |
-| [`AzerothVoices.GuildChatter.AmbientChance`](#azerothvoicesguildchatterambientchance) | Percentage (`0` - `100`) | `8` | Chance a scan starts a guild ambient line. (Percentage; default 8) |
-| [`AzerothVoices.GuildChatter.AmbientCooldownSeconds`](#azerothvoicesguildchatterambientcooldownseconds) | Integer (Seconds, 0-86400; default 600) | `600` | Cooldown between guild ambient lines. (Seconds, 0-86400; default 600) |
-| [`AzerothVoices.GuildChatter.ConversationChance`](#azerothvoicesguildchatterconversationchance) | Percentage (`0` - `100`) | `35` | Chance a guild ambient line becomes a short multi-line conversation. (Perce... |
-| [`AzerothVoices.GuildChatter.MaximumParticipants`](#azerothvoicesguildchattermaximumparticipants) | Integer | `2` | Participants a guild conversation may use, capped by the number of online g... |
+| [`AzerothVoices.GuildChatter.AmbientChance`](#azerothvoicesguildchatterambientchance) | Percentage (`0` - `100`) | `5` | Chance a scan starts a guild ambient line. (Percentage; default 8) |
+| [`AzerothVoices.GuildChatter.AmbientCooldownSeconds`](#azerothvoicesguildchatterambientcooldownseconds) | Integer (Seconds, 0-86400; default 900) | `900` | Cooldown between guild ambient lines. (Seconds, 0-86400; default 600) |
+| [`AzerothVoices.GuildChatter.Pacing.Enable`](#azerothvoicesguildchatterpacingenable) | Boolean (`0` or `1`) | `1` | Enables per-guild pacing timeline reservation for guild conversations. |
+| [`AzerothVoices.GuildChatter.Pacing.MinimumGapSeconds`](#azerothvoicesguildchatterpacingminimumgapseconds) | Integer (Seconds, 0-3600) | `60` | Minimum quiet gap between consecutive guild conversations. |
+| [`AzerothVoices.GuildChatter.Pacing.ReplyDelayMinSeconds`](#azerothvoicesguildchatterpacingreplydelayminseconds) | Integer (Seconds, 0-60) | `4` | Minimum randomized reply delay before the next guild turn delivers. |
+| [`AzerothVoices.GuildChatter.Pacing.ReplyDelayMaxSeconds`](#azerothvoicesguildchatterpacingreplydelaymaxseconds) | Integer (Seconds, 0-60) | `10` | Maximum randomized reply delay before the next guild turn delivers. |
+| [`AzerothVoices.GuildChatter.Pacing.BotSpeakerCooldownSeconds`](#azerothvoicesguildchatterpacingbotspeakercooldownseconds) | Integer (Seconds, 0-86400) | `90` | Cooldown applied to participant bots after completing a guild conversation. |
+| [`AzerothVoices.GuildChatter.Pacing.PauseDuringPlayerChatSeconds`](#azerothvoicesguildchatterpacingpauseduringplayerchatseconds) | Integer (Seconds, 0-3600) | `60` | Mutes guild ambient chatter if a human guild member recently spoke in guild chat. |
+| [`AzerothVoices.GuildChatter.ConversationChance`](#azerothvoicesguildchatterconversationchance) | Percentage (`0` - `100`) | `25` | Chance a guild ambient line becomes a short multi-line conversation. (Perce... |
+| [`AzerothVoices.GuildChatter.MaximumParticipants`](#azerothvoicesguildchattermaximumparticipants) | Integer | `3` | Participants a guild conversation may use, capped by the number of online g... |
 | [`AzerothVoices.GuildChatter.MaximumLines`](#azerothvoicesguildchattermaximumlines) | Integer | `3` | Lines a guild conversation may deliver. (Lines, 1-12; default 3) |
 | [`AzerothVoices.GuildChatter.ParticipantReferenceChance`](#azerothvoicesguildchatterparticipantreferencechance) | Percentage (`0` - `100`) | `20` | Chance the topic instruction mentions another online guild member. (Percent... |
 | [`AzerothVoices.GuildChatter.ZoneNameChance`](#azerothvoicesguildchatterzonenamechance) | Percentage (`0` - `100`) | `15` | Chance the topic instruction refers to the current zone. (Percentage; defau... |
@@ -2249,6 +2359,48 @@ conservative defaults below; raise only the ones you want.
 - **Default Value**: `600`
 - **Description**: Cooldown between guild ambient lines. (Seconds, 0-86400; default 600)
 - **Operator Guidance & Impact**: Controls rate-limiting. Increasing this value prevents repetitive triggers and reduces API call frequency; setting to `0` removes time-based gating for this specific event.
+
+### <a id="azerothvoicesguildchatterpacingenable"></a>`AzerothVoices.GuildChatter.Pacing.Enable`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Enables per-guild pacing timeline reservation for guild conversations.
+- **Operator Guidance & Impact**: Prevents chatter overlapping in guild chat.
+
+### <a id="azerothvoicesguildchatterpacingminimumgapseconds"></a>`AzerothVoices.GuildChatter.Pacing.MinimumGapSeconds`
+
+- **Data Type**: Integer (Seconds, 0-3600)
+- **Default Value**: `60`
+- **Description**: Minimum quiet gap between consecutive guild conversations.
+- **Operator Guidance & Impact**: Enforces 60 seconds of quiet between guild conversations.
+
+### <a id="azerothvoicesguildchatterpacingreplydelayminseconds"></a>`AzerothVoices.GuildChatter.Pacing.ReplyDelayMinSeconds`
+
+- **Data Type**: Integer (Seconds, 0-60)
+- **Default Value**: `4`
+- **Description**: Minimum randomized reply delay before the next guild turn delivers.
+- **Operator Guidance & Impact**: Simulates typing latency.
+
+### <a id="azerothvoicesguildchatterpacingreplydelaymaxseconds"></a>`AzerothVoices.GuildChatter.Pacing.ReplyDelayMaxSeconds`
+
+- **Data Type**: Integer (Seconds, 0-60)
+- **Default Value**: `10`
+- **Description**: Maximum randomized reply delay before the next guild turn delivers.
+- **Operator Guidance & Impact**: Randomized 4-10 second delay between guild lines.
+
+### <a id="azerothvoicesguildchatterpacingbotspeakercooldownseconds"></a>`AzerothVoices.GuildChatter.Pacing.BotSpeakerCooldownSeconds`
+
+- **Data Type**: Integer (Seconds, 0-86400)
+- **Default Value**: `90`
+- **Description**: Cooldown applied to participant bots after completing a guild conversation.
+- **Operator Guidance & Impact**: Prevents the same bots from dominating guild chat.
+
+### <a id="azerothvoicesguildchatterpacingpauseduringplayerchatseconds"></a>`AzerothVoices.GuildChatter.Pacing.PauseDuringPlayerChatSeconds`
+
+- **Data Type**: Integer (Seconds, 0-3600)
+- **Default Value**: `60`
+- **Description**: Mutes guild ambient chatter if a human guild member recently spoke in guild chat.
+- **Operator Guidance & Impact**: Prevents automated bot banter while human guildmates are actively talking.
 
 ### <a id="azerothvoicesguildchatterconversationchance"></a>`AzerothVoices.GuildChatter.ConversationChance`
 
@@ -2645,9 +2797,9 @@ Forget button and `.av memory forget` delete them.
 | Setting Name | Type / Range | Default | Summary |
 | :--- | :--- | :--- | :--- |
 | [`AzerothVoices.Random.Enable`](#azerothvoicesrandomenable) | Boolean (`0` or `1`) | `1` | Enables scheduled ambient chatter around online real players. (Default 1) |
-| [`AzerothVoices.Random.MinimumIntervalSeconds`](#azerothvoicesrandomminimumintervalseconds) | Integer (Seconds, minimum 5; default 300) | `300` | Lower bound before the next ambient attempt. (Seconds, minimum 5; default 300) |
-| [`AzerothVoices.Random.MaximumIntervalSeconds`](#azerothvoicesrandommaximumintervalseconds) | Integer (Seconds, at least MinimumIntervalSeconds; default 600) | `600` | Upper interval bound. (Seconds, at least MinimumIntervalSeconds; default 600) |
-| [`AzerothVoices.Random.FollowupChance`](#azerothvoicesrandomfollowupchance) | Percentage (`0` - `100`) | `10` | Chance another actor replies after ambient chatter, a bot-originated Say/Ye... |
+| [`AzerothVoices.Random.MinimumIntervalSeconds`](#azerothvoicesrandomminimumintervalseconds) | Integer (Seconds, minimum 5; default 180) | `180` | Lower bound before the next ambient attempt. (Seconds, minimum 5; default 300) |
+| [`AzerothVoices.Random.MaximumIntervalSeconds`](#azerothvoicesrandommaximumintervalseconds) | Integer (Seconds, at least MinimumIntervalSeconds; default 480) | `480` | Upper interval bound. (Seconds, at least MinimumIntervalSeconds; default 600) |
+| [`AzerothVoices.Random.FollowupChance`](#azerothvoicesrandomfollowupchance) | Percentage (`0` - `100`) | `5` | Chance another actor replies after ambient chatter, a bot-originated Say/Ye... |
 | [`AzerothVoices.Random.MaximumActors`](#azerothvoicesrandommaximumactors) | Integer | `2` | Generated conversation chain cap; 1 disables follow-ups. (Generated turns, ... |
 | [`AzerothVoices.Random.Scopes`](#azerothvoicesrandomscopes) | String (Comma-separated list) | `guild,world,party` | Chooses ambient-chat delivery scopes; a disabled or unavailable group scope... |
 | [`AzerothVoices.Random.Prompts`](#azerothvoicesrandomprompts) | String (Pipe-separated choices) | `Make a casual observation about the current zone.|Complain briefly about leveling or grinding.|Comment on loot, repairs, travel, professions, quests, dungeons, or battlegrounds.|Make a short joke that fits World of Warcraft.|Mention what you want to do next in the game.` | General ambient topic instructions. (Pipe-separated text choices.) |
@@ -3221,11 +3373,11 @@ Forget button and `.av memory forget` delete them.
 | Setting Name | Type / Range | Default | Summary |
 | :--- | :--- | :--- | :--- |
 | [`AzerothVoices.PartyGate.Enable`](#azerothvoicespartygateenable) | Boolean (`0` or `1`) | `1` | Enables per-party delivery timeline pacing and trigger-based policy gating.... |
-| [`AzerothVoices.PartyGate.FillerMinGapSeconds`](#azerothvoicespartygatefillermingapseconds) | Integer (Seconds, 0-300; default 30) | `30` | Minimum gap between filler chatter messages in the same party. (Seconds, 0-... |
-| [`AzerothVoices.PartyGate.ContextualMinGapSeconds`](#azerothvoicespartygatecontextualmingapseconds) | Integer (Seconds, 0-300; default 20) | `20` | Minimum gap between contextual event chatter messages in the same party. (S... |
+| [`AzerothVoices.PartyGate.FillerMinGapSeconds`](#azerothvoicespartygatefillermingapseconds) | Integer (Seconds, 0-300; default 45) | `45` | Minimum gap between filler chatter messages in the same party. (Seconds, 0-... |
+| [`AzerothVoices.PartyGate.ContextualMinGapSeconds`](#azerothvoicespartygatecontextualmingapseconds) | Integer (Seconds, 0-300; default 25) | `25` | Minimum gap between contextual event chatter messages in the same party. (S... |
 | [`AzerothVoices.PartyGate.ResponsiveMinGapSeconds`](#azerothvoicespartygateresponsivemingapseconds) | Integer (Seconds, 0-300; default 4) | `4` | Minimum gap between direct/responsive chatter messages in the same party. (... |
 | [`AzerothVoices.PartyGate.UrgentMinGapSeconds`](#azerothvoicespartygateurgentmingapseconds) | Integer (Seconds, 0-300; default 0) | `0` | Minimum gap between urgent callout messages in the same party. (Seconds, 0-... |
-| [`AzerothVoices.PartyGate.PreLLMDeferThresholdSeconds`](#azerothvoicespartygateprellmdeferthresholdseconds) | Integer (Seconds, 0-60; default 4) | `4` | Threshold in seconds beyond which pre-LLM filler requests are deferred or d... |
+| [`AzerothVoices.PartyGate.PreLLMDeferThresholdSeconds`](#azerothvoicespartygateprellmdeferthresholdseconds) | Integer (Seconds, 0-60; default 5) | `5` | Threshold in seconds beyond which pre-LLM filler requests are deferred or d... |
 | [`AzerothVoices.PartyGate.MaxFillerDelaySeconds`](#azerothvoicespartygatemaxfillerdelayseconds) | Integer (Seconds, 5-300; default 45) | `45` | Maximum post-generation delay cap for filler chatter. (Seconds, 5-300; defa... |
 | [`AzerothVoices.PartyGate.DebugLog`](#azerothvoicespartygatedebuglog) | Boolean (`0` or `1`) | `0` | Enables debug logging for PartyGate policy decisions and pacing reservation... |
 
@@ -3360,16 +3512,16 @@ human within SayDistance; Party actors require a real human in the same party su
 | Setting Name | Type / Range | Default | Summary |
 | :--- | :--- | :--- | :--- |
 | [`AzerothVoices.Events.Enable`](#azerothvoiceseventsenable) | Boolean (`0` or `1`) | `1` | Master switch for automatic and adapter event reactions. (Default 1) |
-| [`AzerothVoices.Events.ResponderChance`](#azerothvoiceseventsresponderchance) | Percentage (`0` - `100`) | `15` | Second-stage chance that other actors react after the selected scope's real... |
-| [`AzerothVoices.Events.SelfCommentChance`](#azerothvoiceseventsselfcommentchance) | Percentage (`0` - `100`) | `5` | Chance an AI PlayerBot comments on its own event through Guild, preferred P... |
-| [`AzerothVoices.Events.MaximumResponders`](#azerothvoiceseventsmaximumresponders) | Integer | `2` | Maximum other responders to one event. (Actors, minimum 1; default 2) |
-| [`AzerothVoices.Events.CooldownSeconds`](#azerothvoiceseventscooldownseconds) | Integer (Seconds, minimum 0; default 300) | `300` | Per-subject/per-event repeat cooldown. (Seconds, minimum 0; default 300) |
-| [`AzerothVoices.Events.Chance.CreatureDefeated`](#azerothvoiceseventschancecreaturedefeated) | Percentage (`0` - `100`) | `8` | Initial chance for an automatic creature-kill event. (Percentage; default 8... |
-| [`AzerothVoices.Events.Chance.PlayerDefeated`](#azerothvoiceseventschanceplayerdefeated) | Percentage (`0` - `100`) | `40` | Initial chance for an automatic PvP-kill event. (Percentage; default 40) |
-| [`AzerothVoices.Events.Chance.Died`](#azerothvoiceseventschancedied) | Percentage (`0` - `100`) | `25` | Initial chance for automatic player-death event. (Percentage; default 25) |
-| [`AzerothVoices.Events.Chance.ItemLooted`](#azerothvoiceseventschanceitemlooted) | Percentage (`0` - `100`) | `8` | Initial chance for automatic non-rare loot chatter. (Percentage; default 8.... |
+| [`AzerothVoices.Events.ResponderChance`](#azerothvoiceseventsresponderchance) | Percentage (`0` - `100`) | `8` | Second-stage chance that other actors react after the selected scope's real... |
+| [`AzerothVoices.Events.SelfCommentChance`](#azerothvoiceseventsselfcommentchance) | Percentage (`0` - `100`) | `3` | Chance an AI PlayerBot comments on its own event through Guild, preferred P... |
+| [`AzerothVoices.Events.MaximumResponders`](#azerothvoiceseventsmaximumresponders) | Integer | `1` | Maximum other responders to one event. (Actors, minimum 1; default 2) |
+| [`AzerothVoices.Events.CooldownSeconds`](#azerothvoiceseventscooldownseconds) | Integer (Seconds, minimum 0; default 90) | `90` | Per-subject/per-event repeat cooldown. (Seconds, minimum 0; default 300) |
+| [`AzerothVoices.Events.Chance.CreatureDefeated`](#azerothvoiceseventschancecreaturedefeated) | Percentage (`0` - `100`) | `4` | Initial chance for an automatic creature-kill event. (Percentage; default 8... |
+| [`AzerothVoices.Events.Chance.PlayerDefeated`](#azerothvoiceseventschanceplayerdefeated) | Percentage (`0` - `100`) | `25` | Initial chance for an automatic PvP-kill event. (Percentage; default 40) |
+| [`AzerothVoices.Events.Chance.Died`](#azerothvoiceseventschancedied) | Percentage (`0` - `100`) | `15` | Initial chance for automatic player-death event. (Percentage; default 25) |
+| [`AzerothVoices.Events.Chance.ItemLooted`](#azerothvoiceseventschanceitemlooted) | Percentage (`0` - `100`) | `3` | Initial chance for automatic non-rare loot chatter. (Percentage; default 8.... |
 | [`AzerothVoices.Events.Chance.QuestCompleted`](#azerothvoiceseventschancequestcompleted) | Percentage (`0` - `100`) | `25` | Initial chance for automatic quest-completion chatter. (Percentage; default... |
-| [`AzerothVoices.Events.Chance.SpellLearned`](#azerothvoiceseventschancespelllearned) | Percentage (`0` - `100`) | `15` | Initial chance for automatic spell-learning chatter. (Percentage; default 1... |
+| [`AzerothVoices.Events.Chance.SpellLearned`](#azerothvoiceseventschancespelllearned) | Percentage (`0` - `100`) | `8` | Initial chance for automatic spell-learning chatter. (Percentage; default 1... |
 | [`AzerothVoices.Events.Chance.DuelRequested`](#azerothvoiceseventschanceduelrequested) | Percentage (`0` - `100`) | `25` | Initial chance for automatic duel-request chatter. (Percentage; default 25.... |
 | [`AzerothVoices.Events.Chance.DuelStarted`](#azerothvoiceseventschanceduelstarted) | Percentage (`0` - `100`) | `20` | Initial chance for automatic duel-start chatter. (Percentage; default 20) |
 | [`AzerothVoices.Events.Chance.DuelWon`](#azerothvoiceseventschanceduelwon) | Percentage (`0` - `100`) | `35` | Initial chance for automatic duel-victory chatter. (Percentage; default 35.... |
