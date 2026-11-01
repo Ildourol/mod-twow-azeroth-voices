@@ -118,6 +118,14 @@ namespace AzerothVoices
         if (policy != PartyGatePolicy::Filler || partyKey.empty())
             return false;
 
+        // R2: If lane is owned by another active exchange, defer filler immediately
+        if (timeline.IsOwnedByAnother(partyKey))
+        {
+            if (outWaitSeconds)
+                *outWaitSeconds = deferThresholdSeconds + 1;
+            return true;
+        }
+
         auto nextEligible = timeline.NextEligible(partyKey);
         if (nextEligible <= now)
             return false;
@@ -131,7 +139,7 @@ namespace AzerothVoices
         return waitSeconds > deferThresholdSeconds;
     }
 
-    std::chrono::steady_clock::time_point CalculatePartyScheduledTime(
+    PartyScheduleResult CalculatePartyScheduledTime(
         DeliveryTimeline const& timeline,
         std::string const& partyKey,
         PartyGatePolicy policy,
@@ -141,12 +149,18 @@ namespace AzerothVoices
         ExchangeId const& owner)
     {
         if (policy == PartyGatePolicy::Bypass || partyKey.empty())
-            return requestedTime;
+            return { PartyScheduleStatus::Ready, requestedTime };
 
         if (policy == PartyGatePolicy::Urgent)
         {
             // Urgent messages bypass normal next-slot waiting (Section 27)
-            return requestedTime;
+            return { PartyScheduleStatus::Ready, requestedTime };
+        }
+
+        // R2: Perform active-owner check before applying filler-delay cap
+        if (timeline.IsOwnedByAnother(partyKey, owner))
+        {
+            return { PartyScheduleStatus::BlockedByActiveOwner, requestedTime };
         }
 
         auto nextEligible = timeline.NextEligible(partyKey, now, owner);
@@ -159,6 +173,6 @@ namespace AzerothVoices
             scheduled = std::min(scheduled, maxFillerTime);
         }
 
-        return scheduled;
+        return { PartyScheduleStatus::Ready, scheduled };
     }
 }

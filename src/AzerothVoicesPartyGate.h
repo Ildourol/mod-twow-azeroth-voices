@@ -30,6 +30,23 @@ namespace AzerothVoices
     // Generates the party pacing key: "party:<groupId>" or "party:<groupId>:subgroup:<subgroup>"
     std::string PartyPacingKey(uint32_t groupId, int32_t subgroup = -1);
 
+    // Party schedule status for active-owner gating (R2)
+    enum class PartyScheduleStatus : uint8_t
+    {
+        Ready,
+        BlockedByActiveOwner
+    };
+
+    struct PartyScheduleResult
+    {
+        PartyScheduleStatus status = PartyScheduleStatus::Ready;
+        std::chrono::steady_clock::time_point scheduledTime{};
+
+        // Implicit conversion to time_point allows seamless compatibility with callers and tests
+        operator std::chrono::steady_clock::time_point() const { return scheduledTime; }
+        bool IsBlocked() const { return status == PartyScheduleStatus::BlockedByActiveOwner; }
+    };
+
     // Pre-LLM deferral check for Filler chatter (Section 28).
     // Returns true if congested filler should be deferred before spending an LLM call.
     bool ShouldDeferPartyFiller(DeliveryTimeline const& timeline,
@@ -39,8 +56,8 @@ namespace AzerothVoices
                                 std::chrono::steady_clock::time_point now,
                                 uint32_t* outWaitSeconds = nullptr);
 
-    // Calculates the adjusted schedule time for a Party message (Section 23, 27, 29).
-    std::chrono::steady_clock::time_point CalculatePartyScheduledTime(
+    // Calculates the adjusted schedule time for a Party message (Section 23, 27, 29, R2).
+    PartyScheduleResult CalculatePartyScheduledTime(
         DeliveryTimeline const& timeline,
         std::string const& partyKey,
         PartyGatePolicy policy,

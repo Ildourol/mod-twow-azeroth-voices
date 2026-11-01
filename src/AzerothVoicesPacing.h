@@ -44,6 +44,7 @@ namespace AzerothVoices
             bool hasActiveOwner = false;
             bool anyLineDelivered = false;
             TimePoint quietDeadline{};
+            TimePoint priorQuietDeadline{};
             TimePoint lastDelivered{};
             uint32_t minimumGapMilliseconds = 0;
         };
@@ -52,6 +53,7 @@ namespace AzerothVoices
         size_t Size() const;
 
         bool CanDeliver(std::string const& key, TimePoint now, ExchangeId const& requester = {}) const;
+        bool IsOwnedByAnother(std::string const& key, ExchangeId const& requester = {}) const;
         TimePoint NextEligible(std::string const& key, TimePoint now, ExchangeId const& requester = {}) const;
         TimePoint NextEligible(std::string const& key) const;
 

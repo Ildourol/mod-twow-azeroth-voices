@@ -219,6 +219,8 @@ namespace AzerothVoices
             std::vector<uint64_t> speakers;
             std::set<uint64_t> deliveredSpeakers;
             ExchangeId exchangeId{};
+            std::string laneKey;
+            uint32_t minimumGapMilliseconds = 0;
             uint32_t maximumLines = 4;
             uint32_t deliveredLines = 0;
             uint32_t replyTurns = 0;
@@ -286,7 +288,10 @@ namespace AzerothVoices
             std::string channel;
             uint64_t anchorPlayerGuid = 0;
             std::vector<uint64_t> speakers;
+            std::set<uint64_t> deliveredSpeakers;
             ExchangeId exchangeId{};
+            std::string laneKey;
+            uint32_t minimumGapMilliseconds = 0;
             uint32_t deliveredLines = 0;
             uint32_t maximumLines = 6;
             GeneralThemeType theme = GeneralThemeType::Game;
@@ -303,7 +308,10 @@ namespace AzerothVoices
             uint32_t instanceId = 0;
             uint64_t anchorPlayerGuid = 0;
             std::vector<uint64_t> speakers;
+            std::set<uint64_t> deliveredSpeakers;
             ExchangeId exchangeId{};
+            std::string laneKey;
+            uint32_t minimumGapMilliseconds = 0;
             uint32_t deliveredLines = 0;
             uint32_t replyTurns = 0;
             uint32_t maximumLines = 4;
@@ -420,9 +428,12 @@ namespace AzerothVoices
         bool PreflightDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
                                ChatScope scope, std::string const& channelName,
                                std::string const& trigger, RequestPriority priority,
-                               bool ambient);
+                               bool ambient, ExchangeId const& candidateOwner = {});
         bool CanEnqueueDialogue(ActorSnapshot const& actor, RequestPriority priority,
-                                bool ambient);
+                                bool ambient, ExchangeId const& candidateOwner = {});
+        bool IsValidContinuation(ActorSnapshot const& actor, ExchangeId const& exchangeId) const;
+        bool IsExchangeActive(ExchangeId const& exchangeId) const;
+        void RecordDeliveredLine(ScheduledLine const& line, std::chrono::steady_clock::time_point now, uint32_t nowSec);
         void RecordPreflightRejection(PreflightReason reason);
         bool Enqueue(ChatRequest request);
         bool PopRequest(ChatRequest& request);
@@ -625,7 +636,7 @@ namespace AzerothVoices
         std::map<uint64_t, PendingGuildGreeting> m_pendingGuildGreetings;
         std::map<uint64_t, std::pair<uint32_t, std::string>> m_lastPlayerMap;
         uint32_t m_epoch = 1;
-        void TerminateExchange(ExchangeId const& exchangeId, char const* reason);
+        void TerminateExchange(ExchangeId exchangeId, char const* reason);
         DeliveryTimeline m_generalPacing;
         DeliveryTimeline m_partyPacing;
         DeliveryTimeline m_guildPacing;

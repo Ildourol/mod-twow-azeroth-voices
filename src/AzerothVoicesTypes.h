@@ -319,5 +319,9 @@ namespace AzerothVoices
         std::string text;
         std::chrono::steady_clock::time_point due;
         bool firstLine = false;
+        bool lastLine = false;
+        size_t lineIndex = 0;
+        size_t lineCount = 1;
+        bool waitForOwner = false;
     };
 }

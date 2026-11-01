@@ -130,6 +130,24 @@ namespace AzerothVoices
         return now >= lane.quietDeadline;
     }
 
+    bool DeliveryTimeline::IsOwnedByAnother(std::string const& key, ExchangeId const& requester) const
+    {
+        if (key.empty())
+            return false;
+        auto found = m_lanes.find(key);
+        if (found == m_lanes.end())
+            return false;
+
+        LaneState const& lane = found->second;
+        if (lane.hasActiveOwner)
+        {
+            if (requester.IsValid() && lane.activeOwner == requester)
+                return false;
+            return true;
+        }
+        return false;
+    }
+
     DeliveryTimeline::TimePoint DeliveryTimeline::NextEligible(std::string const& key, TimePoint now, ExchangeId const& requester) const
     {
         if (key.empty())
@@ -164,17 +182,23 @@ namespace AzerothVoices
     {
         if (key.empty())
             return true;
+        if (!owner.IsValid())
+            return false;
+
+        LaneState& lane = m_lanes[key];
+        // R5: Idempotent Acquire by the same owner
+        if (lane.hasActiveOwner && lane.activeOwner == owner)
+            return true;
 
         if (!CanDeliver(key, now, owner))
             return false;
 
-        LaneState& lane = m_lanes[key];
-        lane.activeOwner = owner;
+        lane.priorQuietDeadline = lane.quietDeadline;
         lane.hasActiveOwner = true;
+        lane.activeOwner = owner;
         lane.anyLineDelivered = false;
-        lane.lastDelivered = now;
+        lane.lastDelivered = TimePoint{};
         lane.minimumGapMilliseconds = minimumGapMilliseconds;
-        lane.quietDeadline = now + std::chrono::milliseconds(minimumGapMilliseconds);
         return true;
     }
 
@@ -182,26 +206,26 @@ namespace AzerothVoices
     {
         if (!owner.IsValid())
             return;
+        auto handleLane = [&](LaneState& lane) {
+            if (lane.hasActiveOwner && lane.activeOwner == owner)
+            {
+                lane.anyLineDelivered = true;
+                lane.lastDelivered = (lane.lastDelivered.time_since_epoch().count() == 0)
+                    ? now : std::max(lane.lastDelivered, now);
+                TimePoint const minQuiet = lane.lastDelivered + std::chrono::milliseconds(lane.minimumGapMilliseconds);
+                lane.quietDeadline = std::max(lane.quietDeadline, minQuiet);
+            }
+        };
+
         if (!key.empty())
         {
             auto found = m_lanes.find(key);
-            if (found != m_lanes.end() && found->second.hasActiveOwner && found->second.activeOwner == owner)
-            {
-                found->second.anyLineDelivered = true;
-                found->second.lastDelivered = now;
-                found->second.quietDeadline = now + std::chrono::milliseconds(found->second.minimumGapMilliseconds);
-            }
+            if (found != m_lanes.end())
+                handleLane(found->second);
             return;
         }
         for (auto& pair : m_lanes)
-        {
-            if (pair.second.hasActiveOwner && pair.second.activeOwner == owner)
-            {
-                pair.second.anyLineDelivered = true;
-                pair.second.lastDelivered = now;
-                pair.second.quietDeadline = now + std::chrono::milliseconds(pair.second.minimumGapMilliseconds);
-            }
-        }
+            handleLane(pair.second);
     }
 
     void DeliveryTimeline::Release(std::string const& key, ExchangeId const& owner, TimePoint now,
@@ -214,12 +238,16 @@ namespace AzerothVoices
             {
                 if (lineDelivered || lane.anyLineDelivered)
                 {
-                    lane.quietDeadline = std::max(lane.quietDeadline,
-                        now + std::chrono::milliseconds(lane.minimumGapMilliseconds));
+                    // R5: Compute quiet expiry from the last delivery (lastDelivered + captured gap)!
+                    TimePoint const deliveryAnchor = (lane.lastDelivered.time_since_epoch().count() != 0)
+                        ? lane.lastDelivered : now;
+                    TimePoint const deliveryQuiet = deliveryAnchor + std::chrono::milliseconds(lane.minimumGapMilliseconds);
+                    lane.quietDeadline = std::max(lane.priorQuietDeadline, deliveryQuiet);
                 }
                 else
                 {
-                    lane.quietDeadline = lane.lastDelivered <= now ? lane.lastDelivered : now;
+                    // R5: Rollback for unperformed/cancelled exchange: restore prior independent quiet deadline
+                    lane.quietDeadline = lane.priorQuietDeadline;
                 }
                 lane.hasActiveOwner = false;
                 lane.activeOwner = ExchangeId{};
@@ -245,9 +273,18 @@ namespace AzerothVoices
         TimePoint candidate = now + std::chrono::milliseconds(
             static_cast<int64_t>(durationMilliseconds) + static_cast<int64_t>(minimumGapMilliseconds));
         LaneState& lane = m_lanes[key];
-        if (lane.quietDeadline < candidate)
-            lane.quietDeadline = candidate;
-        lane.minimumGapMilliseconds = minimumGapMilliseconds;
+        // R5: Other Reserve calls must not overwrite an active owner's policy
+        if (!lane.hasActiveOwner)
+        {
+            if (lane.quietDeadline < candidate)
+                lane.quietDeadline = candidate;
+            lane.minimumGapMilliseconds = minimumGapMilliseconds;
+        }
+        else
+        {
+            if (lane.quietDeadline < candidate)
+                lane.quietDeadline = candidate;
+        }
     }
 
     void DeliveryTimeline::Prune(TimePoint now)

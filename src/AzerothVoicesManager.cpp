@@ -1533,17 +1533,12 @@ namespace AzerothVoices
         {
             if (Clock::now() > request.expires)
             {
-                if (request.kind == RequestKind::PersonalityGeneration ||
-                    request.kind == RequestKind::BarrensTopicGeneration)
-                {
-                    ChatCompletion completion;
-                    completion.request = std::move(request);
-                    completion.error = "request expired in the queue";
-                    std::lock_guard<std::mutex> lock(m_completionMutex);
-                    m_completions.push_back(std::move(completion));
-                    continue;
-                }
-                ++m_dropped;
+                // R6: Forward queue-expired request to m_completions so Manager thread terminates exchange promptly
+                ChatCompletion completion;
+                completion.request = std::move(request);
+                completion.error = "request expired in the queue";
+                std::lock_guard<std::mutex> lock(m_completionMutex);
+                m_completions.push_back(std::move(completion));
                 continue;
             }
 
@@ -1605,8 +1600,65 @@ namespace AzerothVoices
             ++m_preflightRejections[index];
     }
 
+    bool Manager::IsExchangeActive(ExchangeId const& exchangeId) const
+    {
+        if (!exchangeId.IsValid() || exchangeId.epoch != m_epoch)
+            return false;
+
+        switch (exchangeId.domain)
+        {
+            case 0: // General
+                return m_generalConversations.find(exchangeId.id) != m_generalConversations.end();
+            case 1: // Group / Party
+            case 2: // Guild
+                return m_groupConversations.find(std::to_string(exchangeId.id)) != m_groupConversations.end();
+            case 3: // Proximity
+                return m_proximityScenes.find(std::to_string(exchangeId.id)) != m_proximityScenes.end();
+            default:
+                return false;
+        }
+    }
+
+    bool Manager::IsValidContinuation(ActorSnapshot const& actor, ExchangeId const& exchangeId) const
+    {
+        if (!exchangeId.IsValid() || exchangeId.epoch != m_epoch)
+            return false;
+
+        auto const now = Clock::now();
+        switch (exchangeId.domain)
+        {
+            case 0: // General
+            {
+                auto it = m_generalConversations.find(exchangeId.id);
+                if (it == m_generalConversations.end() || it->second.expires <= now)
+                    return false;
+                auto const& spk = it->second.speakers;
+                return std::find(spk.begin(), spk.end(), actor.guid) != spk.end();
+            }
+            case 1: // Group / Party
+            case 2: // Guild
+            {
+                auto it = m_groupConversations.find(std::to_string(exchangeId.id));
+                if (it == m_groupConversations.end() || it->second.expires <= now)
+                    return false;
+                auto const& spk = it->second.speakers;
+                return std::find(spk.begin(), spk.end(), actor.guid) != spk.end();
+            }
+            case 3: // Proximity
+            {
+                auto it = m_proximityScenes.find(std::to_string(exchangeId.id));
+                if (it == m_proximityScenes.end() || it->second.expires <= now)
+                    return false;
+                auto const& spk = it->second.speakers;
+                return std::find(spk.begin(), spk.end(), actor.guid) != spk.end();
+            }
+            default:
+                return false;
+        }
+    }
+
     bool Manager::CanEnqueueDialogue(ActorSnapshot const& actor, RequestPriority priority,
-                                     bool ambient)
+                                     bool ambient, ExchangeId const& candidateOwner)
     {
         if (!m_started || m_stopping || m_paused || !m_config)
         {
@@ -1615,11 +1667,10 @@ namespace AzerothVoices
         }
 
         auto const now = Clock::now();
-        uint32_t const cooldownSeconds = ambient
-            ? m_config->ambientActorCooldownSeconds : 0;
+        bool const isValidContinuation = candidateOwner.IsValid() && IsValidContinuation(actor, candidateOwner);
         auto cooldown = m_actorCooldowns.find(actor.guid);
-        if (ambient && priority != RequestPriority::Direct && cooldown != m_actorCooldowns.end() &&
-            cooldown->second > now)
+        if (ambient && priority != RequestPriority::Direct && !isValidContinuation &&
+            cooldown != m_actorCooldowns.end() && cooldown->second > now)
         {
             RecordPreflightRejection(PreflightReason::Cooldown);
             return false;
@@ -1673,7 +1724,7 @@ namespace AzerothVoices
     bool Manager::PreflightDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
                                     ChatScope scope, std::string const& channelName,
                                     std::string const& trigger, RequestPriority priority,
-                                    bool ambient)
+                                    bool ambient, ExchangeId const& candidateOwner)
     {
         if (!m_config || !IsScopeEnabled(*m_config, scope))
         {
@@ -1805,7 +1856,7 @@ namespace AzerothVoices
             }
         }
 
-        return CanEnqueueDialogue(actor, priority, ambient);
+        return CanEnqueueDialogue(actor, priority, ambient, candidateOwner);
     }
 
     bool Manager::QueueDialogue(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
@@ -1819,12 +1870,21 @@ namespace AzerothVoices
                                 std::string const& customContext,
                                 ActorSnapshot const* targetedBot)
     {
-        if (!PreflightDialogue(actor, speaker, scope, channelName, trigger, priority, ambient))
+        ExchangeId candidateOwner;
+        if (scene && scene->exchangeId.IsValid())
+            candidateOwner = scene->exchangeId;
+        else if (groupScene && groupScene->exchangeId.IsValid())
+            candidateOwner = groupScene->exchangeId;
+
+        if (!PreflightDialogue(actor, speaker, scope, channelName, trigger, priority, ambient, candidateOwner))
             return false;
 
         ChatRequest request = BuildRequest(actor, speaker, scope, channelName, trigger,
             message, priority, ambient, allowFollowup, scene, boss, bossDirected, groupScene, targetedNpc, customContext, targetedBot);
         request.conversationDepth = conversationDepth;
+        if (candidateOwner.IsValid() && !request.exchangeId.IsValid())
+            request.exchangeId = candidateOwner;
+
         if (Enqueue(std::move(request)))
             return true;
         RecordPreflightRejection(PreflightReason::Unavailable);
@@ -1868,7 +1928,10 @@ namespace AzerothVoices
                                        std::string const& continuityPrompt)
     {
         (void)turnIndex;
-        if (!PreflightDialogue(actor, speaker, ChatScope::World, channelName, trigger, RequestPriority::Ambient, false))
+        ExchangeId const candidateOwner = (conversationId > 0)
+            ? ExchangeId{ m_epoch, 0, conversationId } : ExchangeId{};
+
+        if (!PreflightDialogue(actor, speaker, ChatScope::World, channelName, trigger, RequestPriority::Ambient, false, candidateOwner))
             return false;
 
         ChatRequest request = BuildRequest(actor, speaker, ChatScope::World, channelName, trigger,
@@ -1877,7 +1940,7 @@ namespace AzerothVoices
         {
             request.generalConversation = true;
             request.generalConversationId = conversationId;
-            request.exchangeId = ExchangeId{ m_epoch, 0, conversationId };
+            request.exchangeId = candidateOwner;
         }
         request.generalInitialDelaySeconds = initialDelaySeconds;
         if (!continuityPrompt.empty())
@@ -1898,9 +1961,11 @@ namespace AzerothVoices
         bool const personalityRequest = request.kind == RequestKind::PersonalityGeneration;
         uint32_t cooldownSeconds = request.ambient
             ? m_config->ambientActorCooldownSeconds : 0;
+        bool const isValidContinuation = request.exchangeId.IsValid() &&
+            IsValidContinuation(request.actor, request.exchangeId);
         auto cooldown = m_actorCooldowns.find(request.actor.guid);
         if (!personalityRequest && request.ambient && request.priority != RequestPriority::Direct &&
-            cooldown != m_actorCooldowns.end() && cooldown->second > now)
+            !isValidContinuation && cooldown != m_actorCooldowns.end() && cooldown->second > now)
         {
             ++m_dropped;
             return false;
@@ -1908,6 +1973,7 @@ namespace AzerothVoices
 
         ActorSnapshot personalityActor;
         bool queueMissingPersonality = false;
+        std::vector<ExchangeId> evictedExchanges;
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
             while (!m_requestBudget.empty() && now - m_requestBudget.front() >= std::chrono::minutes(1))
@@ -1953,6 +2019,7 @@ namespace AzerothVoices
                 {
                     ChatRequest dropped = std::move(m_queues[0].back());
                     m_queues[0].pop_back();
+                    ExchangeId evictedExchange = dropped.exchangeId;
                     if (dropped.kind == RequestKind::PersonalityGeneration)
                     {
                         auto pending = m_pendingPersonalityRequests.find(dropped.actor.guid);
@@ -1966,6 +2033,8 @@ namespace AzerothVoices
                         auto oldLatest = m_latestRequestByActor.find(dropped.actor.guid);
                         if (oldLatest != m_latestRequestByActor.end() && oldLatest->second == dropped.id)
                             m_latestRequestByActor.erase(oldLatest);
+                        if (evictedExchange.IsValid())
+                            evictedExchanges.push_back(evictedExchange);
                     }
                     ++m_dropped;
                 }
@@ -1994,6 +2063,10 @@ namespace AzerothVoices
             ++m_accepted;
             m_queueReady.notify_one();
         }
+
+        // R6: Terminate evicted exchanges outside the queue mutex
+        for (auto const& exId : evictedExchanges)
+            TerminateExchange(exId, "queue_evicted");
 
         if (queueMissingPersonality)
             QueuePersonalityGeneration(personalityActor, false);
@@ -3554,15 +3627,13 @@ namespace AzerothVoices
             }
 
             bool const isConversation = (eligibleBots.size() >= 2) && Roll(m_config->generalConversationChance);
-            size_t const totalLines = isConversation ? m_config->generalConversationMaximumLines : 1;
             Player* speaker1 = eligibleBots[0];
             Player* anchor = realPlayerAnchorByZone[zoneId];
             if (!anchor)
                 anchor = speaker1;
 
             ChatScope const scope = ChatScope::World;
-            if (!ReserveGeneralPacing(scope, channel, SnapshotBot(speaker1), totalLines))
-                continue;
+            std::string const pacingKey = NormalizePacingKey(scope, channel, 0, 0, zoneId, false);
 
             std::string area;
             std::string zone;
@@ -3582,10 +3653,36 @@ namespace AzerothVoices
 
             if (!isConversation)
             {
-                if (QueueGeneralDialogue(SnapshotBot(speaker1), audienceSnapshot, channel,
-                        "ambient", topic, 0, 0, 0, ""))
+                uint64_t const statementId = m_nextGeneralConversationId++;
+                ExchangeId const statementOwner{ m_epoch, 0, statementId };
+                uint32_t const minGapMs = m_config->generalChatMinimumGapSeconds * 1000;
+
+                // R1: Transactional admission for 1-line General statements via direct Acquire
+                if (m_config->generalChatPacingEnabled &&
+                    !m_generalPacing.Acquire(pacingKey, statementOwner, now, minGapMs))
+                    continue;
+
+                GeneralConversation scene;
+                scene.id = statementId;
+                scene.zoneId = zoneId;
+                scene.channel = channel;
+                scene.anchorPlayerGuid = anchor->GetObjectGuid().GetRawValue();
+                scene.deliveredLines = 0;
+                scene.maximumLines = 1;
+                scene.theme = theme;
+                scene.effectiveZone = effectiveZone;
+                scene.expires = now + std::chrono::minutes(2);
+                scene.exchangeId = statementOwner;
+                scene.laneKey = pacingKey;
+                scene.minimumGapMilliseconds = minGapMs;
+                scene.speakers.push_back(speaker1->GetObjectGuid().GetRawValue());
+
+                m_generalConversations[scene.id] = scene;
+
+                if (!QueueGeneralDialogue(SnapshotBot(speaker1), audienceSnapshot, channel,
+                        "ambient", topic, scene.id, 0, 0, ""))
                 {
-                    m_generalSpeakerTracker.RecordSpeech(speaker1->GetObjectGuid().GetRawValue(), nowSec);
+                    TerminateExchange(scene.exchangeId, "admission_failed");
                 }
             }
             else
@@ -3605,10 +3702,12 @@ namespace AzerothVoices
                 scene.effectiveZone = effectiveZone;
                 scene.expires = now + std::chrono::minutes(5);
                 scene.exchangeId = ExchangeId{ m_epoch, 0, scene.id };
+                scene.laneKey = pacingKey;
+                scene.minimumGapMilliseconds = m_config->generalChatMinimumGapSeconds * 1000;
 
-                std::string const pacingKey = NormalizePacingKey(scope, channel, 0, 0, zoneId, false);
+                // R1: Call Acquire directly on otherwise available lane; no ReserveGeneralPacing first
                 if (m_config->generalChatPacingEnabled &&
-                    !m_generalPacing.Acquire(pacingKey, scene.exchangeId, now, m_config->generalChatMinimumGapSeconds * 1000))
+                    !m_generalPacing.Acquire(pacingKey, scene.exchangeId, now, scene.minimumGapMilliseconds))
                     continue;
 
                 for (size_t i = 0; i < participantCount; ++i)
@@ -4642,6 +4741,16 @@ namespace AzerothVoices
                 continue;
             }
 
+            // R3: Before accepting a completion, require its owned exchange to still be active
+            if (completion.request.exchangeId.IsValid())
+            {
+                if (!IsExchangeActive(completion.request.exchangeId))
+                {
+                    ++m_dropped;
+                    continue;
+                }
+            }
+
             if (!completion.success)
             {
                 if (completion.request.exchangeId.IsValid())
@@ -4725,7 +4834,9 @@ namespace AzerothVoices
             }
             if (lines.empty())
             {
-                if (completion.request.barrensScene)
+                if (completion.request.exchangeId.IsValid())
+                    TerminateExchange(completion.request.exchangeId, "empty_lines");
+                else if (completion.request.barrensScene)
                     HandleBarrensTerminalDrop(completion.request, "empty_lines");
                 ++m_failed;
                 continue;
@@ -4789,7 +4900,11 @@ namespace AzerothVoices
                     if (gscene != m_groupConversations.end() && line.due < gscene->second.nextTurn)
                         line.due = gscene->second.nextTurn;
                 }
-                line.firstLine = i == 0;
+                line.firstLine = (i == 0);
+                line.lastLine = (i + 1 == lines.size());
+                line.lineIndex = i;
+                line.lineCount = lines.size();
+                line.waitForOwner = false;
                 m_scheduled.push_back(std::move(line));
                 if (m_config->typingSimulationEnabled)
                     cumulativeDelay += 500;
@@ -4808,31 +4923,42 @@ namespace AzerothVoices
                     uint32_t const gapSeconds = PartyGateGapSeconds(policy, *m_config);
                     size_t const firstIndex = m_scheduled.size() - linesAdded;
                     auto const requestedTime = m_scheduled[firstIndex].due;
-                    auto const scheduledTime = CalculatePartyScheduledTime(
+                    auto const scheduleResult = CalculatePartyScheduledTime(
                         m_partyPacing, partyKey, policy, requestedTime, now, m_config->partyGateMaxFillerDelaySeconds,
                         completion.request.exchangeId);
-                    auto const shift = scheduledTime - requestedTime;
-                    if (shift != std::chrono::milliseconds(0))
-                    {
-                        for (size_t k = firstIndex; k < m_scheduled.size(); ++k)
-                            m_scheduled[k].due += shift;
-                    }
 
-                    uint32_t const exchangeDuration = EstimateExchangeMilliseconds(
-                        linesAdded,
-                        m_config->typingSimulationEnabled,
-                        m_config->typingBaseDelayMilliseconds,
-                        m_config->typingDelayPerCharacterMilliseconds,
-                        60,
-                        500
-                    );
-                    m_partyPacing.Reserve(partyKey, scheduledTime, exchangeDuration, gapSeconds * 1000);
-                    if (m_config->partyGateDebugLog)
+                    if (scheduleResult.IsBlocked())
                     {
-                        sLog.outString("[AzerothVoices] PartyGate paced %s message for %s: policy=%s, shift=%lld ms, exchange=%u ms, gap=%u s",
-                            completion.request.trigger.c_str(), partyKey.c_str(), PartyGatePolicyName(policy),
-                            (long long)std::chrono::duration_cast<std::chrono::milliseconds>(shift).count(),
-                            exchangeDuration, gapSeconds);
+                        // R2: Defer line without clamping when blocked by an active owner
+                        for (size_t k = firstIndex; k < m_scheduled.size(); ++k)
+                            m_scheduled[k].waitForOwner = true;
+                    }
+                    else
+                    {
+                        auto const scheduledTime = scheduleResult.scheduledTime;
+                        auto const shift = scheduledTime - requestedTime;
+                        if (shift != std::chrono::milliseconds(0))
+                        {
+                            for (size_t k = firstIndex; k < m_scheduled.size(); ++k)
+                                m_scheduled[k].due += shift;
+                        }
+
+                        uint32_t const exchangeDuration = EstimateExchangeMilliseconds(
+                            linesAdded,
+                            m_config->typingSimulationEnabled,
+                            m_config->typingBaseDelayMilliseconds,
+                            m_config->typingDelayPerCharacterMilliseconds,
+                            60,
+                            500
+                        );
+                        m_partyPacing.Reserve(partyKey, scheduledTime, exchangeDuration, gapSeconds * 1000);
+                        if (m_config->partyGateDebugLog)
+                        {
+                            sLog.outString("[AzerothVoices] PartyGate paced %s message for %s: policy=%s, shift=%lld ms, exchange=%u ms, gap=%u s",
+                                completion.request.trigger.c_str(), partyKey.c_str(), PartyGatePolicyName(policy),
+                                (long long)std::chrono::duration_cast<std::chrono::milliseconds>(shift).count(),
+                                exchangeDuration, gapSeconds);
+                        }
                     }
                 }
             }
@@ -4965,135 +5091,251 @@ namespace AzerothVoices
         m_preflightRejections.fill(0);
     }
 
-    void Manager::DeliverScheduled()
+    void Manager::RecordDeliveredLine(ScheduledLine const& line, std::chrono::steady_clock::time_point now, uint32_t nowSec)
     {
-        auto const now = Clock::now();
-        for (auto it = m_scheduled.begin(); it != m_scheduled.end(); )
+        (void)nowSec;
+        if (line.request.generalConversation && line.request.generalConversationId)
         {
-            if (it->due > now)
+            auto it = m_generalConversations.find(line.request.generalConversationId);
+            if (it != m_generalConversations.end())
             {
-                ++it;
-                continue;
+                ++it->second.deliveredLines;
+                it->second.deliveredSpeakers.insert(line.request.actor.guid);
+                std::string const pacingKey = !it->second.laneKey.empty() ? it->second.laneKey :
+                    NormalizePacingKey(ChatScope::World, it->second.channel, 0, 0, it->second.zoneId, false);
+                m_generalPacing.OnLineDelivered(pacingKey, it->second.exchangeId, now);
             }
-
-            bool delivered = Deliver(*it);
-            if (delivered && it->firstLine)
+        }
+        else if (line.request.groupConversation && line.request.groupConversationId)
+        {
+            auto it = m_groupConversations.find(std::to_string(line.request.groupConversationId));
+            if (it != m_groupConversations.end())
             {
-                if (it->request.barrensScene)
+                ++it->second.deliveredLines;
+                it->second.deliveredSpeakers.insert(line.request.actor.guid);
+                if (it->second.guild)
                 {
-                    OnBarrensDelivered(it->request, it->text);
+                    std::string const guildKey = !it->second.laneKey.empty() ? it->second.laneKey :
+                        NormalizeGuildPacingKey(it->second.groupId);
+                    m_guildPacing.OnLineDelivered(guildKey, it->second.exchangeId, now);
                 }
                 else
                 {
-                    ApplyDeliveredSentiment(it->request);
-                    AddHistory(it->request, it->text);
-                    AddSnapshotHistory(it->request, it->request.currentSnapshot);
+                    std::string const partyKey = !it->second.laneKey.empty() ? it->second.laneKey :
+                        PartyPacingKey(it->second.groupId, -1);
+                    m_partyPacing.OnLineDelivered(partyKey, it->second.exchangeId, now);
                 }
-                SpeakerSnapshot actorSpeaker;
-                actorSpeaker.guid = it->request.actor.guid;
-                actorSpeaker.name = it->request.actor.name;
-                actorSpeaker.race = it->request.actor.race;
-                actorSpeaker.className = it->request.actor.className;
-                actorSpeaker.gender = it->request.actor.gender;
-                actorSpeaker.faction = it->request.actor.faction;
-                actorSpeaker.guild = it->request.actor.guild;
-                actorSpeaker.groupStatus = it->request.actor.groupStatus;
-                actorSpeaker.level = it->request.actor.level;
-                actorSpeaker.groupId = it->request.speaker.groupId;
-                actorSpeaker.guildId = it->request.speaker.guildId;
-                actorSpeaker.isBot = true;
-                ActorSnapshot replyLocation = it->request.actor;
-                if (it->request.scope == ChatScope::Whisper)
-                    replyLocation.guid = it->request.speaker.guid;
-                RecordSurroundingChat(it->request.scope, it->request.channelName,
-                    replyLocation, actorSpeaker, it->text);
-                MaybeQueueFollowup(it->request, it->text);
-                if (it->text.find('?') != std::string::npos)
-                    MaybeQueueBotQuestionAnswer(it->request, it->text);
-                if (it->request.bossLine)
-                    NoteBossLineDelivered(it->request, it->text);
-                if (it->request.proximityScene)
-                    MaybeQueueProximityTurn(it->request, it->text);
-                if (it->request.groupConversation)
-                    MaybeQueueGroupTurn(it->request, it->text);
-                if (it->request.generalConversation)
-                    MaybeQueueGeneralTurn(it->request, it->text);
-                else if (!it->request.groupChatter &&
-                    (it->request.scope == ChatScope::Party || it->request.scope == ChatScope::Raid) &&
-                    it->request.actor.kind == ActorKind::PlayerBot && !it->request.speaker.isBot)
-                    MaybeQueueGroupPlayerFollowup(it->request, it->text);
-                if (it->request.scope == ChatScope::Say)
+            }
+        }
+        else if (line.request.proximityScene && line.request.sceneId)
+        {
+            auto it = m_proximityScenes.find(std::to_string(line.request.sceneId));
+            if (it != m_proximityScenes.end())
+            {
+                ++it->second.deliveredLines;
+                it->second.deliveredSpeakers.insert(line.request.actor.guid);
+                std::string const proxKey = !it->second.laneKey.empty() ? it->second.laneKey :
+                    NormalizeProximityPacingKey(it->second.mapId, it->second.instanceId, it->second.zoneId, it->second.instance);
+                m_proximityPacing.OnLineDelivered(proxKey, it->second.exchangeId, now);
+            }
+        }
+    }
+
+    void Manager::DeliverScheduled()
+    {
+        auto const now = Clock::now();
+        uint32_t const nowSec = static_cast<uint32_t>(
+            std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
+
+        std::vector<ScheduledLine> batch;
+        std::vector<ScheduledLine> remaining;
+        batch.reserve(m_scheduled.size());
+        remaining.reserve(m_scheduled.size());
+
+        for (auto& line : m_scheduled)
+        {
+            // R2: Explicit wait-for-owner check
+            if (line.waitForOwner)
+            {
+                if (line.request.exchangeId.IsValid() && !IsExchangeActive(line.request.exchangeId))
+                    continue;
+
+                if (now > line.request.expires)
                 {
-                    uint64_t playerGuid = 0;
-                    if (it->request.speaker.guid && !it->request.speaker.isBot)
-                        playerGuid = it->request.speaker.guid;
-                    else if (it->request.actor.anchorPlayerGuid)
-                        playerGuid = it->request.actor.anchorPlayerGuid;
+                    if (line.request.exchangeId.IsValid())
+                        TerminateExchange(line.request.exchangeId, "request_ttl_expired");
+                    continue;
+                }
 
-                    if (playerGuid)
+                std::string partyKey;
+                if (line.request.groupId != 0)
+                {
+                    partyKey = PartyPacingKey(line.request.groupId,
+                        line.request.groupSubgroup ? static_cast<int32_t>(line.request.groupSubgroup) : -1);
+                }
+                if (!partyKey.empty() && m_partyPacing.IsOwnedByAnother(partyKey, line.request.exchangeId))
+                {
+                    remaining.push_back(std::move(line));
+                    continue;
+                }
+
+                line.waitForOwner = false;
+                PartyGatePolicy const policy = PartyGatePolicyForTrigger(line.request.trigger);
+                auto const schedResult = CalculatePartyScheduledTime(
+                    m_partyPacing, partyKey, policy, now, now, m_config->partyGateMaxFillerDelaySeconds,
+                    line.request.exchangeId);
+                line.due = schedResult.scheduledTime;
+                if (line.due > now)
+                {
+                    remaining.push_back(std::move(line));
+                    continue;
+                }
+            }
+
+            if (line.due <= now)
+                batch.push_back(std::move(line));
+            else
+                remaining.push_back(std::move(line));
+        }
+
+        m_scheduled = std::move(remaining);
+
+        for (auto& line : batch)
+        {
+            // R3: Recheck active identity before each delivery
+            if (line.request.exchangeId.IsValid() && !IsExchangeActive(line.request.exchangeId))
+                continue;
+
+            bool delivered = Deliver(line);
+            if (delivered)
+            {
+                // R3 / R4: Record delivery for every actual delivered line
+                RecordDeliveredLine(line, now, nowSec);
+
+                if (line.firstLine)
+                {
+                    if (line.request.barrensScene)
                     {
-                        RecordSayConversationTurn(playerGuid, it->request.actor.guid, it->request.actor.name,
-                                                  it->request.actor.kind == ActorKind::Creature,
-                                                  it->request.actor.mapId, it->request.actor.instanceId,
-                                                  it->request.incomingMessage, it->text);
+                        OnBarrensDelivered(line.request, line.text);
+                    }
+                    else
+                    {
+                        ApplyDeliveredSentiment(line.request);
+                        AddHistory(line.request, line.text);
+                        AddSnapshotHistory(line.request, line.request.currentSnapshot);
+                    }
+                    SpeakerSnapshot actorSpeaker;
+                    actorSpeaker.guid = line.request.actor.guid;
+                    actorSpeaker.name = line.request.actor.name;
+                    actorSpeaker.race = line.request.actor.race;
+                    actorSpeaker.className = line.request.actor.className;
+                    actorSpeaker.gender = line.request.actor.gender;
+                    actorSpeaker.faction = line.request.actor.faction;
+                    actorSpeaker.guild = line.request.actor.guild;
+                    actorSpeaker.groupStatus = line.request.actor.groupStatus;
+                    actorSpeaker.level = line.request.actor.level;
+                    actorSpeaker.groupId = line.request.speaker.groupId;
+                    actorSpeaker.guildId = line.request.speaker.guildId;
+                    actorSpeaker.isBot = true;
+                    ActorSnapshot replyLocation = line.request.actor;
+                    if (line.request.scope == ChatScope::Whisper)
+                        replyLocation.guid = line.request.speaker.guid;
+                    RecordSurroundingChat(line.request.scope, line.request.channelName,
+                        replyLocation, actorSpeaker, line.text);
+                    MaybeQueueFollowup(line.request, line.text);
+                    if (line.text.find('?') != std::string::npos)
+                        MaybeQueueBotQuestionAnswer(line.request, line.text);
+                    if (line.request.bossLine)
+                        NoteBossLineDelivered(line.request, line.text);
 
-                        if (it->request.actor.kind == ActorKind::Creature)
+                    if (line.request.scope == ChatScope::Say)
+                    {
+                        uint64_t playerGuid = 0;
+                        if (line.request.speaker.guid && !line.request.speaker.isBot)
+                            playerGuid = line.request.speaker.guid;
+                        else if (line.request.actor.anchorPlayerGuid)
+                            playerGuid = line.request.actor.anchorPlayerGuid;
+
+                        if (playerGuid)
                         {
-                            Player* realPlayer = ObjectAccessor::FindPlayer(ObjectGuid(playerGuid));
-                            if (IsOnlineRealPlayer(realPlayer))
+                            RecordSayConversationTurn(playerGuid, line.request.actor.guid, line.request.actor.name,
+                                                      line.request.actor.kind == ActorKind::Creature,
+                                                      line.request.actor.mapId, line.request.actor.instanceId,
+                                                      line.request.incomingMessage, line.text);
+
+                            if (line.request.actor.kind == ActorKind::Creature)
                             {
-                                MaybeQueueNpcReplyObserverComment(realPlayer, it->request.actor,
-                                    it->request.incomingMessage, it->text);
+                                Player* realPlayer = ObjectAccessor::FindPlayer(ObjectGuid(playerGuid));
+                                if (IsOnlineRealPlayer(realPlayer))
+                                {
+                                    MaybeQueueNpcReplyObserverComment(realPlayer, line.request.actor,
+                                        line.request.incomingMessage, line.text);
+                                }
+                            }
+                        }
+                    }
+                    if (line.request.scope == ChatScope::Party || line.request.scope == ChatScope::Raid)
+                    {
+                        if (line.request.speaker.groupId)
+                            m_partyLastSpeaker[line.request.speaker.groupId] =
+                                std::make_pair(line.request.actor.guid, Clock::now());
+                    }
+                    if (line.request.actor.kind == ActorKind::PlayerBot && line.request.speaker.guid &&
+                        !line.request.speaker.isBot)
+                    {
+                        Player* observer = ObjectAccessor::FindPlayer(ObjectGuid(line.request.speaker.guid));
+                        if (IsOnlineRealPlayer(observer))
+                        {
+                            RecordAddonContact(observer->GetObjectGuid().GetRawValue(),
+                                line.request.actor.guid, line.request.actor.name);
+                            if (line.request.trigger == "targeted-bot-selected" || line.request.priority == RequestPriority::Direct)
+                            {
+                                MaybeQueueBotReplyObserverComment(observer, line.request.actor,
+                                    line.request.scope, line.request.channelName,
+                                    line.request.incomingMessage, line.text);
                             }
                         }
                     }
                 }
-                if (it->request.scope == ChatScope::Party || it->request.scope == ChatScope::Raid)
+
+                // R3: Run turn advancement only after all response lines are delivered (on line.lastLine)
+                if (line.lastLine)
                 {
-                    if (it->request.speaker.groupId)
-                        m_partyLastSpeaker[it->request.speaker.groupId] =
-                            std::make_pair(it->request.actor.guid, Clock::now());
-                }
-                if (it->request.actor.kind == ActorKind::PlayerBot && it->request.speaker.guid &&
-                    !it->request.speaker.isBot)
-                {
-                    Player* observer = ObjectAccessor::FindPlayer(ObjectGuid(it->request.speaker.guid));
-                    if (IsOnlineRealPlayer(observer))
-                    {
-                        RecordAddonContact(observer->GetObjectGuid().GetRawValue(),
-                            it->request.actor.guid, it->request.actor.name);
-                        if (it->request.trigger == "targeted-bot-selected" || it->request.priority == RequestPriority::Direct)
-                        {
-                            MaybeQueueBotReplyObserverComment(observer, it->request.actor,
-                                it->request.scope, it->request.channelName,
-                                it->request.incomingMessage, it->text);
-                        }
-                    }
+                    if (line.request.proximityScene)
+                        MaybeQueueProximityTurn(line.request, line.text);
+                    if (line.request.groupConversation)
+                        MaybeQueueGroupTurn(line.request, line.text);
+                    if (line.request.generalConversation)
+                        MaybeQueueGeneralTurn(line.request, line.text);
+                    else if (!line.request.groupChatter &&
+                        (line.request.scope == ChatScope::Party || line.request.scope == ChatScope::Raid) &&
+                        line.request.actor.kind == ActorKind::PlayerBot && !line.request.speaker.isBot)
+                        MaybeQueueGroupPlayerFollowup(line.request, line.text);
                 }
             }
-            if (!delivered)
+            else
             {
-                if (it->request.exchangeId.IsValid())
-                    TerminateExchange(it->request.exchangeId, "delivery_failed");
+                if (line.request.exchangeId.IsValid())
+                    TerminateExchange(line.request.exchangeId, "delivery_failed");
                 else
                 {
-                    if (it->request.barrensScene)
-                        OnBarrensDeliveryFailed(it->request);
-                    if (it->request.generalConversation)
-                        OnGeneralDeliveryFailed(it->request);
-                    if (it->request.groupConversation)
-                        OnGroupDeliveryFailed(it->request);
-                    if (it->request.proximityScene)
-                        OnProximityDeliveryFailed(it->request);
+                    if (line.request.barrensScene)
+                        OnBarrensDeliveryFailed(line.request);
+                    if (line.request.generalConversation)
+                        OnGeneralDeliveryFailed(line.request);
+                    if (line.request.groupConversation)
+                        OnGroupDeliveryFailed(line.request);
+                    if (line.request.proximityScene)
+                        OnProximityDeliveryFailed(line.request);
                 }
             }
+
             if (!delivered && m_config->debug)
                 sLog.outDebug("[AzerothVoices] Reply discarded because actor %s is unavailable.",
-                    SanitizeLogText(it->request.actor.name).c_str());
+                    SanitizeLogText(line.request.actor.name).c_str());
             else if (delivered && m_config->debug)
                 sLog.outDebug("[AzerothVoices] %s replied through %s.",
-                    SanitizeLogText(it->request.actor.name).c_str(), ScopeName(it->request.scope).c_str());
-            it = m_scheduled.erase(it);
+                    SanitizeLogText(line.request.actor.name).c_str(), ScopeName(line.request.scope).c_str());
         }
     }
 
@@ -7387,6 +7629,8 @@ namespace AzerothVoices
             std::string const partyKey = PartyPacingKey(groupId, -1);
             ExchangeId const exchangeId{ m_epoch, 1, scene.id };
             scene.exchangeId = exchangeId;
+            scene.laneKey = partyKey;
+            scene.minimumGapMilliseconds = m_config->groupChatMinimumGapSeconds * 1000;
             if (m_config->groupPacingEnabled &&
                 !m_partyPacing.Acquire(partyKey, exchangeId, now, m_config->groupChatMinimumGapSeconds * 1000))
                 return false;
@@ -7422,7 +7666,7 @@ namespace AzerothVoices
             return;
         if (!scene.guild && !m_config->groupChatterEnabled)
             return;
-        ++scene.deliveredLines;
+
         GroupConversationBudget const budget {
             scene.guild ? m_config->guildMaximumLines : m_config->groupConversationMaximumLines,
             scene.guild ? m_config->guildMaximumParticipants
@@ -7433,28 +7677,9 @@ namespace AzerothVoices
             m_config->groupConversationReplyWindowSeconds };
 
         auto const now = Clock::now();
-        uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
-
-        if (scene.guild)
-        {
-            std::string const guildKey = NormalizeGuildPacingKey(scene.groupId);
-            m_guildPacing.OnLineDelivered(guildKey, scene.exchangeId, now);
-        }
-        else
-        {
-            std::string const partyKey = PartyPacingKey(scene.groupId, -1);
-            m_partyPacing.OnLineDelivered(partyKey, scene.exchangeId, now);
-        }
 
         if (!budget.CanContinue(scene.deliveredLines, scene.replyTurns) || now > scene.expires)
         {
-            for (uint64_t guid : scene.speakers)
-            {
-                if (scene.guild)
-                    m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
-                else
-                    m_groupSpeakerTracker.RecordSpeech(guid, nowSec);
-            }
             TerminateExchange(scene.exchangeId, "finished");
             return;
         }
@@ -7463,8 +7688,6 @@ namespace AzerothVoices
         {
             if (!FindOnlineRealGuildAudience(scene.groupId, ChatScope::Guild))
             {
-                for (uint64_t guid : scene.speakers)
-                    m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
                 TerminateExchange(scene.exchangeId, "no_audience");
                 return;
             }
@@ -7495,8 +7718,6 @@ namespace AzerothVoices
 
             if (!nextSpeaker)
             {
-                for (uint64_t guid : scene.speakers)
-                    m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
                 TerminateExchange(scene.exchangeId, "next_speaker_unavailable");
                 return;
             }
@@ -7504,8 +7725,6 @@ namespace AzerothVoices
             Player* anchor = ObjectAccessor::FindPlayer(ObjectGuid(scene.anchorPlayerGuid));
             if (!anchor)
             {
-                for (uint64_t guid : scene.speakers)
-                    m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
                 TerminateExchange(scene.exchangeId, "anchor_unavailable");
                 return;
             }
@@ -7539,8 +7758,6 @@ namespace AzerothVoices
                 ++scene.replyTurns;
             else
             {
-                for (uint64_t guid : scene.speakers)
-                    m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
                 TerminateExchange(scene.exchangeId, "followup_failed");
             }
             return;
@@ -7550,8 +7767,6 @@ namespace AzerothVoices
         if (!anchor || !anchor->IsInWorld() || anchor->GetMapId() != scene.mapId ||
             CurrentInstanceId(anchor) != scene.instanceId)
         {
-            for (uint64_t guid : scene.speakers)
-                m_groupSpeakerTracker.RecordSpeech(guid, nowSec);
             TerminateExchange(scene.exchangeId, "anchor_unavailable");
             return;
         }
@@ -7583,8 +7798,6 @@ namespace AzerothVoices
 
         if (!next)
         {
-            for (uint64_t guid : scene.speakers)
-                m_groupSpeakerTracker.RecordSpeech(guid, nowSec);
             TerminateExchange(scene.exchangeId, "next_speaker_unavailable");
             return;
         }
@@ -7619,8 +7832,6 @@ namespace AzerothVoices
             ++scene.replyTurns;
         else
         {
-            for (uint64_t guid : scene.speakers)
-                m_groupSpeakerTracker.RecordSpeech(guid, nowSec);
             TerminateExchange(scene.exchangeId, "followup_failed");
         }
     }
@@ -8452,6 +8663,8 @@ namespace AzerothVoices
 
                 ExchangeId const exchangeId{ m_epoch, 2, scene.id };
                 scene.exchangeId = exchangeId;
+                scene.laneKey = guildPacingKey;
+                scene.minimumGapMilliseconds = m_config->guildChatMinimumGapSeconds * 1000;
                 if (m_config->guildPacingEnabled &&
                     !m_guildPacing.Acquire(guildPacingKey, exchangeId, now, m_config->guildChatMinimumGapSeconds * 1000))
                     continue;
@@ -8954,6 +9167,8 @@ namespace AzerothVoices
         std::string const sceneKey = std::to_string(scene.id);
         ExchangeId const exchangeId{ m_epoch, 3, scene.id };
         scene.exchangeId = exchangeId;
+        scene.laneKey = proxKey;
+        scene.minimumGapMilliseconds = m_config->proximityMinimumGapSeconds * 1000;
 
         if (m_config->proximityPacingEnabled &&
             !m_proximityPacing.Acquire(proxKey, exchangeId, now, m_config->proximityMinimumGapSeconds * 1000))
@@ -8987,14 +9202,8 @@ namespace AzerothVoices
         if (found == m_proximityScenes.end())
             return;
         ProximityScene& scene = found->second;
-        ++scene.deliveredLines;
-        scene.deliveredSpeakers.insert(request.actor.guid);
 
         auto const now = Clock::now();
-        std::string const proxKey = NormalizeProximityPacingKey(
-            scene.mapId, scene.instanceId, scene.zoneId, scene.instance);
-        m_proximityPacing.OnLineDelivered(proxKey, scene.exchangeId, now);
-
         if (!scene.conversation || scene.deliveredLines >= scene.maximumLines ||
             scene.replyTurns >= m_config->proximityMaximumReplyTurns || now > scene.expires)
         {
@@ -10123,20 +10332,10 @@ namespace AzerothVoices
             return;
 
         GeneralConversation& scene = it->second;
-        ++scene.deliveredLines;
-
         auto const now = Clock::now();
-        uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
-            now.time_since_epoch()).count());
-
-        std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
-        m_generalPacing.OnLineDelivered(pacingKey, scene.exchangeId, now);
 
         if (scene.deliveredLines >= scene.maximumLines || now > scene.expires)
         {
-            for (uint64_t guid : scene.speakers)
-                m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
-
             TerminateExchange(scene.exchangeId, "finished");
             return;
         }
@@ -10145,8 +10344,6 @@ namespace AzerothVoices
         size_t const poolSize = scene.speakers.size();
         if (poolSize < 2)
         {
-            for (uint64_t guid : scene.speakers)
-                m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
             TerminateExchange(scene.exchangeId, "too_few_speakers");
             return;
         }
@@ -10155,8 +10352,6 @@ namespace AzerothVoices
         Player* nextSpeaker = ObjectAccessor::FindPlayer(ObjectGuid(nextGuid));
         if (!nextSpeaker || !nextSpeaker->IsInWorld() || !nextSpeaker->IsAlive())
         {
-            for (uint64_t guid : scene.speakers)
-                m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
             TerminateExchange(scene.exchangeId, "speaker_dead_or_offline");
             return;
         }
@@ -10185,21 +10380,13 @@ namespace AzerothVoices
         if (!QueueGeneralDialogue(actor, prevSpeaker, scene.channel, "conversation",
                 reply, scene.id, static_cast<uint32_t>(turn), delay, continuityPrompt))
         {
-            for (uint64_t guid : scene.speakers)
-                m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
             TerminateExchange(scene.exchangeId, "dialogue_enqueue_failed");
-        }
-        else if (m_config->generalChatPacingEnabled)
-        {
-            std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
-            uint32_t const followDurationMs = (delay * 1000) + 6000;
-            m_generalPacing.Reserve(pacingKey, now, followDurationMs, m_config->generalChatMinimumGapSeconds * 1000);
         }
     }
 
-    void Manager::TerminateExchange(ExchangeId const& exchangeId, char const* reason)
+    void Manager::TerminateExchange(ExchangeId exchangeId, char const* reason)
     {
-        if (!exchangeId.IsValid())
+        if (!exchangeId.IsValid() || exchangeId.epoch != m_epoch)
             return;
 
         auto const now = Clock::now();
@@ -10218,13 +10405,15 @@ namespace AzerothVoices
                 auto it = m_generalConversations.find(exchangeId.id);
                 if (it != m_generalConversations.end())
                 {
-                    GeneralConversation const& scene = it->second;
-                    for (uint64_t guid : scene.speakers)
+                    GeneralConversation const scene = std::move(it->second);
+                    m_generalConversations.erase(it);
+
+                    for (uint64_t guid : scene.deliveredSpeakers)
                         m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
                     bool const delivered = scene.deliveredLines > 0;
-                    std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
+                    std::string const pacingKey = !scene.laneKey.empty() ? scene.laneKey :
+                        NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
                     m_generalPacing.Release(pacingKey, exchangeId, now, delivered);
-                    m_generalConversations.erase(it);
                 }
                 else
                 {
@@ -10237,13 +10426,15 @@ namespace AzerothVoices
                 auto it = m_groupConversations.find(std::to_string(exchangeId.id));
                 if (it != m_groupConversations.end())
                 {
-                    GroupConversation const& scene = it->second;
-                    for (uint64_t guid : scene.speakers)
+                    GroupConversation const scene = std::move(it->second);
+                    m_groupConversations.erase(it);
+
+                    for (uint64_t guid : scene.deliveredSpeakers)
                         m_groupSpeakerTracker.RecordSpeech(guid, nowSec);
                     bool const delivered = scene.deliveredLines > 0;
-                    std::string const partyKey = PartyPacingKey(scene.groupId, -1);
+                    std::string const partyKey = !scene.laneKey.empty() ? scene.laneKey :
+                        PartyPacingKey(scene.groupId, -1);
                     m_partyPacing.Release(partyKey, exchangeId, now, delivered);
-                    m_groupConversations.erase(it);
                 }
                 else
                 {
@@ -10256,13 +10447,15 @@ namespace AzerothVoices
                 auto it = m_groupConversations.find(std::to_string(exchangeId.id));
                 if (it != m_groupConversations.end())
                 {
-                    GroupConversation const& scene = it->second;
-                    for (uint64_t guid : scene.speakers)
+                    GroupConversation const scene = std::move(it->second);
+                    m_groupConversations.erase(it);
+
+                    for (uint64_t guid : scene.deliveredSpeakers)
                         m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
                     bool const delivered = scene.deliveredLines > 0;
-                    std::string const guildKey = NormalizeGuildPacingKey(scene.groupId);
+                    std::string const guildKey = !scene.laneKey.empty() ? scene.laneKey :
+                        NormalizeGuildPacingKey(scene.groupId);
                     m_guildPacing.Release(guildKey, exchangeId, now, delivered);
-                    m_groupConversations.erase(it);
                 }
                 else
                 {
@@ -10275,17 +10468,18 @@ namespace AzerothVoices
                 auto it = m_proximityScenes.find(std::to_string(exchangeId.id));
                 if (it != m_proximityScenes.end())
                 {
-                    ProximityScene const& scene = it->second;
+                    ProximityScene const scene = std::move(it->second);
+                    m_proximityScenes.erase(it);
+
                     for (uint64_t guid : scene.deliveredSpeakers)
                     {
                         m_proximitySpeakerCooldowns[guid] = now +
                             std::chrono::seconds(m_config->proximityEntityCooldownSeconds);
                     }
                     bool const delivered = scene.deliveredLines > 0;
-                    std::string const proxKey = NormalizeProximityPacingKey(
-                        scene.mapId, scene.instanceId, scene.zoneId, scene.instance);
+                    std::string const proxKey = !scene.laneKey.empty() ? scene.laneKey :
+                        NormalizeProximityPacingKey(scene.mapId, scene.instanceId, scene.zoneId, scene.instance);
                     m_proximityPacing.Release(proxKey, exchangeId, now, delivered);
-                    m_proximityScenes.erase(it);
                 }
                 else
                 {
@@ -10313,12 +10507,13 @@ namespace AzerothVoices
         auto const now = Clock::now();
         uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
             now.time_since_epoch()).count());
-        for (uint64_t guid : it->second.speakers)
+        for (uint64_t guid : it->second.deliveredSpeakers)
             m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
         if (m_config->generalChatPacingEnabled)
         {
-            std::string const pacingKey = NormalizePacingKey(ChatScope::World, it->second.channel, 0, 0, it->second.zoneId, false);
-            m_generalPacing.Reserve(pacingKey, now, 0, m_config->generalChatMinimumGapSeconds * 1000);
+            std::string const pacingKey = !it->second.laneKey.empty() ? it->second.laneKey :
+                NormalizePacingKey(ChatScope::World, it->second.channel, 0, 0, it->second.zoneId, false);
+            m_generalPacing.Release(pacingKey, it->second.exchangeId, now, it->second.deliveredLines > 0);
         }
         m_generalConversations.erase(it);
     }
@@ -10335,9 +10530,10 @@ namespace AzerothVoices
         auto it = m_groupConversations.find(std::to_string(request.groupConversationId));
         if (it == m_groupConversations.end())
             return;
+        auto const now = Clock::now();
         uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
-            Clock::now().time_since_epoch()).count());
-        for (uint64_t guid : it->second.speakers)
+            now.time_since_epoch()).count());
+        for (uint64_t guid : it->second.deliveredSpeakers)
         {
             if (it->second.guild)
                 m_guildSpeakerTracker.RecordSpeech(guid, nowSec);
@@ -10362,7 +10558,7 @@ namespace AzerothVoices
         auto const now = Clock::now();
         uint32_t const cooldown = (m_config && m_config->proximityEntityCooldownSeconds > 0)
             ? m_config->proximityEntityCooldownSeconds : 300;
-        for (uint64_t guid : it->second.speakers)
+        for (uint64_t guid : it->second.deliveredSpeakers)
             m_proximitySpeakerCooldowns[guid] = now + std::chrono::seconds(cooldown);
         m_proximityScenes.erase(it);
     }
