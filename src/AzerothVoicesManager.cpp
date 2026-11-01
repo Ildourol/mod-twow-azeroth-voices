@@ -3580,9 +3580,11 @@ namespace AzerothVoices
 
             if (!isConversation)
             {
-                m_generalSpeakerTracker.RecordSpeech(speaker1->GetObjectGuid().GetRawValue(), nowSec);
-                QueueGeneralDialogue(SnapshotBot(speaker1), audienceSnapshot, channel,
-                    "ambient", topic, 0, 0, 0, "");
+                if (QueueGeneralDialogue(SnapshotBot(speaker1), audienceSnapshot, channel,
+                        "ambient", topic, 0, 0, 0, ""))
+                {
+                    m_generalSpeakerTracker.RecordSpeech(speaker1->GetObjectGuid().GetRawValue(), nowSec);
+                }
             }
             else
             {
@@ -3607,8 +3609,11 @@ namespace AzerothVoices
                 m_generalConversations[scene.id] = scene;
 
                 Player* opener = eligibleBots[0];
-                QueueGeneralDialogue(SnapshotBot(opener), audienceSnapshot, channel,
-                    "ambient", topic, scene.id, 0, 0, "");
+                if (!QueueGeneralDialogue(SnapshotBot(opener), audienceSnapshot, channel,
+                        "ambient", topic, scene.id, 0, 0, ""))
+                {
+                    m_generalConversations.erase(scene.id);
+                }
             }
 
             if (m_config->debug)
@@ -4614,6 +4619,12 @@ namespace AzerothVoices
             {
                 if (completion.request.barrensScene)
                     HandleBarrensTerminalDrop(completion.request, "superseded_or_expired");
+                if (completion.request.generalConversation)
+                    OnGeneralDeliveryFailed(completion.request);
+                if (completion.request.groupConversation)
+                    OnGroupDeliveryFailed(completion.request);
+                if (completion.request.proximityScene)
+                    OnProximityDeliveryFailed(completion.request);
                 ++m_dropped;
                 continue;
             }
@@ -4622,6 +4633,12 @@ namespace AzerothVoices
             {
                 if (completion.request.barrensScene)
                     HandleBarrensTerminalDrop(completion.request, "provider_error");
+                if (completion.request.generalConversation)
+                    OnGeneralDeliveryFailed(completion.request);
+                if (completion.request.groupConversation)
+                    OnGroupDeliveryFailed(completion.request);
+                if (completion.request.proximityScene)
+                    OnProximityDeliveryFailed(completion.request);
                 ++m_failed;
                 if (m_config->debug || m_lastErrorLog == Clock::time_point() ||
                     now - m_lastErrorLog >= std::chrono::seconds(30))
@@ -7344,14 +7361,6 @@ namespace AzerothVoices
             for (uint32_t i = 0; i < participants; ++i)
                 scene.speakers.push_back(eligibleBots[i]->GetObjectGuid().GetRawValue());
 
-            if (m_config->groupPacingEnabled && groupId != 0)
-            {
-                std::string const partyKey = PartyPacingKey(groupId, -1);
-                uint32_t const avgDelayMs = ((m_config->groupReplyDelayMinSeconds + m_config->groupReplyDelayMaxSeconds) / 2) * 1000;
-                uint32_t const estimatedDurationMs = EstimateExchangeMilliseconds(scene.maximumLines, avgDelayMs, 3000);
-                m_partyPacing.Reserve(partyKey, now, estimatedDurationMs, m_config->groupChatMinimumGapSeconds * 1000);
-            }
-
             m_groupConversations[std::to_string(scene.id)] = scene;
         }
 
@@ -7388,7 +7397,8 @@ namespace AzerothVoices
             scene.guild ? m_config->guildMaximumLines : m_config->groupConversationMaximumLines,
             scene.guild ? m_config->guildMaximumParticipants
                         : m_config->groupConversationMaximumParticipants,
-            m_config->groupConversationMaximumReplyTurns,
+            scene.guild ? (m_config->guildMaximumLines > 1 ? m_config->guildMaximumLines - 1 : 1)
+                        : m_config->groupConversationMaximumReplyTurns,
             m_config->groupConversationTurnGapSeconds,
             m_config->groupConversationReplyWindowSeconds };
 
@@ -8991,10 +9001,6 @@ namespace AzerothVoices
                     !creature->IsVisibleForOrDetect(anchor, anchor, true))
                     continue;
 
-                auto cooldown = m_proximitySpeakerCooldowns.find(guid);
-                if (cooldown != m_proximitySpeakerCooldowns.end() && cooldown->second > now)
-                    continue;
-
                 if (!EvaluateProximityCreature(creature, *m_config).eligible)
                     continue;
 
@@ -10097,6 +10103,12 @@ namespace AzerothVoices
             for (uint64_t guid : scene.speakers)
                 m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
 
+            if (m_config->generalChatPacingEnabled)
+            {
+                std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
+                m_generalPacing.Reserve(pacingKey, now, 0, m_config->generalChatMinimumGapSeconds * 1000);
+            }
+
             m_generalConversations.erase(it);
             return;
         }
@@ -10107,6 +10119,11 @@ namespace AzerothVoices
         {
             for (uint64_t guid : scene.speakers)
                 m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
+            if (m_config->generalChatPacingEnabled)
+            {
+                std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
+                m_generalPacing.Reserve(pacingKey, now, 0, m_config->generalChatMinimumGapSeconds * 1000);
+            }
             m_generalConversations.erase(it);
             return;
         }
@@ -10117,6 +10134,11 @@ namespace AzerothVoices
         {
             for (uint64_t guid : scene.speakers)
                 m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
+            if (m_config->generalChatPacingEnabled)
+            {
+                std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
+                m_generalPacing.Reserve(pacingKey, now, 0, m_config->generalChatMinimumGapSeconds * 1000);
+            }
             m_generalConversations.erase(it);
             return;
         }
@@ -10147,7 +10169,18 @@ namespace AzerothVoices
         {
             for (uint64_t guid : scene.speakers)
                 m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
+            if (m_config->generalChatPacingEnabled)
+            {
+                std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
+                m_generalPacing.Reserve(pacingKey, now, 0, m_config->generalChatMinimumGapSeconds * 1000);
+            }
             m_generalConversations.erase(it);
+        }
+        else if (m_config->generalChatPacingEnabled)
+        {
+            std::string const pacingKey = NormalizePacingKey(ChatScope::World, scene.channel, 0, 0, scene.zoneId, false);
+            uint32_t const followDurationMs = (delay * 1000) + 6000;
+            m_generalPacing.Reserve(pacingKey, now, followDurationMs, m_config->generalChatMinimumGapSeconds * 1000);
         }
     }
 
@@ -10158,10 +10191,16 @@ namespace AzerothVoices
         auto it = m_generalConversations.find(request.generalConversationId);
         if (it == m_generalConversations.end())
             return;
+        auto const now = Clock::now();
         uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
-            Clock::now().time_since_epoch()).count());
+            now.time_since_epoch()).count());
         for (uint64_t guid : it->second.speakers)
             m_generalSpeakerTracker.RecordSpeech(guid, nowSec);
+        if (m_config->generalChatPacingEnabled)
+        {
+            std::string const pacingKey = NormalizePacingKey(ChatScope::World, it->second.channel, 0, 0, it->second.zoneId, false);
+            m_generalPacing.Reserve(pacingKey, now, 0, m_config->generalChatMinimumGapSeconds * 1000);
+        }
         m_generalConversations.erase(it);
     }
 

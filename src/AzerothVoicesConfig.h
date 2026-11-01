@@ -288,11 +288,11 @@ namespace AzerothVoices
 
         bool groupChatterEnabled = true;
         bool groupPacingEnabled = true;
-        uint32_t groupChatMinimumGapSeconds = 60;
-        uint32_t groupReplyDelayMinSeconds = 3;
+        uint32_t groupChatMinimumGapSeconds = 30;
+        uint32_t groupReplyDelayMinSeconds = 4;
         uint32_t groupReplyDelayMaxSeconds = 8;
-        uint32_t groupBotSpeakerCooldownSeconds = 600;
-        uint32_t groupPauseDuringPlayerChatSeconds = 10;
+        uint32_t groupBotSpeakerCooldownSeconds = 60;
+        uint32_t groupPauseDuringPlayerChatSeconds = 30;
         bool raidChatterEnabled = true;
         uint32_t groupChatterScanSeconds = 180;
         std::vector<CategoryWeight> groupCategoryWeights;
@@ -369,11 +369,11 @@ namespace AzerothVoices
 
         bool guildChatterEnabled = true;
         bool guildPacingEnabled = true;
-        uint32_t guildChatMinimumGapSeconds = 90;
+        uint32_t guildChatMinimumGapSeconds = 60;
         uint32_t guildReplyDelayMinSeconds = 4;
-        uint32_t guildReplyDelayMaxSeconds = 12;
-        uint32_t guildBotSpeakerCooldownSeconds = 900;
-        uint32_t guildPauseDuringPlayerChatSeconds = 15;
+        uint32_t guildReplyDelayMaxSeconds = 10;
+        uint32_t guildBotSpeakerCooldownSeconds = 90;
+        uint32_t guildPauseDuringPlayerChatSeconds = 60;
         uint32_t guildChatterScanSeconds = 60;
         uint32_t guildAmbientChance = 5;
         uint32_t guildAmbientCooldownSeconds = 900;
