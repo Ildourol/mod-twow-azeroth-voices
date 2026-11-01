@@ -1358,6 +1358,7 @@ namespace AzerothVoices
         m_groupSpeakerTracker.Clear();
         m_guildLastPlayerChat.clear();
         m_groupLastPlayerChat.clear();
+        m_proximityLastPlayerSay.clear();
         m_instanceLore.clear();
         m_instanceLoreLoaded = false;
         m_nextProximitySceneId = 1;
@@ -2732,7 +2733,13 @@ namespace AzerothVoices
             else if ((scope == ChatScope::Party || scope == ChatScope::Raid) && speaker->GetGroup())
                 m_groupLastPlayerChat[speaker->GetGroup()->GetId()] = Clock::now();
             else if (scope == ChatScope::Say)
-                m_proximityLastPlayerSay = Clock::now();
+            {
+                std::string const proxKey = NormalizeProximityPacingKey(
+                    speaker->GetMapId(),
+                    CurrentInstanceId(speaker),
+                    speaker->GetZoneId());
+                m_proximityLastPlayerSay[proxKey] = Clock::now();
+            }
         }
         if (false)
             NotePlayerWorldChat(channelName);

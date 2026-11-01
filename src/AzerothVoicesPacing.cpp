@@ -63,15 +63,29 @@ namespace AzerothVoices
         return "guild:" + std::to_string(guildId);
     }
 
-    std::string NormalizeProximityPacingKey(uint32_t mapId, uint32_t zoneId, uint32_t instanceId, bool instance)
+    std::string NormalizeProximityPacingKey(uint32_t mapId, uint32_t instanceId, uint32_t zoneId, bool instance)
     {
         std::ostringstream key;
         key << "proximity:";
-        if (instance)
+        if (instance || instanceId != 0)
             key << "map:" << mapId << ':' << instanceId;
         else
             key << "zone:" << zoneId;
         return key.str();
+    }
+
+    std::string NormalizeProximityPacingKey(uint32_t mapId, uint32_t zoneId, uint32_t instanceId, bool instance)
+    {
+        return NormalizeProximityPacingKey(mapId, instanceId, zoneId, instance);
+    }
+
+    uint32_t EstimateExchangeMilliseconds(size_t lines, uint32_t averageDelayMs,
+                                          uint32_t speechDurationMs)
+    {
+        if (!lines)
+            return 0;
+        uint64_t const total = static_cast<uint64_t>(lines) * (static_cast<uint64_t>(averageDelayMs) + speechDurationMs);
+        return static_cast<uint32_t>(std::min<uint64_t>(total, 600000));
     }
 
     uint32_t EstimateExchangeMilliseconds(size_t lines, bool typingSimulation,

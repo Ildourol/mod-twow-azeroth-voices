@@ -626,16 +626,16 @@ namespace AzerothVoices
         DeliveryTimeline m_proximityPacing;
         SpeakerCooldownTracker m_guildSpeakerTracker;
         SpeakerCooldownTracker m_groupSpeakerTracker;
-        std::unordered_map<uint32_t, Clock::time_point> m_guildLastPlayerChat;
-        std::unordered_map<uint32_t, Clock::time_point> m_groupLastPlayerChat;
-        Clock::time_point m_proximityLastPlayerSay;
+        std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> m_guildLastPlayerChat;
+        std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> m_groupLastPlayerChat;
+        std::unordered_map<std::string, std::chrono::steady_clock::time_point> m_proximityLastPlayerSay;
 
         std::chrono::steady_clock::time_point m_nextGeneralTrigger;
         GeneralSpeakerTracker m_generalSpeakerTracker;
         GossipTargetTracker m_gossipTargetTracker;
         std::map<uint64_t, GeneralConversation> m_generalConversations;
         uint64_t m_nextGeneralConversationId = 1;
-        std::unordered_map<std::string, Clock::time_point> m_generalLastPlayerChat;
+        std::unordered_map<std::string, std::chrono::steady_clock::time_point> m_generalLastPlayerChat;
         InstanceLoreRegistry m_instanceLore;
         std::vector<RagItem> m_rag;
         size_t m_ragFiles = 0;

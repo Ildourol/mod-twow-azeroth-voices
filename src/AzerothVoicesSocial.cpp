@@ -11,6 +11,14 @@
 
 namespace AzerothVoices
 {
+    static uint32_t SocialRandomUInt(uint32_t minimum, uint32_t maximum)
+    {
+        if (minimum >= maximum)
+            return minimum;
+        static thread_local std::mt19937 engine(std::random_device{}());
+        return std::uniform_int_distribution<uint32_t>(minimum, maximum)(engine);
+    }
+
     char const* GroupTriggerName(GroupTrigger trigger)
     {
         switch (trigger)
@@ -1624,14 +1632,6 @@ namespace AzerothVoices
         if (tokens <= mediumThreshold)
             return LengthTier::Medium;
         return LengthTier::Long;
-    }
-
-    static uint32_t SocialRandomUInt(uint32_t minimum, uint32_t maximum)
-    {
-        if (minimum >= maximum)
-            return minimum;
-        static thread_local std::mt19937 engine(std::random_device{}());
-        return std::uniform_int_distribution<uint32_t>(minimum, maximum)(engine);
     }
 
     DynamicLengthPlan ResolveDynamicLengthPlan(Config const& config, uint32_t tokenRollOverride)

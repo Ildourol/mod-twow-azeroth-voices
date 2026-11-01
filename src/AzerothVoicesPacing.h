@@ -18,7 +18,12 @@ namespace AzerothVoices
                                    bool instance);
 
     std::string NormalizeGuildPacingKey(uint32_t guildId);
+    std::string NormalizeProximityPacingKey(uint32_t mapId, uint32_t instanceId, uint32_t zoneId, bool instance = false);
     std::string NormalizeProximityPacingKey(uint32_t mapId, uint32_t zoneId, uint32_t instanceId, bool instance);
+
+    // Overloaded convenience helper for estimated exchange duration
+    uint32_t EstimateExchangeMilliseconds(size_t lines, uint32_t averageDelayMs,
+                                          uint32_t speechDurationMs = 3000);
 
     // The full duration of a generated multi-line exchange is reserved before
     // its first line is scheduled, so a later automated exchange cannot
