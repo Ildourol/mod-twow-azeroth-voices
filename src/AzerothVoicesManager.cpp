@@ -7090,7 +7090,7 @@ namespace AzerothVoices
         if (!realPlayer)
             return bots;
         Group* group = realPlayer->GetGroup();
-        if (!group || (raid && !group->IsRaidGroup()))
+        if (!group || (raid && !group->isRaidGroup()))
             return bots;
         groupId = group->GetId();
         uint8_t const subgroup = group->GetMemberGroup(realPlayer->GetObjectGuid());
@@ -7117,7 +7117,7 @@ namespace AzerothVoices
             if (!member)
                 return nullptr;
             Group* group = member->GetGroup();
-            if (!group || (raid && !group->IsRaidGroup()))
+            if (!group || (raid && !group->isRaidGroup()))
                 return nullptr;
             groupId = group->GetId();
             uint8_t const subgroup = group->GetMemberGroup(member->GetObjectGuid());
