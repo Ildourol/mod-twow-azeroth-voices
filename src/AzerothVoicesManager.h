@@ -222,6 +222,7 @@ namespace AzerothVoices
             uint32_t replyTurns = 0;
             bool conversation = false;
             bool instance = false;
+            std::string locationName;
             std::chrono::steady_clock::time_point expires;
             std::chrono::steady_clock::time_point nextTurn;
         };
@@ -301,10 +302,11 @@ namespace AzerothVoices
             std::vector<uint64_t> speakers;
             uint32_t deliveredLines = 0;
             uint32_t replyTurns = 0;
-            uint32_t maximumLines = 3;
+            uint32_t maximumLines = 4;
             bool conversation = false;
             bool raid = false;
             bool guild = false;
+            std::string locationName;
             std::chrono::steady_clock::time_point expires;
             std::chrono::steady_clock::time_point nextTurn;
         };
@@ -468,6 +470,8 @@ namespace AzerothVoices
                                   std::string const& continuityPrompt = "");
         void MaybeQueueGeneralTurn(ChatRequest const& request, std::string const& reply);
         void OnGeneralDeliveryFailed(ChatRequest const& request);
+        void OnGroupDeliveryFailed(ChatRequest const& request);
+        void OnProximityDeliveryFailed(ChatRequest const& request);
         void RunGroupChatter();
         void RunGuildChatter();
         void PruneGroupAndGuildState();
@@ -618,6 +622,13 @@ namespace AzerothVoices
         std::map<uint64_t, std::pair<uint32_t, std::string>> m_lastPlayerMap;
         DeliveryTimeline m_generalPacing;
         DeliveryTimeline m_partyPacing;
+        DeliveryTimeline m_guildPacing;
+        DeliveryTimeline m_proximityPacing;
+        SpeakerCooldownTracker m_guildSpeakerTracker;
+        SpeakerCooldownTracker m_groupSpeakerTracker;
+        std::unordered_map<uint32_t, Clock::time_point> m_guildLastPlayerChat;
+        std::unordered_map<uint32_t, Clock::time_point> m_groupLastPlayerChat;
+        Clock::time_point m_proximityLastPlayerSay;
 
         std::chrono::steady_clock::time_point m_nextGeneralTrigger;
         GeneralSpeakerTracker m_generalSpeakerTracker;

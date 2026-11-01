@@ -1079,8 +1079,8 @@ AzerothVoices.Proximity.Enable = 1
 
 # AzerothVoices.Proximity.ScanSecondsOutdoor
 #     Description: Delay between outdoor proximity scans. (Seconds, 5-3600.)
-#     Default:     30
-AzerothVoices.Proximity.ScanSecondsOutdoor = 30
+#     Default:     60
+AzerothVoices.Proximity.ScanSecondsOutdoor = 60
 
 # AzerothVoices.Proximity.ScanSecondsInstance
 #     Description: Delay between dungeon/raid proximity scans. (Seconds, 5-3600.)
@@ -1089,14 +1089,14 @@ AzerothVoices.Proximity.ScanSecondsInstance = 30
 
 # AzerothVoices.Proximity.OutdoorChance
 #     Description: Trigger chance per outdoor scan, before zone fatigue. (Percentage.)
-#     Default:     15
-AzerothVoices.Proximity.OutdoorChance = 15
+#     Default:     10
+AzerothVoices.Proximity.OutdoorChance = 10
 
 # AzerothVoices.Proximity.InstanceChance
 #     Description: Trigger chance per dungeon/raid scan, before zone fatigue.
 #                  (Percentage.)
-#     Default:     75
-AzerothVoices.Proximity.InstanceChance = 75
+#     Default:     35
+AzerothVoices.Proximity.InstanceChance = 35
 
 # AzerothVoices.Proximity.IncludeInstances
 #     Description: Includes dungeons and raids; they are never required for outdoor
@@ -1104,11 +1104,46 @@ AzerothVoices.Proximity.InstanceChance = 75
 #     Default:     1
 AzerothVoices.Proximity.IncludeInstances = 1
 
+# AzerothVoices.Proximity.PlayerDistance
+#     Description: Maximum distance from the anchor player to the first NPC to trigger proximity chat.
+#     Default:     10.0
+AzerothVoices.Proximity.PlayerDistance = 10.0
+
+# AzerothVoices.Proximity.InterNpcDistance
+#     Description: Maximum distance between NPCs for multi-NPC dialogue.
+#     Default:     10.0
+AzerothVoices.Proximity.InterNpcDistance = 10.0
+
+# AzerothVoices.Proximity.Pacing.Enable
+#     Description: Enables per-area pacing timeline reservation for proximity conversations.
+#     Default:     1
+AzerothVoices.Proximity.Pacing.Enable = 1
+
+# AzerothVoices.Proximity.Pacing.MinimumGapSeconds
+#     Description: Minimum quiet gap between consecutive proximity conversations in the same zone/area.
+#     Default:     45
+AzerothVoices.Proximity.Pacing.MinimumGapSeconds = 45
+
+# AzerothVoices.Proximity.Pacing.ReplyDelayMinSeconds
+#     Description: Minimum randomized reply delay before the next NPC turn delivers.
+#     Default:     4
+AzerothVoices.Proximity.Pacing.ReplyDelayMinSeconds = 4
+
+# AzerothVoices.Proximity.Pacing.ReplyDelayMaxSeconds
+#     Description: Maximum randomized reply delay before the next NPC turn delivers.
+#     Default:     9
+AzerothVoices.Proximity.Pacing.ReplyDelayMaxSeconds = 9
+
+# AzerothVoices.Proximity.Pacing.PauseDuringPlayerChatSeconds
+#     Description: Mutes proximity ambient chatter if a human player recently spoke in /say nearby.
+#     Default:     45
+AzerothVoices.Proximity.Pacing.PauseDuringPlayerChatSeconds = 45
+
 # AzerothVoices.Proximity.EntityCooldownSeconds
 #     Description: Per-speaker cooldown after a delivered proximity line. (Seconds,
 #                  0-86400.)
-#     Default:     60
-AzerothVoices.Proximity.EntityCooldownSeconds = 60
+#     Default:     300
+AzerothVoices.Proximity.EntityCooldownSeconds = 300
 
 # AzerothVoices.Proximity.ZoneFatigueScenes
 #     Description: Scenes a zone may produce before its trigger chance starts decaying.
@@ -1130,19 +1165,19 @@ AzerothVoices.Proximity.MinimumSpeakers = 1
 # AzerothVoices.Proximity.MaximumSpeakers
 #     Description: Maximum speakers selected per scene; raised to MinimumSpeakers when
 #                  set lower. (Speakers, 1-8.)
-#     Default:     3
-AzerothVoices.Proximity.MaximumSpeakers = 3
+#     Default:     2
+AzerothVoices.Proximity.MaximumSpeakers = 2
 
 # AzerothVoices.Proximity.ConversationChance
 #     Description: Chance a scene becomes a multi-line conversation instead of one line.
 #                  (Percentage.)
-#     Default:     40
-AzerothVoices.Proximity.ConversationChance = 40
+#     Default:     25
+AzerothVoices.Proximity.ConversationChance = 25
 
 # AzerothVoices.Proximity.MaximumLines
 #     Description: Lines a single scene may deliver. (Lines, 1-12.)
-#     Default:     4
-AzerothVoices.Proximity.MaximumLines = 4
+#     Default:     3
+AzerothVoices.Proximity.MaximumLines = 3
 
 # AzerothVoices.Proximity.TurnGapSeconds
 #     Description: Minimum gap between delivered lines of one conversation. (Seconds,
@@ -1351,8 +1386,8 @@ AzerothVoices.GroupChatter.ZoneChangeCooldownSeconds = 300
 
 # AzerothVoices.GroupChatter.KillChance
 #     Description: Chance the group reacts to an ordinary creature kill. (Percentage.)
-#     Default:     4
-AzerothVoices.GroupChatter.KillChance = 4
+#     Default:     2
+AzerothVoices.GroupChatter.KillChance = 2
 
 # AzerothVoices.GroupChatter.KillCooldownSeconds
 #     Description: Cooldown after a trash-kill line. (Seconds, 0-86400.)
@@ -1426,13 +1461,13 @@ AzerothVoices.GroupChatter.ResurrectCooldownSeconds = 120
 # AzerothVoices.GroupChatter.LootChanceGreen
 #     Description: Loot chatter chance by item quality; poor and common loot never
 #                  triggers. (Percentage.)
-#     Default:     5
-AzerothVoices.GroupChatter.LootChanceGreen = 5
+#     Default:     0
+AzerothVoices.GroupChatter.LootChanceGreen = 0
 
 # AzerothVoices.GroupChatter.LootChanceBlue
 #     Description: Rare (blue) loot chatter chance. (Percentage.)
-#     Default:     10
-AzerothVoices.GroupChatter.LootChanceBlue = 10
+#     Default:     5
+AzerothVoices.GroupChatter.LootChanceBlue = 5
 
 # AzerothVoices.GroupChatter.LootChancePurple
 #     Description: Epic (purple) loot chatter chance. (Percentage.)
@@ -1458,8 +1493,8 @@ AzerothVoices.GroupChatter.QuestAcceptChance = 10
 # AzerothVoices.GroupChatter.QuestObjectiveChance
 #     Description: Chance the group comments when a quest objective advances.
 #                  (Percentage.)
-#     Default:     10
-AzerothVoices.GroupChatter.QuestObjectiveChance = 10
+#     Default:     5
+AzerothVoices.GroupChatter.QuestObjectiveChance = 5
 
 # AzerothVoices.GroupChatter.QuestCompleteChance
 #     Description: Chance the group comments when a member completes a quest.
@@ -1481,8 +1516,8 @@ AzerothVoices.GroupChatter.QuestObjectiveDebounceSeconds = 300
 # AzerothVoices.GroupChatter.SpellCastChance
 #     Description: Chance the group comments on a member's spell cast. This hook fires
 #                  very often, so keep the value low. (Percentage.)
-#     Default:     2
-AzerothVoices.GroupChatter.SpellCastChance = 2
+#     Default:     1
+AzerothVoices.GroupChatter.SpellCastChance = 1
 
 # AzerothVoices.GroupChatter.SpellCastCooldownSeconds
 #     Description: Cooldown after a spell-cast line. (Seconds, 0-86400.)
@@ -1577,22 +1612,52 @@ AzerothVoices.GroupChatter.PlayerFollowupChance = 25
 #     Default:     60
 AzerothVoices.GroupChatter.PlayerFollowupCooldownSeconds = 60
 
+# AzerothVoices.GroupChatter.Pacing.Enable
+#     Description: Enables per-party pacing timeline reservation for group conversations.
+#     Default:     1
+AzerothVoices.GroupChatter.Pacing.Enable = 1
+
+# AzerothVoices.GroupChatter.Pacing.MinimumGapSeconds
+#     Description: Minimum quiet gap between consecutive group conversations.
+#     Default:     30
+AzerothVoices.GroupChatter.Pacing.MinimumGapSeconds = 30
+
+# AzerothVoices.GroupChatter.Pacing.ReplyDelayMinSeconds
+#     Description: Minimum randomized reply delay before the next group turn delivers.
+#     Default:     4
+AzerothVoices.GroupChatter.Pacing.ReplyDelayMinSeconds = 4
+
+# AzerothVoices.GroupChatter.Pacing.ReplyDelayMaxSeconds
+#     Description: Maximum randomized reply delay before the next group turn delivers.
+#     Default:     8
+AzerothVoices.GroupChatter.Pacing.ReplyDelayMaxSeconds = 8
+
+# AzerothVoices.GroupChatter.Pacing.BotSpeakerCooldownSeconds
+#     Description: Cooldown applied to participant bots after completing a group conversation.
+#     Default:     60
+AzerothVoices.GroupChatter.Pacing.BotSpeakerCooldownSeconds = 60
+
+# AzerothVoices.GroupChatter.Pacing.PauseDuringPlayerChatSeconds
+#     Description: Mutes group chatter if a human party member recently spoke in party/raid chat.
+#     Default:     30
+AzerothVoices.GroupChatter.Pacing.PauseDuringPlayerChatSeconds = 30
+
 # AzerothVoices.GroupChatter.ConversationChance
 #     Description: Chance a group line becomes a short multi-line conversation instead
 #                  of one line. (Percentage.)
-#     Default:     10
-AzerothVoices.GroupChatter.ConversationChance = 10
+#     Default:     15
+AzerothVoices.GroupChatter.ConversationChance = 15
 
 # AzerothVoices.GroupChatter.ConversationMaximumLines
 #     Description: Lines a group conversation may deliver. (Lines, 1-12.)
-#     Default:     2
-AzerothVoices.GroupChatter.ConversationMaximumLines = 2
+#     Default:     3
+AzerothVoices.GroupChatter.ConversationMaximumLines = 3
 
 # AzerothVoices.GroupChatter.ConversationMaximumParticipants
 #     Description: Participants a group conversation may use, capped by the number of
 #                  grouped bots. (Participants, 1-8.)
-#     Default:     2
-AzerothVoices.GroupChatter.ConversationMaximumParticipants = 2
+#     Default:     3
+AzerothVoices.GroupChatter.ConversationMaximumParticipants = 3
 
 # AzerothVoices.GroupChatter.ConversationTurnGapSeconds
 #     Description: Minimum gap between delivered lines of one group conversation.
@@ -1676,27 +1741,57 @@ AzerothVoices.GuildChatter.Enable = 1
 #     Default:     60
 AzerothVoices.GuildChatter.ScanSeconds = 60
 
+# AzerothVoices.GuildChatter.Pacing.Enable
+#     Description: Enables per-guild pacing timeline reservation for guild conversations.
+#     Default:     1
+AzerothVoices.GuildChatter.Pacing.Enable = 1
+
+# AzerothVoices.GuildChatter.Pacing.MinimumGapSeconds
+#     Description: Minimum quiet gap between consecutive guild conversations.
+#     Default:     60
+AzerothVoices.GuildChatter.Pacing.MinimumGapSeconds = 60
+
+# AzerothVoices.GuildChatter.Pacing.ReplyDelayMinSeconds
+#     Description: Minimum randomized reply delay before the next guild turn delivers.
+#     Default:     4
+AzerothVoices.GuildChatter.Pacing.ReplyDelayMinSeconds = 4
+
+# AzerothVoices.GuildChatter.Pacing.ReplyDelayMaxSeconds
+#     Description: Maximum randomized reply delay before the next guild turn delivers.
+#     Default:     10
+AzerothVoices.GuildChatter.Pacing.ReplyDelayMaxSeconds = 10
+
+# AzerothVoices.GuildChatter.Pacing.BotSpeakerCooldownSeconds
+#     Description: Cooldown applied to participant bots after completing a guild conversation.
+#     Default:     90
+AzerothVoices.GuildChatter.Pacing.BotSpeakerCooldownSeconds = 90
+
+# AzerothVoices.GuildChatter.Pacing.PauseDuringPlayerChatSeconds
+#     Description: Mutes guild ambient chatter if a human guild member recently spoke in guild chat.
+#     Default:     60
+AzerothVoices.GuildChatter.Pacing.PauseDuringPlayerChatSeconds = 60
+
 # AzerothVoices.GuildChatter.AmbientChance
 #     Description: Chance a scan starts a guild ambient line. (Percentage.)
-#     Default:     8
-AzerothVoices.GuildChatter.AmbientChance = 8
+#     Default:     5
+AzerothVoices.GuildChatter.AmbientChance = 5
 
 # AzerothVoices.GuildChatter.AmbientCooldownSeconds
 #     Description: Cooldown between guild ambient lines. (Seconds, 0-86400.)
-#     Default:     600
-AzerothVoices.GuildChatter.AmbientCooldownSeconds = 600
+#     Default:     900
+AzerothVoices.GuildChatter.AmbientCooldownSeconds = 900
 
 # AzerothVoices.GuildChatter.ConversationChance
 #     Description: Chance a guild ambient line becomes a short multi-line conversation.
 #                  (Percentage.)
-#     Default:     35
-AzerothVoices.GuildChatter.ConversationChance = 35
+#     Default:     25
+AzerothVoices.GuildChatter.ConversationChance = 25
 
 # AzerothVoices.GuildChatter.MaximumParticipants
 #     Description: Participants a guild conversation may use, capped by the number of
 #                  online guilded bots. (Participants, 1-8.)
-#     Default:     2
-AzerothVoices.GuildChatter.MaximumParticipants = 2
+#     Default:     3
+AzerothVoices.GuildChatter.MaximumParticipants = 3
 
 # AzerothVoices.GuildChatter.MaximumLines
 #     Description: Lines a guild conversation may deliver. (Lines, 1-12.)
@@ -2000,13 +2095,13 @@ AzerothVoices.Random.Enable = 1
 
 # AzerothVoices.Random.MinimumIntervalSeconds
 #     Description: Lower bound before the next ambient attempt. (Seconds, minimum 5.)
-#     Default:     300
-AzerothVoices.Random.MinimumIntervalSeconds = 300
+#     Default:     180
+AzerothVoices.Random.MinimumIntervalSeconds = 180
 
 # AzerothVoices.Random.MaximumIntervalSeconds
 #     Description: Upper interval bound. (Seconds, at least MinimumIntervalSeconds.)
-#     Default:     600
-AzerothVoices.Random.MaximumIntervalSeconds = 600
+#     Default:     480
+AzerothVoices.Random.MaximumIntervalSeconds = 480
 
 # AzerothVoices.Random.FollowupChance
 #     Description: Chance another actor replies after ambient chatter, a bot-originated
@@ -2014,8 +2109,8 @@ AzerothVoices.Random.MaximumIntervalSeconds = 600
 #                  corresponding bot-to-bot or RPG interaction cap is then applied.
 #                  Every follow-up repeats the selected scope's real-audience rule.
 #                  (Percentage.)
-#     Default:     10
-AzerothVoices.Random.FollowupChance = 10
+#     Default:     5
+AzerothVoices.Random.FollowupChance = 5
 
 # AzerothVoices.Random.MaximumActors
 #     Description: Generated conversation chain cap; 1 disables follow-ups. (Generated
@@ -2035,8 +2130,8 @@ AzerothVoices.Random.MaximumActors = 2
 #                  requires one online real player, and channel uses the custom-channel
 #                  audience gate. (Comma-separated
 #                  say/yell/party/raid/guild/officer/world/channel.)
-#     Default:     guild,world,party
-AzerothVoices.Random.Scopes = guild,world,party
+#     Default:     world,say
+AzerothVoices.Random.Scopes = world,say
 
 # AzerothVoices.Random.Prompts
 #     Description: General ambient topic instructions. (Pipe-separated text choices.)
@@ -2394,14 +2489,14 @@ AzerothVoices.PartyGate.Enable = 1
 # AzerothVoices.PartyGate.FillerMinGapSeconds
 #     Description: Minimum gap between filler chatter messages in the same party.
 #                  (Seconds, 0-300.)
-#     Default:     30
-AzerothVoices.PartyGate.FillerMinGapSeconds = 30
+#     Default:     45
+AzerothVoices.PartyGate.FillerMinGapSeconds = 45
 
 # AzerothVoices.PartyGate.ContextualMinGapSeconds
 #     Description: Minimum gap between contextual event chatter messages in the same
 #                  party. (Seconds, 0-300.)
-#     Default:     20
-AzerothVoices.PartyGate.ContextualMinGapSeconds = 20
+#     Default:     25
+AzerothVoices.PartyGate.ContextualMinGapSeconds = 25
 
 # AzerothVoices.PartyGate.ResponsiveMinGapSeconds
 #     Description: Minimum gap between direct/responsive chatter messages in the same
@@ -2418,8 +2513,8 @@ AzerothVoices.PartyGate.UrgentMinGapSeconds = 0
 # AzerothVoices.PartyGate.PreLLMDeferThresholdSeconds
 #     Description: Threshold in seconds beyond which pre-LLM filler requests are
 #                  deferred or dropped. (Seconds, 0-60.)
-#     Default:     4
-AzerothVoices.PartyGate.PreLLMDeferThresholdSeconds = 4
+#     Default:     5
+AzerothVoices.PartyGate.PreLLMDeferThresholdSeconds = 5
 
 # AzerothVoices.PartyGate.MaxFillerDelaySeconds
 #     Description: Maximum post-generation delay cap for filler chatter. (Seconds,
@@ -2493,25 +2588,25 @@ AzerothVoices.Events.Enable = 1
 # AzerothVoices.Events.ResponderChance
 #     Description: Second-stage chance that other actors react after the selected
 #                  scope's real-audience check passes. (Percentage.)
-#     Default:     15
-AzerothVoices.Events.ResponderChance = 15
+#     Default:     8
+AzerothVoices.Events.ResponderChance = 8
 
 # AzerothVoices.Events.SelfCommentChance
 #     Description: Chance an AI PlayerBot comments on its own event through Guild,
 #                  preferred Party, or fallback Say after the selected scope's audience
 #                  check passes. (Percentage.)
-#     Default:     5
-AzerothVoices.Events.SelfCommentChance = 5
+#     Default:     3
+AzerothVoices.Events.SelfCommentChance = 3
 
 # AzerothVoices.Events.MaximumResponders
 #     Description: Maximum other responders to one event. (Actors, minimum 1.)
-#     Default:     2
-AzerothVoices.Events.MaximumResponders = 2
+#     Default:     1
+AzerothVoices.Events.MaximumResponders = 1
 
 # AzerothVoices.Events.CooldownSeconds
 #     Description: Per-subject/per-event repeat cooldown. (Seconds, minimum 0.)
-#     Default:     300
-AzerothVoices.Events.CooldownSeconds = 300
+#     Default:     90
+AzerothVoices.Events.CooldownSeconds = 90
 
 # AzerothVoices.Events.CategoryWeights
 #     Description: Percentage chance distribution for reactions to in-game events (kills, deaths, wipes, level-ups):
@@ -2524,23 +2619,23 @@ AzerothVoices.Events.CategoryWeights = entertainment:30,toxic:25,celebratory:25,
 
 # AzerothVoices.Events.Chance.CreatureDefeated
 #     Description: Initial chance for an automatic creature-kill event. (Percentage.)
-#     Default:     8
-AzerothVoices.Events.Chance.CreatureDefeated = 8
+#     Default:     4
+AzerothVoices.Events.Chance.CreatureDefeated = 4
 
 # AzerothVoices.Events.Chance.PlayerDefeated
 #     Description: Initial chance for an automatic PvP-kill event. (Percentage.)
-#     Default:     40
-AzerothVoices.Events.Chance.PlayerDefeated = 40
+#     Default:     25
+AzerothVoices.Events.Chance.PlayerDefeated = 25
 
 # AzerothVoices.Events.Chance.Died
 #     Description: Initial chance for automatic player-death event. (Percentage.)
-#     Default:     25
-AzerothVoices.Events.Chance.Died = 25
+#     Default:     15
+AzerothVoices.Events.Chance.Died = 15
 
 # AzerothVoices.Events.Chance.ItemLooted
 #     Description: Initial chance for automatic non-rare loot chatter. (Percentage.)
-#     Default:     8
-AzerothVoices.Events.Chance.ItemLooted = 8
+#     Default:     3
+AzerothVoices.Events.Chance.ItemLooted = 3
 
 # AzerothVoices.Events.Chance.QuestCompleted
 #     Description: Initial chance for automatic quest-completion chatter. (Percentage.)
@@ -2549,8 +2644,8 @@ AzerothVoices.Events.Chance.QuestCompleted = 25
 
 # AzerothVoices.Events.Chance.SpellLearned
 #     Description: Initial chance for automatic spell-learning chatter. (Percentage.)
-#     Default:     15
-AzerothVoices.Events.Chance.SpellLearned = 15
+#     Default:     8
+AzerothVoices.Events.Chance.SpellLearned = 8
 
 # AzerothVoices.Events.Chance.DuelRequested
 #     Description: Initial chance for automatic duel-request chatter. (Percentage.)

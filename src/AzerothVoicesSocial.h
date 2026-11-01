@@ -164,6 +164,8 @@ namespace AzerothVoices
         std::unordered_map<uint64_t, uint32_t> m_lastSpokeAt;
     };
 
+    using SpeakerCooldownTracker = GeneralSpeakerTracker;
+
     // Gossip target cooldown tracker (by type:key, e.g. "npc:Hogger" or "bot:Warriorbot")
     class GossipTargetTracker
     {

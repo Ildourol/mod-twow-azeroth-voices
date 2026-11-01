@@ -241,18 +241,24 @@ namespace AzerothVoices
         std::vector<std::string> commandIgnoreList;
 
         bool proximityEnabled = true;
+        float proximityPlayerDistance = 10.0f;
+        float proximityInterNpcDistance = 10.0f;
+        uint32_t proximityReplyDelayMinSeconds = 4;
+        uint32_t proximityReplyDelayMaxSeconds = 9;
+        uint32_t proximityMinimumGapSeconds = 60;
+        uint32_t proximityPauseDuringPlayerChatSeconds = 15;
         uint32_t proximityOutdoorScanSeconds = 30;
         uint32_t proximityInstanceScanSeconds = 30;
         uint32_t proximityOutdoorChance = 15;
         uint32_t proximityInstanceChance = 100;
-        uint32_t proximityConversationChance = 40;
-        uint32_t proximityMinimumSpeakers = 1;
-        uint32_t proximityMaximumSpeakers = 4;
+        uint32_t proximityConversationChance = 50;
+        uint32_t proximityMinimumSpeakers = 2;
+        uint32_t proximityMaximumSpeakers = 2;
         uint32_t proximityMaximumLines = 4;
         uint32_t proximityTurnGapSeconds = 6;
         uint32_t proximityReplyWindowSeconds = 30;
         uint32_t proximityMaximumReplyTurns = 5;
-        uint32_t proximityEntityCooldownSeconds = 60;
+        uint32_t proximityEntityCooldownSeconds = 300;
         uint32_t proximityZoneFatigueScenes = 3;
         uint32_t proximityZoneFatigueDecayPercent = 20;
         bool proximityIncludeInstances = true;
@@ -280,11 +286,17 @@ namespace AzerothVoices
         std::set<uint32_t> bossDialogueDenyEntries;
 
         bool groupChatterEnabled = true;
+        bool groupPacingEnabled = true;
+        uint32_t groupChatMinimumGapSeconds = 60;
+        uint32_t groupReplyDelayMinSeconds = 3;
+        uint32_t groupReplyDelayMaxSeconds = 8;
+        uint32_t groupBotSpeakerCooldownSeconds = 600;
+        uint32_t groupPauseDuringPlayerChatSeconds = 10;
         bool raidChatterEnabled = true;
-        uint32_t groupChatterScanSeconds = 120;
+        uint32_t groupChatterScanSeconds = 180;
         std::vector<CategoryWeight> groupCategoryWeights;
-        uint32_t groupConversationChance = 10;
-        uint32_t groupConversationMaximumLines = 3;
+        uint32_t groupConversationChance = 40;
+        uint32_t groupConversationMaximumLines = 4;
         uint32_t groupConversationMaximumParticipants = 2;
         uint32_t groupConversationMaximumReplyTurns = 2;
         uint32_t groupConversationTurnGapSeconds = 12;
@@ -303,20 +315,20 @@ namespace AzerothVoices
         uint32_t groupResurrectCooldownSeconds = 120;
         uint32_t groupDeathChance = 25;
         uint32_t groupDeathCooldownSeconds = 60;
-        uint32_t groupKillChance = 4;
-        uint32_t groupKillCooldownSeconds = 300;
-        uint32_t groupLootUncommonChance = 10;
-        uint32_t groupLootRareChance = 35;
-        uint32_t groupLootEpicChance = 70;
+        uint32_t groupKillChance = 2;
+        uint32_t groupKillCooldownSeconds = 600;
+        uint32_t groupLootUncommonChance = 0;
+        uint32_t groupLootRareChance = 10;
+        uint32_t groupLootEpicChance = 30;
         uint32_t groupLootLegendaryChance = 100;
         uint32_t groupLootCooldownSeconds = 120;
         uint32_t groupQuestAcceptChance = 25;
-        uint32_t groupQuestObjectiveChance = 20;
-        uint32_t groupQuestObjectiveDebounceSeconds = 60;
+        uint32_t groupQuestObjectiveChance = 5;
+        uint32_t groupQuestObjectiveDebounceSeconds = 300;
         uint32_t groupQuestCompleteChance = 25;
         uint32_t groupQuestCooldownSeconds = 60;
-        uint32_t groupSpellCastChance = 2;
-        uint32_t groupSpellCastCooldownSeconds = 180;
+        uint32_t groupSpellCastChance = 1;
+        uint32_t groupSpellCastCooldownSeconds = 600;
         uint32_t groupLowHealthChance = 40;
         uint32_t groupLowHealthThresholdPercent = 35;
         uint32_t groupLowHealthCooldownSeconds = 180;
@@ -329,7 +341,7 @@ namespace AzerothVoices
         uint32_t groupBotQuestionChance = 1;
         uint32_t groupBotQuestionScanSeconds = 60;
         uint32_t groupBotQuestionCooldownSeconds = 300;
-        uint32_t groupPlayerFollowupChance = 5;
+        uint32_t groupPlayerFollowupChance = 10;
         uint32_t groupPlayerFollowupCooldownSeconds = 120;
         uint32_t groupZoneChangeChance = 15;
         uint32_t groupZoneChangeCooldownSeconds = 180;
@@ -346,8 +358,8 @@ namespace AzerothVoices
 
         // Party delivery gate (PartyGate)
         bool partyGateEnabled = true;
-        uint32_t partyGateFillerMinGapSeconds = 30;
-        uint32_t partyGateContextualMinGapSeconds = 20;
+        uint32_t partyGateFillerMinGapSeconds = 45;
+        uint32_t partyGateContextualMinGapSeconds = 25;
         uint32_t partyGateResponsiveMinGapSeconds = 4;
         uint32_t partyGateUrgentMinGapSeconds = 0;
         uint32_t partyGatePreLLMDeferThresholdSeconds = 4;
@@ -355,11 +367,17 @@ namespace AzerothVoices
         bool partyGateDebugLog = false;
 
         bool guildChatterEnabled = true;
+        bool guildPacingEnabled = true;
+        uint32_t guildChatMinimumGapSeconds = 90;
+        uint32_t guildReplyDelayMinSeconds = 4;
+        uint32_t guildReplyDelayMaxSeconds = 12;
+        uint32_t guildBotSpeakerCooldownSeconds = 900;
+        uint32_t guildPauseDuringPlayerChatSeconds = 15;
         uint32_t guildChatterScanSeconds = 60;
-        uint32_t guildAmbientChance = 8;
-        uint32_t guildAmbientCooldownSeconds = 600;
-        uint32_t guildConversationChance = 35;
-        uint32_t guildMaximumLines = 3;
+        uint32_t guildAmbientChance = 5;
+        uint32_t guildAmbientCooldownSeconds = 900;
+        uint32_t guildConversationChance = 60;
+        uint32_t guildMaximumLines = 4;
         uint32_t guildMaximumParticipants = 2;
         uint32_t guildZoneNameChance = 15;
         uint32_t guildParticipantReferenceChance = 20;
@@ -367,7 +385,7 @@ namespace AzerothVoices
         uint32_t guildRecentSpeakerSuppressionSeconds = 30;
         uint32_t guildReplyDebounceSeconds = 5;
         bool guildLoginGreetingEnabled = true;
-        uint32_t guildLoginGreetingChance = 50;
+        uint32_t guildLoginGreetingChance = 35;
         uint32_t guildLoginGreetingCooldownSeconds = 1800;
 
         // Guild player-driven conversation controls
@@ -375,10 +393,10 @@ namespace AzerothVoices
         uint32_t guildPlayerRepliesDebounceSeconds = 5;
         uint32_t guildPlayerRepliesIdleSuppressionSeconds = 90;
         uint32_t guildPlayerRepliesMaxCandidates = 12;
-        uint32_t guildPlayerRepliesMultiReplyChance = 35;
+        uint32_t guildPlayerRepliesMultiReplyChance = 20;
         uint32_t guildPlayerRepliesMultiAddressedBonus = 50;
         uint32_t guildPlayerRepliesConversationChance = 20;
-        uint32_t guildPlayerRepliesMaxResponders = 3;
+        uint32_t guildPlayerRepliesMaxResponders = 2;
         uint32_t guildPlayerRepliesPlayerNameChance = 45;
         uint32_t guildPlayerRepliesCallbackChance = 25;
         uint32_t guildPlayerRepliesFollowupQuestionChance = 30;
@@ -392,8 +410,8 @@ namespace AzerothVoices
         uint32_t guildLoginGreetingRetryIntervalSeconds = 5;
         uint32_t guildLoginGreetingReadinessTimeoutSeconds = 90;
         uint32_t guildLoginGreetingMaxCandidates = 12;
-        uint32_t guildLoginGreetingMultiReplyChance = 20;
-        uint32_t guildLoginGreetingMaxResponders = 3;
+        uint32_t guildLoginGreetingMultiReplyChance = 10;
+        uint32_t guildLoginGreetingMaxResponders = 2;
         uint32_t guildLoginGreetingPlayerNameChance = 60;
         uint32_t guildLoginGreetingMaxCharacters = 100;
 
@@ -416,9 +434,9 @@ namespace AzerothVoices
         uint32_t memoryDatabaseFlushBatchSize = 50;
 
         bool randomChatterEnabled = true;
-        uint32_t randomMinimumIntervalSeconds = 90;
+        uint32_t randomMinimumIntervalSeconds = 180;
         uint32_t randomMaximumIntervalSeconds = 240;
-        uint32_t randomFollowupChance = 15;
+        uint32_t randomFollowupChance = 8;
         uint32_t randomMaximumActors = 2;
         std::vector<std::string> randomScopes;
         std::vector<std::string> randomPrompts;
@@ -453,10 +471,10 @@ namespace AzerothVoices
         bool environmentIncludeBackpack = false;
 
         bool eventChatterEnabled = true;
-        uint32_t eventResponderChance = 25;
+        uint32_t eventResponderChance = 15;
         uint32_t eventSelfCommentChance = 5;
         uint32_t eventMaximumResponders = 2;
-        uint32_t eventCooldownSeconds = 60;
+        uint32_t eventCooldownSeconds = 90;
         std::map<std::string, uint32_t> eventChances;
         std::vector<CategoryWeight> eventCategoryWeights;
 
