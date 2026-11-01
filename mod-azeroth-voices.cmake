@@ -8,7 +8,7 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
   # Comply strictly with the server's bundled OpenSSL 1.1 architecture:
   # inject the core's bundled OpenSSL headers ahead of any external toolchain
   # (e.g. vcpkg) to ensure binary compatibility with the server engine.
-  foreach(AV_TARGET modules mod_mod_azeroth_voices)
+  foreach(AV_TARGET modules mod_mod_azeroth_voices mod_mod_twow_azeroth_voices)
     if(TARGET ${AV_TARGET})
       if(WIN32)
         target_include_directories(${AV_TARGET} BEFORE PRIVATE

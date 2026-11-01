@@ -28,7 +28,7 @@ namespace AzerothVoices
         uint8_t GetFixed() const { return level; }
 
         static BarrensTaggedLevel FromString(std::string const& str,
-                                             BarrensTaggedLevel const& def = BarrensTaggedLevel{},
+                                             BarrensTaggedLevel const& def,
                                              bool* warned = nullptr);
         std::string ToString() const;
 

@@ -7,6 +7,7 @@
 #include "ObjectAccessor.h"
 #include "GameObject.h"
 #include "Creature.h"
+#include "Chat/Chat.h"
 
 namespace AzerothVoices
 {

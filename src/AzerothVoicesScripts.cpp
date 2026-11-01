@@ -470,3 +470,8 @@ void Addmod_azeroth_voicesScripts()
     AzerothVoices::RegisterAzerothVoicesScripts();
     AzerothVoices::RegisterAzerothVoicesCommand();
 }
+
+void Addmod_twow_azeroth_voicesScripts()
+{
+    Addmod_azeroth_voicesScripts();
+}

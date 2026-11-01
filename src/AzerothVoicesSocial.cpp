@@ -5,6 +5,7 @@
 #include <random>
 
 #include <algorithm>
+#include <sstream>
 #include <cctype>
 #include <cstring>
 

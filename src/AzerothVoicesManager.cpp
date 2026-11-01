@@ -3323,7 +3323,7 @@ namespace AzerothVoices
             scope = ChatScope::Say;
         if ((scope == ChatScope::Party || scope == ChatScope::Raid) && !anchor->GetGroup())
             scope = ChatScope::Say;
-        if (scope == ChatScope::Raid && !anchor->GetGroup()->IsRaidGroup())
+        if (scope == ChatScope::Raid && !anchor->GetGroup()->isRaidGroup())
             scope = ChatScope::Say;
         if (!IsScopeEnabled(*m_config, scope))
             scope = ChatScope::Say;
@@ -4540,7 +4540,7 @@ namespace AzerothVoices
         Player* answeringBot = eligibleBots.front();
 
         std::string const trigger = isPartyScope ? "group:bot-question-reply" : "world:bot-question-reply";
-        ChatScope const scope = isPartyScope ? (askingBot->GetGroup() && askingBot->GetGroup()->IsRaidGroup() ? ChatScope::Raid : ChatScope::Party) : ChatScope::World;
+        ChatScope const scope = isPartyScope ? (askingBot->GetGroup() && askingBot->GetGroup()->isRaidGroup() ? ChatScope::Raid : ChatScope::Party) : ChatScope::World;
         std::string const channel = isWorldScope ? m_config->worldChannelName : "";
 
         QueueDialogue(SnapshotBot(answeringBot), SnapshotSpeaker(askingBot), scope, channel,
