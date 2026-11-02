@@ -25,6 +25,7 @@ namespace AzerothVoices
         constexpr char const* NativeCommandPrefix = ".avaddon";
         constexpr size_t MaxWireLength = 255;
         constexpr size_t MaxRequestParts = 32;
+        constexpr size_t MaxNativeResponseParts = 128;
         constexpr size_t MaxRequestBytes = 8192;
         constexpr uint32_t RequestTimeoutMs = 10000;
 
@@ -57,6 +58,7 @@ namespace AzerothVoices
         // case hex digits, matching the addon's Encode().
         std::string Encode(std::string const& value);
         std::string Decode(std::string const& token);
+        bool IsValidRequestId(std::string const& id);
 
         // Parses the text that follows `.llmc` or `.avaddon`. Leading command
         // tokens are tolerated so both chat and command-table call sites can share it.

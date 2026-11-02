@@ -27,6 +27,43 @@ namespace AzerothVoices
 {
     namespace
     {
+        std::mutex s_activeClientsMutex;
+        std::unordered_set<httplib::Client*> s_activeClients;
+
+        struct ScopedActiveClient
+        {
+            httplib::Client* client;
+            explicit ScopedActiveClient(httplib::Client* c) : client(c)
+            {
+                if (client)
+                {
+                    std::lock_guard<std::mutex> lock(s_activeClientsMutex);
+                    s_activeClients.insert(client);
+                }
+            }
+            ~ScopedActiveClient()
+            {
+                if (client)
+                {
+                    std::lock_guard<std::mutex> lock(s_activeClientsMutex);
+                    s_activeClients.erase(client);
+                }
+            }
+        };
+    }
+
+    void Provider::CancelAll()
+    {
+        std::lock_guard<std::mutex> lock(s_activeClientsMutex);
+        for (httplib::Client* client : s_activeClients)
+        {
+            if (client)
+                client->stop();
+        }
+    }
+
+    namespace
+    {
         using Json = nlohmann::json;
 
         struct ParsedEndpoint
@@ -331,21 +368,82 @@ namespace AzerothVoices
             }
 
             std::string scheme = Lower(match[1].str());
-            std::string host = match[2].str();
-            parsed.base = scheme + "://" + host;
+            std::string authority = match[2].str();
+            if (authority.empty())
+            {
+                error = "endpoint authority cannot be empty";
+                return false;
+            }
+
+            std::string hostPart;
+            std::string portStr;
+
+            if (authority.front() == '[')
+            {
+                size_t closeBracket = authority.find(']');
+                if (closeBracket == std::string::npos)
+                {
+                    error = "malformed IPv6 endpoint missing closing bracket";
+                    return false;
+                }
+                hostPart = authority.substr(0, closeBracket + 1);
+                if (closeBracket + 1 < authority.size())
+                {
+                    if (authority[closeBracket + 1] != ':')
+                    {
+                        error = "malformed IPv6 endpoint authority";
+                        return false;
+                    }
+                    portStr = authority.substr(closeBracket + 2);
+                }
+            }
+            else
+            {
+                size_t colon = authority.rfind(':');
+                if (colon != std::string::npos)
+                {
+                    hostPart = authority.substr(0, colon);
+                    portStr = authority.substr(colon + 1);
+                }
+                else
+                {
+                    hostPart = authority;
+                }
+            }
+
+            if (hostPart.empty())
+            {
+                error = "endpoint host cannot be empty";
+                return false;
+            }
+
+            if (!portStr.empty())
+            {
+                if (portStr.size() > 5 || !std::all_of(portStr.begin(), portStr.end(), [](unsigned char c) { return std::isdigit(c) != 0; }))
+                {
+                    error = "endpoint port must be a numeric value between 1 and 65535";
+                    return false;
+                }
+                errno = 0;
+                char* endPtr = nullptr;
+                unsigned long pVal = std::strtoul(portStr.c_str(), &endPtr, 10);
+                if (errno != 0 || !endPtr || *endPtr != '\0' || pVal == 0 || pVal > 65535)
+                {
+                    error = "endpoint port must be between 1 and 65535";
+                    return false;
+                }
+            }
+
+            parsed.base = scheme + "://" + authority;
             parsed.path = match[3].matched ? match[3].str() : "/";
             parsed.secure = scheme == "https";
 
-            std::string hostLower = Lower(host);
-            if (hostLower.compare(0, 5, "[::1]") == 0)
+            std::string hostLower = Lower(hostPart);
+            if (hostLower == "[::1]" || hostLower == "::1" || hostLower == "127.0.0.1" || hostLower == "localhost")
                 parsed.local = true;
             else
-            {
-                size_t colon = hostLower.find(':');
-                if (colon != std::string::npos)
-                    hostLower.erase(colon);
-                parsed.local = hostLower == "localhost" || hostLower == "127.0.0.1" || hostLower == "::1";
-            }
+                parsed.local = false;
+
             return true;
         }
 
@@ -402,6 +500,7 @@ namespace AzerothVoices
 
             if (root.is_object() && root.count("output") && root["output"].is_array())
             {
+                std::string combined;
                 for (auto const& output : root["output"])
                 {
                     if (!output.is_object() || !output.count("content") || !output["content"].is_array())
@@ -409,9 +508,15 @@ namespace AzerothVoices
                     for (auto const& part : output["content"])
                     {
                         if (part.is_object() && part.count("text") && part["text"].is_string())
-                            return part["text"].get<std::string>();
+                        {
+                            if (!combined.empty())
+                                combined += '\n';
+                            combined += part["text"].get<std::string>();
+                        }
                     }
                 }
+                if (!combined.empty())
+                    return combined;
             }
 
             if (root.is_object() && root.count("candidates") && root["candidates"].is_array() && !root["candidates"].empty())
@@ -422,9 +527,20 @@ namespace AzerothVoices
                     Json const& content = candidate["content"];
                     if (content.count("parts") && content["parts"].is_array() && !content["parts"].empty())
                     {
-                        Json const& part = content["parts"][0];
-                        if (part.is_object() && part.count("text") && part["text"].is_string())
-                            return part["text"].get<std::string>();
+                        std::string combined;
+                        for (auto const& part : content["parts"])
+                        {
+                            if (part.is_object() && part.count("text") && part["text"].is_string())
+                            {
+                                if (part.count("thought") && part["thought"].is_boolean() && part["thought"].get<bool>())
+                                    continue;
+                                if (!combined.empty())
+                                    combined += '\n';
+                                combined += part["text"].get<std::string>();
+                            }
+                        }
+                        if (!combined.empty())
+                            return combined;
                     }
                 }
             }
@@ -723,54 +839,135 @@ namespace AzerothVoices
         if (body.empty())
             return finish();
 
-        thread_local ThreadClient slot;
-        if (!slot.client || slot.base != endpoint.base)
+        try
         {
-            slot.base = endpoint.base;
-            slot.client.reset(new httplib::Client(endpoint.base));
-        }
+            thread_local ThreadClient slot;
+            if (!slot.client || slot.base != endpoint.base)
+            {
+                slot.base = endpoint.base;
+                slot.client.reset(new httplib::Client(endpoint.base));
+            }
 
-        slot.client->set_connection_timeout(static_cast<time_t>(config.connectTimeoutSeconds), 0);
-        slot.client->set_read_timeout(static_cast<time_t>(config.requestTimeoutSeconds), 0);
-        slot.client->set_write_timeout(static_cast<time_t>(config.requestTimeoutSeconds), 0);
-        slot.client->set_keep_alive(true);
-        slot.client->enable_server_certificate_verification(true);
-        if (!config.caCertFile.empty())
-            slot.client->set_ca_cert_path(config.caCertFile.c_str());
+            slot.client->set_connection_timeout(static_cast<time_t>(config.connectTimeoutSeconds), 0);
+            slot.client->set_read_timeout(static_cast<time_t>(config.requestTimeoutSeconds), 0);
+            slot.client->set_write_timeout(static_cast<time_t>(config.requestTimeoutSeconds), 0);
+            slot.client->set_keep_alive(true);
+            slot.client->enable_server_certificate_verification(true);
+            if (!config.caCertFile.empty())
+                slot.client->set_ca_cert_path(config.caCertFile.c_str());
 
-        httplib::Headers headers;
-        headers.emplace("Accept", "application/json");
-        std::string apiKey = config.ResolveApiKey();
-        if (!apiKey.empty())
-            headers.emplace("Authorization", "Bearer " + apiKey);
+            httplib::Headers headers;
+            headers.emplace("Accept", "application/json");
+            headers.emplace("Content-Type", "application/json");
+            std::string apiKey = config.ResolveApiKey();
+            if (!apiKey.empty())
+                headers.emplace("Authorization", "Bearer " + apiKey);
 
-        completion.httpAttemptCount = 1;
-        auto result = slot.client->Post(endpoint.path, headers, body, "application/json");
+            completion.httpAttemptCount = 1;
 
-        if (!result)
-        {
-            completion.error = std::string("HTTP transport error: ") + httplib::to_string(result.error());
+            ScopedActiveClient activeClientGuard(slot.client.get());
+
+            auto const deadline = std::chrono::steady_clock::now() +
+                std::chrono::seconds(std::max<uint32_t>(1, config.requestTimeoutSeconds));
+
+            std::string responseBody;
+            int responseStatus = 0;
+            bool exceededMaxBytes = false;
+            bool deadlineExceeded = false;
+
+            httplib::Request req;
+            req.method = "POST";
+            req.path = endpoint.path;
+            req.headers = std::move(headers);
+            req.body = std::move(body);
+
+            req.response_handler = [&](httplib::Response const& res) -> bool {
+                responseStatus = res.status;
+                if (res.has_header("Content-Length"))
+                {
+                    uint64_t const declaredLen = res.get_header_value_u64("Content-Length");
+                    if (declaredLen > config.maxResponseBytes)
+                    {
+                        exceededMaxBytes = true;
+                        return false;
+                    }
+                }
+                return true;
+            };
+
+            req.content_receiver = [&](char const* data, size_t data_length, uint64_t /*offset*/, uint64_t /*total_length*/) -> bool {
+                if (std::chrono::steady_clock::now() > deadline)
+                {
+                    deadlineExceeded = true;
+                    return false;
+                }
+                if (responseBody.size() + data_length > config.maxResponseBytes)
+                {
+                    exceededMaxBytes = true;
+                    return false;
+                }
+                responseBody.append(data, data_length);
+                return true;
+            };
+
+            req.progress = [&](uint64_t /*current*/, uint64_t /*total*/) -> bool {
+                if (std::chrono::steady_clock::now() > deadline)
+                {
+                    deadlineExceeded = true;
+                    return false;
+                }
+                return true;
+            };
+
+            auto result = slot.client->send(req);
+
+            if (exceededMaxBytes)
+            {
+                completion.httpStatus = responseStatus ? responseStatus : 413;
+                completion.error = "provider response exceeded MaxResponseBytes";
+                return finish();
+            }
+
+            if (deadlineExceeded)
+            {
+                completion.httpStatus = 0;
+                completion.error = "request exceeded transport deadline";
+                return finish();
+            }
+
+            if (!result)
+            {
+                completion.httpStatus = responseStatus;
+                completion.error = std::string("HTTP transport error: ") + httplib::to_string(result.error());
+                return finish();
+            }
+
+            completion.httpStatus = result->status;
+            completion.rawResponse = responseBody;
+            if (result->status < 200 || result->status >= 300)
+            {
+                std::string preview = responseBody.substr(0, std::min<size_t>(responseBody.size(), 512));
+                completion.error = "provider returned HTTP " + std::to_string(result->status) + ": " +
+                    RedactSecrets(config, preview);
+                return finish();
+            }
+
+            completion.responseText = ParseResponse(config, request, responseBody, completion.error);
+            completion.success = !completion.responseText.empty();
             return finish();
         }
-
-        completion.httpStatus = result->status;
-        if (result->body.size() > config.maxResponseBytes)
+        catch (std::exception const& ex)
         {
-            completion.error = "provider response exceeded MaxResponseBytes";
+            completion.httpStatus = 0;
+            completion.error = std::string("HTTP transport exception: ") + ex.what();
             return finish();
         }
-        completion.rawResponse = result->body;
-        if (result->status < 200 || result->status >= 300)
+        catch (...)
         {
-            std::string preview = result->body.substr(0, std::min<size_t>(result->body.size(), 512));
-            completion.error = "provider returned HTTP " + std::to_string(result->status) + ": " +
-                RedactSecrets(config, preview);
+            completion.httpStatus = 0;
+            completion.error = "Unknown exception in HTTP transport";
             return finish();
         }
-
-        completion.responseText = ParseResponse(config, request, result->body, completion.error);
-        completion.success = !completion.responseText.empty();
-        return finish();
     }
 
     std::vector<std::string> Provider::SplitReply(Config const& config, std::string text, std::string const& speakerName, uint32_t maxLinesOverride)

@@ -22,6 +22,12 @@
 
 namespace AzerothVoices
 {
+    namespace
+    {
+        std::mutex s_whisperTargetsMutex;
+        std::map<uint64_t, std::pair<std::string, std::string>> s_pendingWhisperTargets;
+    }
+
     void HandleAddonCommandFromPlayer(Player* player, std::string const& arguments);
 
     namespace
@@ -136,7 +142,9 @@ namespace AzerothVoices
                     PLAYERHOOK_ON_UPDATE_ZONE,
                     PLAYERHOOK_ON_MAP_CHANGED,
                     PLAYERHOOK_ON_LOOT_ITEM,
-                    PLAYERHOOK_ON_BEFORE_SEND_CHAT_MESSAGE })
+                    PLAYERHOOK_ON_BEFORE_SEND_CHAT_MESSAGE,
+                    PLAYERHOOK_ON_CHAT_CHANNEL,
+                    PLAYERHOOK_ON_CHAT_WHISPER })
             {
             }
 
@@ -209,8 +217,45 @@ namespace AzerothVoices
                 Manager::Instance().HandlePlayerMapChanged(player);
             }
 
+            void OnChatChannel(Player* from, char const* channel, char const* msg) override
+            {
+                if (!from || !channel || !msg || !*msg)
+                    return;
+                std::string const channelStr(channel);
+                std::string const msgStr(msg);
+                ChatScope scope = Manager::Instance().IsWorldChannel(channelStr)
+                    ? ChatScope::World : ChatScope::Channel;
+                Manager::Instance().HandleChat(from, scope, msgStr, "", channelStr);
+            }
+
+            void OnChatWhisper(Player* from, char const* msg) override
+            {
+                if (!from || !msg || !*msg)
+                    return;
+                uint64_t const guid = from->GetObjectGuid().GetRawValue();
+                std::string target;
+                {
+                    std::lock_guard<std::mutex> lock(s_whisperTargetsMutex);
+                    auto it = s_pendingWhisperTargets.find(guid);
+                    if (it != s_pendingWhisperTargets.end() && it->second.second == msg)
+                    {
+                        target = it->second.first;
+                        s_pendingWhisperTargets.erase(it);
+                    }
+                }
+                if (!target.empty())
+                {
+                    Manager::Instance().HandleChat(from, ChatScope::Whisper, msg, target);
+                }
+            }
+
             void OnLogout(Player* player) override
             {
+                if (player)
+                {
+                    std::lock_guard<std::mutex> lock(s_whisperTargetsMutex);
+                    s_pendingWhisperTargets.erase(player->GetObjectGuid().GetRawValue());
+                }
                 Manager::Instance().HandlePlayerLogout(player);
                 Manager::Instance().HandleEvent(player, "player_logout");
             }
@@ -290,19 +335,7 @@ namespace AzerothVoices
                         if (language == LANG_ADDON)
                             return true;
 
-                        if (type == CHAT_MSG_CHANNEL)
-                        {
-                            std::string channel;
-                            std::string message;
-                            packet >> channel >> message;
-                            if (message.empty())
-                                return true;
-
-                            ChatScope scope = Manager::Instance().IsWorldChannel(channel)
-                                ? ChatScope::World : ChatScope::Channel;
-                            Manager::Instance().HandleChat(session->GetPlayer(), scope, message, "", channel);
-                        }
-                        else if (type == CHAT_MSG_WHISPER)
+                        if (type == CHAT_MSG_WHISPER)
                         {
                             std::string to;
                             std::string message;
@@ -310,7 +343,11 @@ namespace AzerothVoices
                             if (to.empty() || message.empty())
                                 return true;
 
-                            Manager::Instance().HandleChat(session->GetPlayer(), ChatScope::Whisper, message, to);
+                            if (Player* sender = session->GetPlayer())
+                            {
+                                std::lock_guard<std::mutex> lock(s_whisperTargetsMutex);
+                                s_pendingWhisperTargets[sender->GetObjectGuid().GetRawValue()] = { to, message };
+                            }
                         }
                     }
                     catch (ByteBufferException const&)
@@ -329,11 +366,16 @@ namespace AzerothVoices
                         ObjectGuid goGuid;
                         packet >> goGuid;
                         Player* player = session->GetPlayer();
-                        if (player && player->GetMap())
+                        if (player && player->IsSelfMover() && player->GetMap())
                         {
                             GameObject* obj = player->GetMap()->GetGameObject(goGuid);
-                            if (obj && obj->GetGOInfo() &&
-                                obj->GetGoType() != GAMEOBJECT_TYPE_QUESTGIVER)
+                            if (obj && !obj->IsDeleted() && obj->isSpawned() &&
+                                obj->GetGoType() != GAMEOBJECT_TYPE_GENERIC &&
+                                obj->GetGoType() != GAMEOBJECT_TYPE_QUESTGIVER &&
+                                !obj->HasFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT) &&
+                                obj->IsAtInteractDistance(player) &&
+                                obj->PlayerCanUse(player) &&
+                                obj->GetGOInfo())
                             {
                                 Manager::Instance().HandleEvent(player, "used_object", obj->GetGOInfo()->name);
                             }
@@ -358,7 +400,10 @@ namespace AzerothVoices
                         {
                             uint32 const guildId = promoter->GetGuildId();
                             Guild* guild = sGuildMgr.GetGuildById(guildId);
-                            if (guild && guild->GetMemberSlot(targetName))
+                            uint32 const requiredRight = (original.GetOpcode() == CMSG_GUILD_PROMOTE)
+                                ? GR_RIGHT_PROMOTE : GR_RIGHT_DEMOTE;
+                            if (guild && guild->HasRankRight(promoter->GetObjectGuid(), requiredRight) &&
+                                guild->GetMemberSlot(targetName))
                             {
                                 Player* targetPlayer = ObjectAccessor::FindPlayerByName(targetName.c_str());
                                 std::string const eventName = (original.GetOpcode() == CMSG_GUILD_PROMOTE) ? "guild_promotion" : "guild_demotion";

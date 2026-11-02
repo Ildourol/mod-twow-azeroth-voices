@@ -294,6 +294,7 @@ namespace AzerothVoices
             uint32_t minimumGapMilliseconds = 0;
             uint32_t deliveredLines = 0;
             uint32_t maximumLines = 6;
+            uint32_t completedTurns = 0;
             GeneralThemeType theme = GeneralThemeType::Game;
             std::string effectiveZone;
             std::chrono::steady_clock::time_point expires;
@@ -434,6 +435,7 @@ namespace AzerothVoices
         bool IsValidContinuation(ActorSnapshot const& actor, ExchangeId const& exchangeId) const;
         bool IsExchangeActive(ExchangeId const& exchangeId) const;
         void RecordDeliveredLine(ScheduledLine const& line, std::chrono::steady_clock::time_point now, uint32_t nowSec);
+        bool InitializeGuildConversation(GroupConversation& scene, bool acquireLane);
         void RecordPreflightRejection(PreflightReason reason);
         bool Enqueue(ChatRequest request);
         bool PopRequest(ChatRequest& request);
@@ -490,6 +492,7 @@ namespace AzerothVoices
         void RunGroupChatter();
         void RunGuildChatter();
         void PruneGroupAndGuildState();
+        void PruneActorCooldowns();
         bool TryClaimGroupTrigger(Player* subject, std::string const& event,
                                   std::string const& detail, uint32_t creatureEntry,
                                   uint32_t creatureRank, uint32_t itemQuality);

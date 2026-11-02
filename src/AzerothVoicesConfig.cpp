@@ -326,6 +326,7 @@ namespace AzerothVoices
         c.adaptiveLengthGuidanceLong = Trim(sConfig.GetStringDefault("AzerothVoices.AdaptiveLengthGuidance.Long",
             "Feel free to share two or three sentences to elaborate."));
         c.thinkingMode = Trim(sConfig.GetStringDefault("AzerothVoices.Thinking.Mode", "Auto"));
+        c.thinkingAutoDetect = sConfig.GetBoolDefault("AzerothVoices.Thinking.AutoDetect", true);
         std::transform(c.thinkingMode.begin(), c.thinkingMode.end(), c.thinkingMode.begin(), [](unsigned char value) {
             return static_cast<char>(std::tolower(value));
         });

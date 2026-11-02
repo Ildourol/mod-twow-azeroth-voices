@@ -85,10 +85,7 @@ function AzerothVoices:Decode(value)
         return ""
     end
 
-    local out = string.gsub(value, "%%(%x%x)", function(hex)
-        return string.char(tonumber(hex, 16))
-    end)
-    out = string.gsub(out, "~(%x%x)", function(hex)
+    local out = string.gsub(value, "([%%~])(%x%x)", function(prefix, hex)
         return string.char(tonumber(hex, 16))
     end)
     return out
@@ -1267,7 +1264,7 @@ function AzerothVoices:HandleAddonMessage(prefix, message, channel, sender)
     local partCount = tonumber(partCountStr)
 
     if not msgIdx or not partIdx or not partCount or
-        msgIdx < 1 or partIdx < 1 or partCount < 1 or partIdx > partCount or partCount > 32 then
+        msgIdx < 1 or partIdx < 1 or partCount < 1 or partIdx > partCount or partCount > 128 then
         return
     end
 
@@ -1294,7 +1291,7 @@ function AzerothVoices:HandleAddonMessage(prefix, message, channel, sender)
 
     chunk = chunk or ""
     if not buf.parts[partIdx] then
-        if buf.totalBytes + string.len(chunk) > 16384 then
+        if buf.totalBytes + string.len(chunk) > 32768 then
             self.inboundBuffers[bufferKey] = nil
             return
         end

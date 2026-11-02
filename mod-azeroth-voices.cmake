@@ -8,23 +8,37 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
   # Comply strictly with the server's bundled OpenSSL 1.1 architecture:
   # inject the core's bundled OpenSSL headers ahead of any external toolchain
   # (e.g. vcpkg) to ensure binary compatibility with the server engine.
-  foreach(AV_TARGET modules mod_mod_azeroth_voices mod_mod_twow_azeroth_voices)
-    if(TARGET ${AV_TARGET})
-      if(WIN32)
-        target_include_directories(${AV_TARGET} BEFORE PRIVATE
-          "${CMAKE_SOURCE_DIR}/dep/windows/include/zlib"
-          "${CMAKE_SOURCE_DIR}/dep/windows/include"
-          "${CMAKE_SOURCE_DIR}/dep/include-windows")
-        target_compile_definitions(${AV_TARGET} PRIVATE ZLIB_INTERNAL)
+  if(TORTOISE_CURRENT_MODULE_LINKAGE STREQUAL "dynamic")
+    GetModuleProjectName("${TORTOISE_CURRENT_MODULE}" AV_TARGET)
+  else()
+    set(AV_TARGET modules)
+  endif()
+
+  if(TARGET ${AV_TARGET})
+    if(WIN32)
+      target_include_directories(${AV_TARGET} BEFORE PRIVATE
+        "${CMAKE_SOURCE_DIR}/dep/windows/include/zlib"
+        "${CMAKE_SOURCE_DIR}/dep/windows/include"
+        "${CMAKE_SOURCE_DIR}/dep/include-windows")
+      target_compile_definitions(${AV_TARGET} PRIVATE ZLIB_INTERNAL)
+      if(OPENSSL_DEBUG_LIBRARIES)
+        target_link_libraries(${AV_TARGET} PUBLIC
+          $<$<CONFIG:Debug>:${OPENSSL_DEBUG_LIBRARIES}>
+          $<$<NOT:$<CONFIG:Debug>>:${OPENSSL_LIBRARIES}>)
       else()
-        target_include_directories(${AV_TARGET} BEFORE PRIVATE
-          ${OPENSSL_INCLUDE_DIR})
+        target_link_libraries(${AV_TARGET} PUBLIC ${OPENSSL_LIBRARIES})
       endif()
-      target_include_directories(${AV_TARGET} PRIVATE
-        "${CMAKE_SOURCE_DIR}/src/game/MapNodes")
+    else()
+      target_include_directories(${AV_TARGET} BEFORE PRIVATE
+        ${OPENSSL_INCLUDE_DIR})
       target_link_libraries(${AV_TARGET} PUBLIC ${OPENSSL_LIBRARIES})
+      if(OPENSSL_EXTRA_LIBRARIES)
+        target_link_libraries(${AV_TARGET} PUBLIC ${OPENSSL_EXTRA_LIBRARIES})
+      endif()
     endif()
-  endforeach()
+    target_include_directories(${AV_TARGET} PRIVATE
+      "${CMAKE_SOURCE_DIR}/src/game/MapNodes")
+  endif()
 
   install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/data/"
     DESTINATION "modules/mod-azeroth-voices/data")
@@ -39,6 +53,10 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
   endif()
   install(FILES "${CMAKE_CURRENT_LIST_DIR}/README.md"
     DESTINATION "modules/mod-azeroth-voices")
+  if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/docs/CONFIGURATION_GUIDE.md")
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/docs/CONFIGURATION_GUIDE.md"
+      DESTINATION "modules/mod-azeroth-voices/docs")
+  endif()
 
   # Focused, engine-free unit tests. BUILD_TESTING is honoured when the core
   # enables CTest; AZEROTH_VOICES_BUILD_TESTS lets a module-only build opt in

@@ -101,6 +101,14 @@ namespace AzerothVoices
         return static_cast<uint32_t>(std::min<uint64_t>(total, 600000));
     }
 
+    std::chrono::steady_clock::duration ResponseResumeShift(
+        std::chrono::steady_clock::time_point firstDue,
+        std::chrono::steady_clock::time_point resumedFirstDue)
+    {
+        return resumedFirstDue > firstDue ? resumedFirstDue - firstDue
+            : std::chrono::steady_clock::duration::zero();
+    }
+
     void DeliveryTimeline::Clear()
     {
         m_lanes.clear();

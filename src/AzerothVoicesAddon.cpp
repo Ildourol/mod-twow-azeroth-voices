@@ -41,7 +41,7 @@ namespace AzerothVoices
 
             bool IsUnreserved(unsigned char c)
             {
-                return std::isalnum(c) != 0 || c == '-' || c == '_' || c == '.' || c == '~';
+                return std::isalnum(c) != 0 || c == '-' || c == '_' || c == '.';
             }
 
             int HexValue(char c)
@@ -81,11 +81,23 @@ namespace AzerothVoices
                 errno = 0;
                 char* end = nullptr;
                 unsigned long const value = std::strtoul(token.c_str(), &end, 10);
-                if (errno != 0 || !end || *end != '\0')
+                if (errno != 0 || !end || *end != '\0' || value > 0xFFFFFFFFUL)
                     return false;
                 out = static_cast<uint32_t>(value);
                 return true;
             }
+        }
+
+                bool IsValidRequestId(std::string const& id)
+        {
+            if (id.empty() || id.size() > 32)
+                return false;
+            for (char c : id)
+            {
+                if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_')
+                    return false;
+            }
+            return true;
         }
 
         std::string Sanitize(std::string const& value)
@@ -143,7 +155,7 @@ namespace AzerothVoices
             result.reserve(token.size());
             for (size_t i = 0; i < token.size(); ++i)
             {
-                if (token[i] == '%' && i + 2 < token.size())
+                if ((token[i] == '%' || token[i] == '~') && i + 2 < token.size())
                 {
                     int const high = HexValue(token[i + 1]);
                     int const low = HexValue(token[i + 2]);
@@ -387,7 +399,7 @@ namespace AzerothVoices
                                                   std::string const& logicalPayload)
         {
             std::vector<std::string> frames;
-            std::string const req = requestId.empty() ? "0" : requestId;
+            std::string const req = IsValidRequestId(requestId) ? requestId : "0";
             size_t const msgIdx = messageIndex == 0 ? 1 : messageIndex;
             // Prefix ("AZEROTH_VOICES\t") is 15 bytes; 255 - 15 = 240 maximum frame bytes.
             constexpr size_t MaxFrameBytes = 240;
@@ -397,15 +409,20 @@ namespace AzerothVoices
                        std::to_string(partIndex) + "\t" + std::to_string(partCount) + "\t";
             };
 
+            // Early check: if base header cannot fit in budget with at least 1 byte of payload, abort
+            if (makeHeader(1, 1).size() >= MaxFrameBytes)
+                return frames;
+
             if (logicalPayload.empty())
             {
                 frames.push_back(makeHeader(1, 1));
                 return frames;
             }
 
-            // Determine minimum partCount required so every frame fits <= MaxFrameBytes
+            // Determine minimum partCount required so every frame fits <= MaxFrameBytes, bounded by MaxNativeResponseParts
             size_t partCount = 1;
-            while (true)
+            bool feasible = false;
+            while (partCount <= MaxNativeResponseParts)
             {
                 size_t capacity = 0;
                 bool headerFits = true;
@@ -420,9 +437,15 @@ namespace AzerothVoices
                     capacity += (MaxFrameBytes - hLen);
                 }
                 if (headerFits && capacity >= logicalPayload.size())
+                {
+                    feasible = true;
                     break;
+                }
                 ++partCount;
             }
+
+            if (!feasible)
+                return frames;
 
             size_t offset = 0;
             for (size_t p = 1; p <= partCount; ++p)
@@ -487,8 +510,7 @@ namespace AzerothVoices
                 return FrameStatus::Malformed;
             }
 
-            if (versionStr != "1" || requestId.empty() ||
-                requestId.find('\t') != std::string::npos)
+            if (versionStr != "1" || !IsValidRequestId(requestId))
             {
                 return FrameStatus::Malformed;
             }
@@ -519,8 +541,7 @@ namespace AzerothVoices
             auto it = m_pending.find(playerGuid);
             if (it != m_pending.end())
             {
-                bool const isExpired = (nowMs >= it->second.receivedAtMs &&
-                                        nowMs - it->second.receivedAtMs > RequestTimeoutMs);
+                bool const isExpired = static_cast<uint32_t>(nowMs - it->second.receivedAtMs) > RequestTimeoutMs;
                 if (isExpired)
                 {
                     bool const sameRequest = (it->second.requestId == requestId);
@@ -599,8 +620,7 @@ namespace AzerothVoices
         {
             for (auto it = m_pending.begin(); it != m_pending.end(); )
             {
-                if (nowMs >= it->second.receivedAtMs &&
-                    nowMs - it->second.receivedAtMs > RequestTimeoutMs)
+                if (static_cast<uint32_t>(nowMs - it->second.receivedAtMs) > RequestTimeoutMs)
                 {
                     it = m_pending.erase(it);
                 }

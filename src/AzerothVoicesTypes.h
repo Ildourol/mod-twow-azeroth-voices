@@ -170,6 +170,7 @@ namespace AzerothVoices
         std::string groupStatus;
         uint32_t level = 0;
         uint32_t groupId = 0;
+        uint32_t groupSubgroup = 0;
         uint32_t guildId = 0;
         bool isBot = false;
         uint64_t targetGuid = 0;
@@ -253,6 +254,7 @@ namespace AzerothVoices
         uint64_t groupConversationId = 0;
         uint32_t groupId = 0;
         uint32_t groupSubgroup = 0;
+        uint32_t guildId = 0;
         std::string memoryBlock;
         std::string memoryTargetName;
         // Targeted NPC conversation observer.

@@ -167,9 +167,10 @@ namespace AzerothVoices
             {
                 Player* player = entry.second;
                 if (!IsOnlineRealPlayer(player) || player == center ||
+                    player->GetInstanceId() != center->GetInstanceId() ||
                     player->GetMapId() != center->GetMapId())
                     continue;
-                if (center->IsWithinDist(player, distance, false))
+                if (center->IsWithinDistInMap(player, distance, false))
                     return player;
             }
             return nullptr;
@@ -505,20 +506,16 @@ namespace AzerothVoices
 
             if (channel)
             {
-                uint32_t onlineBots = 0;
-                bool onlineRealPlayer = false;
                 HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
                 for (auto const& entry : sObjectAccessor.GetPlayers())
                 {
                     Player* player = entry.second;
                     if (!player || !player->IsInWorld() || !player->GetSession())
                         continue;
-                    if (Script_IsAIControlled(player))
-                        ++onlineBots;
-                    else
-                        onlineRealPlayer = true;
+                    if (!Script_IsAIControlled(player) && channel->IsOn(player->GetObjectGuid()))
+                        return true;
                 }
-                return onlineRealPlayer && channel->GetNumPlayers() > onlineBots;
+                return false;
             }
 
             return false;
@@ -929,6 +926,7 @@ namespace AzerothVoices
             result.groupStatus = player->GetGroup() ? "in a group" : "solo";
             result.level = player->GetLevel();
             result.groupId = player->GetGroup() ? player->GetGroup()->GetId() : 0;
+            result.groupSubgroup = player->GetGroup() ? player->GetGroup()->GetMemberGroup(player->GetObjectGuid()) : 0;
             result.guildId = player->GetGuildId();
             result.isBot = Script_IsAIControlled(player);
             ObjectGuid const targetGuid = player->GetSelectionGuid();
@@ -1095,12 +1093,16 @@ namespace AzerothVoices
                         << std::max(speaker.guid, location.guid);
                     break;
                 case ChatScope::Party:
+                    key << "party:" << speaker.groupId << ':' << speaker.groupSubgroup;
+                    break;
                 case ChatScope::Raid:
-                    key << "group:" << speaker.groupId;
+                    key << "raid:" << speaker.groupId;
                     break;
                 case ChatScope::Guild:
-                case ChatScope::Officer:
                     key << "guild:" << speaker.guildId;
+                    break;
+                case ChatScope::Officer:
+                    key << "officer:" << speaker.guildId;
                     break;
                 case ChatScope::Channel:
                 case ChatScope::World:
@@ -1108,7 +1110,7 @@ namespace AzerothVoices
                     break;
                 case ChatScope::Say:
                 case ChatScope::Yell:
-                    key << "place:" << location.mapId << ':' << location.areaId;
+                    key << "place:" << location.mapId << ':' << location.instanceId << ':' << location.areaId;
                     break;
             }
             return key.str();
@@ -1287,9 +1289,11 @@ namespace AzerothVoices
         {
             FlushDatabaseWrites(true);
             FlushSentimentWrites(true);
+            FlushMemoryWrites(true);
         }
         m_started = false;
         m_stopping = true;
+        Provider::CancelAll();
         ++m_barrensEpoch;
         m_barrensScenes.clear();
         m_queueReady.notify_all();
@@ -1334,6 +1338,7 @@ namespace AzerothVoices
         m_pendingHistoryWrites.clear();
         m_pendingSnapshotWrites.clear();
         m_pendingSentimentWrites.clear();
+        m_pendingMemoryWrites.clear();
         m_proximityScenes.clear();
         m_proximityZoneScenes.clear();
         m_proximitySpeakerCooldowns.clear();
@@ -1378,6 +1383,22 @@ namespace AzerothVoices
         m_inFlight = 0;
     }
 
+    void Manager::PruneActorCooldowns()
+    {
+        auto const now = Clock::now();
+        size_t count = 0;
+        for (auto it = m_actorCooldowns.begin(); it != m_actorCooldowns.end() && count < 128; )
+        {
+            if (it->second <= now)
+            {
+                it = m_actorCooldowns.erase(it);
+                ++count;
+            }
+            else
+                ++it;
+        }
+    }
+
     void Manager::Update(uint32_t /*diff*/)
     {
         if (!m_started || !m_config || !m_config->enabled)
@@ -1395,6 +1416,7 @@ namespace AzerothVoices
         PruneProximityScenes();
         PruneBossPresences();
         PruneGroupAndGuildState();
+        PruneActorCooldowns();
         UpdateBarrensScenes();
         PruneBarrensNovelty();
         ProcessPendingGuildGreetings();
@@ -1520,7 +1542,25 @@ namespace AzerothVoices
                     auto latest = m_latestRequestByActor.find(request.actor.guid);
                     if (latest != m_latestRequestByActor.end() && latest->second == request.id)
                         return true;
-                    ++m_dropped;
+                    if (request.exchangeId.IsValid() || request.barrensScene ||
+                        request.generalConversation || request.groupConversation ||
+                        request.proximityScene)
+                    {
+                        ChatCompletion term;
+                        term.request = request;
+                        term.success = false;
+                        term.error = "superseded_in_queue";
+                        lock.unlock();
+                        {
+                            std::lock_guard<std::mutex> compLock(m_completionMutex);
+                            m_completions.push_back(std::move(term));
+                        }
+                        lock.lock();
+                    }
+                    else
+                    {
+                        ++m_dropped;
+                    }
                 }
             }
         }
@@ -1605,15 +1645,29 @@ namespace AzerothVoices
         if (!exchangeId.IsValid() || exchangeId.epoch != m_epoch)
             return false;
 
+        auto const now = Clock::now();
         switch (exchangeId.domain)
         {
             case 0: // General
-                return m_generalConversations.find(exchangeId.id) != m_generalConversations.end();
+            {
+                auto it = m_generalConversations.find(exchangeId.id);
+                return it != m_generalConversations.end() && it->second.expires > now;
+            }
             case 1: // Group / Party
+            {
+                auto it = m_groupConversations.find(std::to_string(exchangeId.id));
+                return it != m_groupConversations.end() && !it->second.guild && it->second.expires > now;
+            }
             case 2: // Guild
-                return m_groupConversations.find(std::to_string(exchangeId.id)) != m_groupConversations.end();
+            {
+                auto it = m_groupConversations.find(std::to_string(exchangeId.id));
+                return it != m_groupConversations.end() && it->second.guild && it->second.expires > now;
+            }
             case 3: // Proximity
-                return m_proximityScenes.find(std::to_string(exchangeId.id)) != m_proximityScenes.end();
+            {
+                auto it = m_proximityScenes.find(std::to_string(exchangeId.id));
+                return it != m_proximityScenes.end() && it->second.expires > now;
+            }
             default:
                 return false;
         }
@@ -1636,10 +1690,17 @@ namespace AzerothVoices
                 return std::find(spk.begin(), spk.end(), actor.guid) != spk.end();
             }
             case 1: // Group / Party
+            {
+                auto it = m_groupConversations.find(std::to_string(exchangeId.id));
+                if (it == m_groupConversations.end() || it->second.guild || it->second.expires <= now)
+                    return false;
+                auto const& spk = it->second.speakers;
+                return std::find(spk.begin(), spk.end(), actor.guid) != spk.end();
+            }
             case 2: // Guild
             {
                 auto it = m_groupConversations.find(std::to_string(exchangeId.id));
-                if (it == m_groupConversations.end() || it->second.expires <= now)
+                if (it == m_groupConversations.end() || !it->second.guild || it->second.expires <= now)
                     return false;
                 auto const& spk = it->second.speakers;
                 return std::find(spk.begin(), spk.end(), actor.guid) != spk.end();
@@ -1669,6 +1730,11 @@ namespace AzerothVoices
         auto const now = Clock::now();
         bool const isValidContinuation = candidateOwner.IsValid() && IsValidContinuation(actor, candidateOwner);
         auto cooldown = m_actorCooldowns.find(actor.guid);
+        if (cooldown != m_actorCooldowns.end() && cooldown->second <= now)
+        {
+            m_actorCooldowns.erase(cooldown);
+            cooldown = m_actorCooldowns.end();
+        }
         if (ambient && priority != RequestPriority::Direct && !isValidContinuation &&
             cooldown != m_actorCooldowns.end() && cooldown->second > now)
         {
@@ -2166,7 +2232,19 @@ namespace AzerothVoices
                     request.groupSubgroup = bot->GetSubGroup();
             }
             else if (speaker.groupId)
+            {
                 request.groupId = speaker.groupId;
+                request.groupSubgroup = speaker.groupSubgroup;
+            }
+        }
+
+        if (scope == ChatScope::Guild || scope == ChatScope::Officer)
+        {
+            Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(actor.guid));
+            if (bot && bot->GetGuildId())
+                request.guildId = bot->GetGuildId();
+            else if (speaker.guildId)
+                request.guildId = speaker.guildId;
         }
 
         Player* directActor = actor.kind == ActorKind::PlayerBot ? ObjectAccessor::FindPlayer(ObjectGuid(actor.guid)) : nullptr;
@@ -3918,16 +3996,17 @@ namespace AzerothVoices
         CharacterDatabase.escape_string(traits);
         CharacterDatabase.escape_string(tone);
         CharacterDatabase.escape_string(background);
-        CharacterDatabase.PExecute(
-            "INSERT INTO `azeroth_voices_bot_personality` "
-            "(`character_guid`,`bot_name`,`traits_json`,`tone`,`background`,`background_mode`,`generation_version`) "
-            "VALUES ('%llu','%s','%s','%s','%s','%u','%u') "
-            "ON DUPLICATE KEY UPDATE `bot_name`=VALUES(`bot_name`),`traits_json`=VALUES(`traits_json`),"
-            "`tone`=VALUES(`tone`),`background`=VALUES(`background`),"
-            "`background_mode`=VALUES(`background_mode`),`generation_version`=VALUES(`generation_version`),"
-            "`updated_at`=CURRENT_TIMESTAMP",
-            static_cast<unsigned long long>(personality.characterGuid), botName.c_str(), traits.c_str(),
-            tone.c_str(), background.c_str(), personality.backgroundMode, personality.generationVersion);
+        std::ostringstream sql;
+        sql << "INSERT INTO `azeroth_voices_bot_personality` "
+            << "(`character_guid`,`bot_name`,`traits_json`,`tone`,`background`,`background_mode`,`generation_version`) "
+            << "VALUES ('" << static_cast<unsigned long long>(personality.characterGuid)
+            << "','" << botName << "','" << traits << "','" << tone << "','" << background
+            << "','" << personality.backgroundMode << "','" << personality.generationVersion << "') "
+            << "ON DUPLICATE KEY UPDATE `bot_name`=VALUES(`bot_name`),`traits_json`=VALUES(`traits_json`),"
+            << "`tone`=VALUES(`tone`),`background`=VALUES(`background`),"
+            << "`background_mode`=VALUES(`background_mode`),`generation_version`=VALUES(`generation_version`),"
+            << "`updated_at`=CURRENT_TIMESTAMP";
+        CharacterDatabase.Execute(sql.str().c_str());
     }
 
     void Manager::HandlePersonalityCompletion(ChatCompletion const& completion)
@@ -5154,18 +5233,16 @@ namespace AzerothVoices
 
         for (auto& line : m_scheduled)
         {
+            if (now > line.request.expires || (line.request.exchangeId.IsValid() && !IsExchangeActive(line.request.exchangeId)))
+            {
+                if (line.request.exchangeId.IsValid())
+                    TerminateExchange(line.request.exchangeId, "request_ttl_expired");
+                continue;
+            }
+
             // R2: Explicit wait-for-owner check
             if (line.waitForOwner)
             {
-                if (line.request.exchangeId.IsValid() && !IsExchangeActive(line.request.exchangeId))
-                    continue;
-
-                if (now > line.request.expires)
-                {
-                    if (line.request.exchangeId.IsValid())
-                        TerminateExchange(line.request.exchangeId, "request_ttl_expired");
-                    continue;
-                }
 
                 std::string partyKey;
                 if (line.request.groupId != 0)
@@ -5446,8 +5523,14 @@ namespace AzerothVoices
                 case ChatScope::Raid:
                 {
                     Group* group = bot->GetGroup();
-                    if (!group || !HasRealPlayerAudience(bot, request.scope, "", 0.0f))
+                    if (!group || (request.groupId != 0 && group->GetId() != request.groupId) ||
+                        !HasRealPlayerAudience(bot, request.scope, "", 0.0f))
                         return false;
+                    if (request.scope == ChatScope::Party && request.groupSubgroup != 0)
+                    {
+                        if (group->GetMemberGroup(bot->GetObjectGuid()) != static_cast<int8>(request.groupSubgroup))
+                            return false;
+                    }
                     WorldPacket packet;
                     ChatMsg type = request.scope == ChatScope::Raid ? CHAT_MSG_RAID : CHAT_MSG_PARTY;
                     ChatHandler::BuildChatPacket(packet, type, text, LANG_UNIVERSAL,
@@ -5460,12 +5543,18 @@ namespace AzerothVoices
                 case ChatScope::Guild:
                 case ChatScope::Officer:
                 {
+                    if (request.guildId != 0 && bot->GetGuildId() != request.guildId)
+                        return false;
                     Guild* guild = sGuildMgr.GetGuildById(bot->GetGuildId());
                     if (!guild || !bot->GetSession() ||
                         !HasRealPlayerAudience(bot, request.scope, "", 0.0f))
                         return false;
                     if (request.scope == ChatScope::Officer)
+                    {
+                        if (!guild->HasRankRight(bot->GetObjectGuid(), GR_RIGHT_OFFCHAT_SPEAK))
+                            return false;
                         guild->BroadcastToOfficers(bot->GetSession(), text, LANG_UNIVERSAL);
+                    }
                     else
                         guild->BroadcastToGuild(bot->GetSession(), text, LANG_UNIVERSAL);
                     return true;
@@ -5490,10 +5579,12 @@ namespace AzerothVoices
         if (request.scope != ChatScope::Say)
             return false;
         Player* anchor = ObjectAccessor::FindPlayer(ObjectGuid(request.actor.anchorPlayerGuid));
-        if (!anchor || !anchor->IsInWorld() || anchor->GetMapId() != request.actor.mapId)
+        if (!anchor || !anchor->IsInWorld() || anchor->GetMapId() != request.actor.mapId ||
+            CurrentInstanceId(anchor) != request.actor.instanceId)
             return false;
         Creature* creature = GetCreatureFromAnchor(*anchor, ObjectGuid(request.actor.guid));
-        if (!creature || creature->GetName() != request.actor.name)
+        if (!creature || creature->GetName() != request.actor.name ||
+            CurrentInstanceId(creature) != request.actor.instanceId)
             return false;
 
         if (request.bossLine)
@@ -6623,23 +6714,13 @@ namespace AzerothVoices
                                       std::string& message) const
     {
         botName.clear();
-        if (!playerGuid || !botGuid)
+        if (!playerGuid || !botGuid || playerGuid == botGuid)
         {
-            message = "A player and bot GUID are required.";
+            message = "A valid player and bot GUID are required.";
             return false;
         }
 
-        // 1. Check if bot is online in world
-        if (Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(botGuid)))
-        {
-            if (Script_IsAIControlled(bot))
-            {
-                botName = bot->GetName();
-                return true;
-            }
-        }
-
-        // 2. Check if player has group with this bot
+        // 1. Check if player has group with this bot
         if (Player* player = ObjectAccessor::FindPlayer(ObjectGuid(playerGuid)))
         {
             if (Group* group = player->GetGroup())
@@ -6649,6 +6730,11 @@ namespace AzerothVoices
                     Player* member = ref->getSource();
                     if (member && member->GetObjectGuid().GetRawValue() == botGuid)
                     {
+                        if (!Script_IsAIControlled(member))
+                        {
+                            message = "Target is a player, not an AI bot.";
+                            return false;
+                        }
                         botName = member->GetName();
                         return true;
                     }
@@ -6656,7 +6742,7 @@ namespace AzerothVoices
             }
         }
 
-        // 3. Check persistent contacts DB
+        // 2. Check persistent contacts DB
         if (!m_addonDatabaseAvailable)
         {
             message = "Addon contact storage is unavailable on this realm.";
@@ -6675,6 +6761,15 @@ namespace AzerothVoices
         }
         botName = result->Fetch()[0].GetCppString();
         delete result;
+
+        if (Player* onlineBot = ObjectAccessor::FindPlayer(ObjectGuid(botGuid)))
+        {
+            if (!Script_IsAIControlled(onlineBot))
+            {
+                message = "Target is a player, not an AI bot.";
+                return false;
+            }
+        }
 
         if (botName.empty())
             botName = "PlayerBot " + std::to_string(botGuid);
@@ -6717,6 +6812,23 @@ namespace AzerothVoices
             std::string const sharedKey = "0:" + std::to_string(botGuid);
             m_history.erase(sharedKey);
             m_databaseLoadedHistoryKeys.erase(sharedKey);
+        }
+
+        for (auto it = m_pendingHistoryWrites.begin(); it != m_pendingHistoryWrites.end(); )
+        {
+            if (it->first.compare(0, prefix.size(), prefix) == 0 ||
+                (sharedContext && it->first == ("0:" + std::to_string(botGuid))))
+                it = m_pendingHistoryWrites.erase(it);
+            else
+                ++it;
+        }
+        for (auto it = m_pendingSnapshotWrites.begin(); it != m_pendingSnapshotWrites.end(); )
+        {
+            if (it->first.compare(0, prefix.size(), prefix) == 0 ||
+                (sharedContext && it->first == ("0:" + std::to_string(botGuid))))
+                it = m_pendingSnapshotWrites.erase(it);
+            else
+                ++it;
         }
 
         if (m_addonDatabaseAvailable)
@@ -7305,6 +7417,13 @@ namespace AzerothVoices
 
     void Manager::DeleteMemoryPair(MemoryKey const& key)
     {
+        for (auto it = m_pendingMemoryWrites.begin(); it != m_pendingMemoryWrites.end(); )
+        {
+            if (it->key == key)
+                it = m_pendingMemoryWrites.erase(it);
+            else
+                ++it;
+        }
         m_memories.erase(key);
         m_memoryCacheOrder.erase(std::remove(m_memoryCacheOrder.begin(),
             m_memoryCacheOrder.end(), key), m_memoryCacheOrder.end());
@@ -8027,17 +8146,27 @@ namespace AzerothVoices
             return;
         auto const now = Clock::now();
 
-        std::vector<Player*> realPlayers;
+        std::vector<Player*> allEligible;
         {
             HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
             for (auto const& entry : sObjectAccessor.GetPlayers())
             {
                 Player* player = entry.second;
                 if (IsOnlineRealPlayer(player) && player->IsAlive())
-                    realPlayers.push_back(player);
-                if (realPlayers.size() >= 64)
-                    break;
+                    allEligible.push_back(player);
             }
+        }
+        std::vector<Player*> realPlayers;
+        if (allEligible.size() <= 64)
+            realPlayers = std::move(allEligible);
+        else
+        {
+            static size_t s_groupScanCursor = 0;
+            size_t const start = s_groupScanCursor % allEligible.size();
+            s_groupScanCursor = (start + 64) % allEligible.size();
+            realPlayers.reserve(64);
+            for (size_t i = 0; i < 64; ++i)
+                realPlayers.push_back(allEligible[(start + i) % allEligible.size()]);
         }
 
         for (Player* player : realPlayers)
@@ -8565,8 +8694,6 @@ namespace AzerothVoices
                 }
                 else if (Script_IsAIControlled(player) && player->IsAlive())
                     candidate.bots.push_back(player);
-                if (candidates.size() >= 8)
-                    break;
             }
         }
 
@@ -8965,17 +9092,27 @@ namespace AzerothVoices
             m_nextProximityInstanceScan = now +
                 std::chrono::seconds(m_config->proximityInstanceScanSeconds);
 
-        std::vector<Player*> players;
+        std::vector<Player*> allEligible;
         {
             HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
             for (auto const& entry : sObjectAccessor.GetPlayers())
             {
                 Player* player = entry.second;
                 if (IsOnlineRealPlayer(player) && player->IsAlive())
-                    players.push_back(player);
-                if (players.size() >= 64)
-                    break;
+                    allEligible.push_back(player);
             }
+        }
+        std::vector<Player*> players;
+        if (allEligible.size() <= 64)
+            players = std::move(allEligible);
+        else
+        {
+            static size_t s_proxScanCursor = 0;
+            size_t const start = s_proxScanCursor % allEligible.size();
+            s_proxScanCursor = (start + 64) % allEligible.size();
+            players.reserve(64);
+            for (size_t i = 0; i < 64; ++i)
+                players.push_back(allEligible[(start + i) % allEligible.size()]);
         }
 
         for (Player* player : players)
@@ -9397,17 +9534,27 @@ namespace AzerothVoices
             return;
 
         auto const now = Clock::now();
-        std::vector<Player*> players;
+        std::vector<Player*> allEligible;
         {
             HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
             for (auto const& entry : sObjectAccessor.GetPlayers())
             {
                 Player* player = entry.second;
                 if (IsOnlineRealPlayer(player) && player->IsAlive())
-                    players.push_back(player);
-                if (players.size() >= 64)
-                    break;
+                    allEligible.push_back(player);
             }
+        }
+        std::vector<Player*> players;
+        if (allEligible.size() <= 64)
+            players = std::move(allEligible);
+        else
+        {
+            static size_t s_bossScanCursor = 0;
+            size_t const start = s_bossScanCursor % allEligible.size();
+            s_bossScanCursor = (start + 64) % allEligible.size();
+            players.reserve(64);
+            for (size_t i = 0; i < 64; ++i)
+                players.push_back(allEligible[(start + i) % allEligible.size()]);
         }
 
         for (Player* player : players)

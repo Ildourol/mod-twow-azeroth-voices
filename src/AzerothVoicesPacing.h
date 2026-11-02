@@ -33,6 +33,11 @@ namespace AzerothVoices
                                           uint32_t assumedCharactersPerLine,
                                           uint32_t interLineGapMilliseconds);
 
+    // Move a whole response together, retaining its typing/inter-line offsets.
+    std::chrono::steady_clock::duration ResponseResumeShift(
+        std::chrono::steady_clock::time_point firstDue,
+        std::chrono::steady_clock::time_point resumedFirstDue);
+
     class DeliveryTimeline
     {
     public:

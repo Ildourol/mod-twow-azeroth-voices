@@ -98,6 +98,9 @@ namespace AzerothVoices
     };
 
     // Bounded group conversation budget, mirroring the proximity scene rules.
+    size_t LimitConversationReplyLines(size_t requestedLines, uint32_t maximumLines,
+                                      uint32_t deliveredLines);
+
     struct GroupConversationBudget
     {
         uint32_t maximumLines = 3;
@@ -366,6 +369,8 @@ namespace AzerothVoices
 
     // Splits reply dialogue into structured lines respecting sentence and clause boundaries
     // up to maximumCharacters per delivered line and maximumLines in total.
+    size_t FindUtf8CodePointBoundary(std::string const& s, size_t limit);
+
     std::vector<std::string> SplitReplyLinesStructured(
         std::string const& text,
         std::string const& speakerName,

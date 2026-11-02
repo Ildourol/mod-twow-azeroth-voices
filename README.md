@@ -165,21 +165,28 @@ Reconfigure CMake to build the server with PlayerBots and Azeroth Voices enabled
 
 #### Linux (Ubuntu / Debian):
 ```bash
-cd /path/to/server/build
-cmake ../ \
+# Set explicit roots
+CORE_SRC="/path/to/server"
+BUILD_DIR="$CORE_SRC/build"
+
+cmake -S "$CORE_SRC" -B "$BUILD_DIR" \
   -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_PLAYERBOTS=ON \
-  -DMODULE_MOD_AZEROTH_VOICES=static
-cmake --build . --config Release -j$(nproc)
+  -DMODULES=disabled \
+  -DMODULE_MOD_TWOW_AZEROTH_VOICES=static \
+  -DMODULE_TORTOISEBOTS=static
+cmake --build "$BUILD_DIR" --config Release -j$(nproc)
 ```
 
 #### Windows (PowerShell / Visual Studio 2022):
 ```powershell
-cd C:\path\to\server\build
-cmake .. -G "Visual Studio 17 2022" -A x64 `
-  -DBUILD_PLAYERBOTS=ON `
-  -DMODULE_MOD_AZEROTH_VOICES=static
-cmake --build . --config Release --target mangosd -j $env:NUMBER_OF_PROCESSORS
+$CORE_SRC = "C:\path\to\server"
+$BUILD_DIR = "$CORE_SRC\build"
+
+cmake -S $CORE_SRC -B $BUILD_DIR -G "Visual Studio 17 2022" -A x64 `
+  -DMODULES=disabled `
+  -DMODULE_MOD_TWOW_AZEROTH_VOICES=static `
+  -DMODULE_TORTOISEBOTS=static
+cmake --build $BUILD_DIR --config Release --target mangosd -j $env:NUMBER_OF_PROCESSORS
 ```
 
 ---
@@ -288,7 +295,7 @@ AzerothVoices.WorldChat.Barrens.ProfanityChance = 20
 ```
 
 > [!NOTE]
-> For the complete documentation of all 467 configuration options, consult the authoritative [**Comprehensive Configuration & Tuning Guide**](docs/CONFIGURATION_GUIDE.md).
+> For complete documentation of all configuration options, consult the authoritative [**Comprehensive Configuration & Tuning Guide**](docs/CONFIGURATION_GUIDE.md).
 
 ---
 

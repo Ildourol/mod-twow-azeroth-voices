@@ -130,6 +130,13 @@ namespace AzerothVoices
         latched = false;
     }
 
+    size_t LimitConversationReplyLines(size_t requestedLines, uint32_t maximumLines,
+                                      uint32_t deliveredLines)
+    {
+        return deliveredLines < maximumLines
+            ? std::min<size_t>(requestedLines, maximumLines - deliveredLines) : 0;
+    }
+
     bool GroupConversationBudget::CanStartConversation(uint32_t eligibleSpeakers) const
     {
         return eligibleSpeakers >= 2 && maximumLines >= 2;
@@ -1223,7 +1230,42 @@ namespace AzerothVoices
             return value;
         }
 
-        std::vector<std::string> SplitSingleSentence(std::string const& s, size_t limit)
+            size_t FindUtf8CodePointBoundary(std::string const& s, size_t limit)
+    {
+        if (limit >= s.size())
+            return s.size();
+        if (limit == 0)
+            return 0;
+
+        size_t pos = limit;
+        while (pos > 0 && (static_cast<unsigned char>(s[pos]) & 0xC0) == 0x80)
+        {
+            --pos;
+        }
+
+        unsigned char const lead = static_cast<unsigned char>(s[pos]);
+        size_t seqLen = 1;
+        if ((lead & 0x80) == 0)
+            seqLen = 1;
+        else if ((lead & 0xE0) == 0xC0)
+            seqLen = 2;
+        else if ((lead & 0xF0) == 0xE0)
+            seqLen = 3;
+        else if ((lead & 0xF8) == 0xF0)
+            seqLen = 4;
+        else
+            return pos;
+
+        if (pos + seqLen <= limit)
+            return pos + seqLen;
+
+        if (pos == 0)
+            return std::min(s.size(), seqLen);
+
+        return pos;
+    }
+
+    std::vector<std::string> SplitSingleSentence(std::string const& s, size_t limit)
         {
             auto trimStr = [](std::string const& str) -> std::string {
                 size_t start = 0;
@@ -1265,9 +1307,9 @@ namespace AzerothVoices
                         bestSplit = space;
                 }
 
-                // 3. Fallback: hard break at limit
+                // 3. Fallback: hard break at limit using UTF-8 code point boundary
                 if (bestSplit == std::string::npos || bestSplit == 0)
-                    bestSplit = limit;
+                    bestSplit = FindUtf8CodePointBoundary(rem, limit);
 
                 std::string chunk = trimStr(rem.substr(0, bestSplit));
                 if (!chunk.empty())
@@ -1481,7 +1523,7 @@ namespace AzerothVoices
                     }
                     size_t split = l.rfind(' ', lineLimit);
                     if (split == std::string::npos || split < lineLimit / 2)
-                        split = lineLimit;
+                        split = FindUtf8CodePointBoundary(l, lineLimit);
                     std::string chunk = trimStr(l.substr(0, split));
                     if (!chunk.empty())
                     {
