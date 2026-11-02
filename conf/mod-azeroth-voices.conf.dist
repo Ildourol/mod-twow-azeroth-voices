@@ -448,6 +448,34 @@ AzerothVoices.Personality.UseInEvents = 1
 #     Default:     1 (Enabled)
 AzerothVoices.Personality.Backstory.SuppressInAmbientAndEvents = 1
 
+# AzerothVoices.Personality.Backstory.AllowInWhisper
+#     Description: Controls whether bot backstory is included in private 1-on-1 whispers.
+#     Default:     1 (Enabled)
+AzerothVoices.Personality.Backstory.AllowInWhisper = 1
+
+# AzerothVoices.Personality.Backstory.AllowInSay
+#     Description: Controls whether bot backstory is included in proximity /say or /yell dialogue.
+#     Default:     1 (Enabled)
+AzerothVoices.Personality.Backstory.AllowInSay = 1
+
+# AzerothVoices.Personality.Backstory.AllowInParty
+#     Description: Controls whether bot backstory is included in party/raid squad chat.
+#                  Set to 0 to save ~80-120 prompt tokens per party message.
+#     Default:     0 (Disabled for token optimization)
+AzerothVoices.Personality.Backstory.AllowInParty = 0
+
+# AzerothVoices.Personality.Backstory.AllowInGuild
+#     Description: Controls whether bot backstory is included in guild chat.
+#                  Set to 0 to save ~80-120 prompt tokens per guild message.
+#     Default:     0 (Disabled for token optimization)
+AzerothVoices.Personality.Backstory.AllowInGuild = 0
+
+# AzerothVoices.Personality.Backstory.AllowInWorld
+#     Description: Controls whether bot backstory is included in general/world public chat.
+#                  Set to 0 to save ~80-120 prompt tokens per channel message.
+#     Default:     0 (Disabled for token optimization)
+AzerothVoices.Personality.Backstory.AllowInWorld = 0
+
 # AzerothVoices.Personality.GenerationRetrySeconds
 #     Description: Sets the minimum delay after failed generation before the same bot
 #                  can retry; accepted range 10-86400 seconds; default 300.
@@ -1894,6 +1922,13 @@ AzerothVoices.GuildChatter.LoginGreeting.PlayerNameChance = 60
 #     Default:     100
 AzerothVoices.GuildChatter.LoginGreeting.MaxCharacters = 100
 
+# AzerothVoices.Guild.PromptToneOnly
+#     Description: When enabled (1), creates an ultra-lean guild prompt profile containing only
+#                  the bot's Tone and Talent Specialization, omitting generic personality preambles.
+#                  Saves ~35 prompt tokens on every guild message.
+#     Default:     1 (Enabled)
+AzerothVoices.Guild.PromptToneOnly = 1
+
 
 # Advanced Guild player-driven conversation controls
 
@@ -2287,18 +2322,18 @@ AzerothVoices.WorldChat.Barrens.CheckIntervalSeconds = 60
 
 # AzerothVoices.WorldChat.Barrens.StartChance
 #     Description: Percent chance to start a Barrens scene per eligible check pass. (0-100.)
-#     Default:     12
-AzerothVoices.WorldChat.Barrens.StartChance = 12
+#     Default:     10
+AzerothVoices.WorldChat.Barrens.StartChance = 10
 
 # AzerothVoices.WorldChat.Barrens.CooldownMinSeconds
 #     Description: Minimum channel cooldown sampled when a Barrens conversation closes. (Seconds, 0-86400.)
-#     Default:     900
-AzerothVoices.WorldChat.Barrens.CooldownMinSeconds = 900
+#     Default:     1800
+AzerothVoices.WorldChat.Barrens.CooldownMinSeconds = 1800
 
 # AzerothVoices.WorldChat.Barrens.CooldownMaxSeconds
 #     Description: Maximum channel cooldown sampled when a Barrens conversation closes. (Seconds, 0-86400.)
-#     Default:     1800
-AzerothVoices.WorldChat.Barrens.CooldownMaxSeconds = 1800
+#     Default:     2700
+AzerothVoices.WorldChat.Barrens.CooldownMaxSeconds = 2700
 
 # AzerothVoices.WorldChat.Barrens.FailureBackoffSeconds
 #     Description: Minimum delay after a failed pre-delivery scene attempt. (Seconds, 5-3600.)
@@ -2786,8 +2821,8 @@ AzerothVoices.Typing.SubtractGenerationTime = 1
 #                  cleanly split on sentence and clause boundaries so each message
 #                  fits within this character limit without sentence starvation.
 #                  (Characters, minimum 1.)
-#     Default:     120
-AzerothVoices.Reply.MaximumCharacters = 120
+#     Default:     140
+AzerothVoices.Reply.MaximumCharacters = 140
 
 # AzerothVoices.Reply.MaximumLines
 #     Description: Maximum delivered lines/parts per request. Limits the number of
@@ -2967,6 +3002,12 @@ AzerothVoices.Snapshot.IncludeGroup = 1
 #                  entries and keeping the highest useful rank for each spell name.
 #     Default:     1
 AzerothVoices.Snapshot.IncludeSpells = 1
+
+# AzerothVoices.Snapshot.IncludeSpellsInParty
+#     Description: When enabled (1), includes the full learned spell list with ranks and mana costs
+#                  in party chat snapshots. Disabled by default to save ~100-150 tokens per line.
+#     Default:     0 (Disabled for token optimization)
+AzerothVoices.Snapshot.IncludeSpellsInParty = 0
 
 # AzerothVoices.Snapshot.IncludeQuests
 #     Description: Adds bounded quest-log titles and whether each active quest is in

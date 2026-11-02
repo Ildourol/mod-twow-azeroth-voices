@@ -2258,19 +2258,27 @@ namespace AzerothVoices
 
         if (actor.kind == ActorKind::PlayerBot && usePersonality)
         {
-            BotPersonality personality;
-            if (LoadPersonality(actor, personality))
+            if (trigger == "barrens-opener" || trigger == "barrens-reply")
             {
-                request.personality = std::move(personality);
-                request.personalityBlock = BuildPersonalityPromptBlock(
-                    *m_config, request.personality, scope, trigger, message, directConversation, ambient);
+                // Barrens scenes use the dynamic Barrens tone matrix (Salt, Sarcasm, Toxicity, Role).
+                // Suppress generic bot personality to avoid persona clashes and save tokens.
             }
-            else if (m_config->personalityGenerateOnDemand &&
-                     !m_pendingPersonalityRequests.count(actor.guid))
+            else
             {
-                auto retry = m_personalityRetryAfter.find(actor.guid);
-                request.personalityGenerationNeeded = retry == m_personalityRetryAfter.end() ||
-                    retry->second <= Clock::now();
+                BotPersonality personality;
+                if (LoadPersonality(actor, personality))
+                {
+                    request.personality = std::move(personality);
+                    request.personalityBlock = BuildPersonalityPromptBlock(
+                        *m_config, request.personality, scope, trigger, message, directConversation, ambient);
+                }
+                else if (m_config->personalityGenerateOnDemand &&
+                         !m_pendingPersonalityRequests.count(actor.guid))
+                {
+                    auto retry = m_personalityRetryAfter.find(actor.guid);
+                    request.personalityGenerationNeeded = retry == m_personalityRetryAfter.end() ||
+                        retry->second <= Clock::now();
+                }
             }
         }
 
@@ -3607,7 +3615,7 @@ namespace AzerothVoices
         std::string channel = (scope == ChatScope::World || scope == ChatScope::Channel)
             ? m_config->worldChannelName : "";
         if ((scope == ChatScope::World || scope == ChatScope::Channel) &&
-            HasActiveBarrensScene(channel))
+            (HasActiveBarrensScene(channel) || HasActiveGeneralConversation(channel)))
             return false;
         if ((scope == ChatScope::World || scope == ChatScope::Channel) &&
             !ReserveGeneralPacing(scope, channel, SnapshotBot(anchor),
@@ -3691,7 +3699,7 @@ namespace AzerothVoices
             std::shuffle(eligibleBots.begin(), eligibleBots.end(), RandomEngine());
 
             std::string const channel = m_config->worldChannelName;
-            if (HasActiveBarrensScene(channel))
+            if (HasActiveBarrensScene(channel) || HasActiveGeneralConversation(channel))
                 continue;
 
             // Pause if a real player spoke recently in World chat
@@ -5675,6 +5683,15 @@ namespace AzerothVoices
         if (center && center->FindMap() && center->FindMap()->IsDungeon())
             context << ", inside a dungeon";
 
+        // Macro-only scopes: Guild and World/Channel chat only need the macro location above,
+        // skipping local grid searches for nearby creatures and inventory equipment/backpack items.
+        bool const isMacroChannelScope = (request.scope == ChatScope::Guild ||
+                                          request.scope == ChatScope::Officer ||
+                                          request.scope == ChatScope::Channel ||
+                                          request.scope == ChatScope::World);
+        if (isMacroChannelScope)
+            return context.str();
+
         if (center && m_config->environmentMaximumCreatures &&
             (!detailedPlayerBot || !m_config->snapshotIncludeLineOfSight))
         {
@@ -5718,6 +5735,17 @@ namespace AzerothVoices
     std::string Manager::BuildCurrentSnapshotContext(ChatRequest const& request) const
     {
         if (!m_config->snapshotEnabled || request.actor.kind != ActorKind::PlayerBot)
+            return "";
+
+        // Scope gating: Detailed live snapshots (combat resources, nearby party members,
+        // known spells, active quests, and LOS creatures/objects) are strictly relevant
+        // to local tactical situations (Party, Raid, Say, Yell).
+        // Suppress for Guild, Officer, Channel, and World chat to save 300-500 tokens.
+        bool const needsSnapshot = (request.scope == ChatScope::Party ||
+                                    request.scope == ChatScope::Raid ||
+                                    request.scope == ChatScope::Say ||
+                                    request.scope == ChatScope::Yell);
+        if (!needsSnapshot)
             return "";
 
         Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(request.actor.guid));
@@ -5814,7 +5842,9 @@ namespace AzerothVoices
         }
 
         std::string spells;
-        if (m_config->snapshotIncludeSpells && m_config->snapshotMaximumSpells)
+        bool const allowSpellsInScope = (request.scope != ChatScope::Party && request.scope != ChatScope::Raid) ||
+            m_config->snapshotIncludeSpellsInParty;
+        if (m_config->snapshotIncludeSpells && allowSpellsInScope && m_config->snapshotMaximumSpells)
         {
             struct KnownSpell { uint8_t rank = 0; uint32_t id = 0; SpellEntry const* info = nullptr; };
             std::map<std::string, KnownSpell> highestByName;
@@ -6058,6 +6088,13 @@ namespace AzerothVoices
     std::string Manager::BuildSnapshotHistoryContext(ChatRequest const& request)
     {
         if (!m_config->snapshotEnabled || !m_config->snapshotStorageMode || request.actor.kind != ActorKind::PlayerBot)
+            return "";
+
+        bool const needsSnapshot = (request.scope == ChatScope::Party ||
+                                    request.scope == ChatScope::Raid ||
+                                    request.scope == ChatScope::Say ||
+                                    request.scope == ChatScope::Yell);
+        if (!needsSnapshot)
             return "";
         if (m_config->snapshotStorageMode == 2)
             LoadDatabaseSnapshot(request);
@@ -10461,6 +10498,32 @@ namespace AzerothVoices
         return it != m_barrensScenes.end() && it->second.phase != BarrensScenePhase::Finished && it->second.phase != BarrensScenePhase::Cancelled;
     }
 
+    bool Manager::HasActiveGeneralConversation(std::string const& channelName) const
+    {
+        if (!m_config || !m_config->generalChatterEnabled)
+            return false;
+
+        std::string ch = channelName.empty() ? m_config->worldChannelName : channelName;
+        std::transform(ch.begin(), ch.end(), ch.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+
+        auto const now = Clock::now();
+        for (auto const& pair : m_generalConversations)
+        {
+            if (pair.second.expires > now)
+            {
+                std::string convCh = pair.second.channel.empty() ? m_config->worldChannelName : pair.second.channel;
+                std::transform(convCh.begin(), convCh.end(), convCh.begin(), [](unsigned char c) {
+                    return static_cast<char>(std::tolower(c));
+                });
+                if (convCh == ch)
+                    return true;
+            }
+        }
+        return false;
+    }
+
     void Manager::NotePlayerWorldChat(std::string const& channelName)
     {
         std::string ch = channelName.empty() ? (m_config ? m_config->worldChannelName : "world") : channelName;
@@ -10762,6 +10825,9 @@ namespace AzerothVoices
         if (m_barrensScenes.count(audienceKey) > 0)
             return;
 
+        if (HasActiveGeneralConversation(channel))
+            return;
+
         if (!FindOnlineRealPlayer())
         {
             ++m_barrensNoAudience;
@@ -10807,6 +10873,9 @@ namespace AzerothVoices
 
     bool Manager::TryStartBarrensScene(std::string const& audienceKey)
     {
+        if (HasActiveGeneralConversation(m_config->worldChannelName))
+            return false;
+
         auto const now = Clock::now();
 
         std::vector<Player*> eligibleBots;

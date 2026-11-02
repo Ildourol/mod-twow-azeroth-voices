@@ -165,6 +165,11 @@ namespace AzerothVoices
         std::string personalityPromptTraits;
         std::string personalityPromptTone;
         bool personalitySuppressBackstoryInAmbient = true;
+        bool personalityBackstoryAllowInWhisper = true;
+        bool personalityBackstoryAllowInSay = true;
+        bool personalityBackstoryAllowInParty = false;
+        bool personalityBackstoryAllowInGuild = false;
+        bool personalityBackstoryAllowInWorld = false;
 
         bool sentimentEnabled = false;
         bool sentimentUseInRandom = false;
@@ -415,6 +420,7 @@ namespace AzerothVoices
         uint32_t guildLoginGreetingMaxResponders = 2;
         uint32_t guildLoginGreetingPlayerNameChance = 60;
         uint32_t guildLoginGreetingMaxCharacters = 100;
+        bool guildPromptToneOnly = true;
 
         bool memoryEnabled = true;
         uint32_t memoryRetentionDays = 180;
@@ -513,6 +519,7 @@ namespace AzerothVoices
         bool snapshotIncludeCombat = true;
         bool snapshotIncludeGroup = true;
         bool snapshotIncludeSpells = true;
+        bool snapshotIncludeSpellsInParty = false;
         bool snapshotIncludeQuests = true;
         bool snapshotIncludeLineOfSight = true;
         bool snapshotIncludeNearbyPlayers = true;

@@ -479,6 +479,16 @@ namespace AzerothVoices
             c.personalityPromptTone = defaultPersonalityTonePrompt;
         c.personalitySuppressBackstoryInAmbient = Bounded(
             "AzerothVoices.Personality.Backstory.SuppressInAmbientAndEvents", 1, 0, 1) != 0;
+        c.personalityBackstoryAllowInWhisper = Bounded(
+            "AzerothVoices.Personality.Backstory.AllowInWhisper", 1, 0, 1) != 0;
+        c.personalityBackstoryAllowInSay = Bounded(
+            "AzerothVoices.Personality.Backstory.AllowInSay", 1, 0, 1) != 0;
+        c.personalityBackstoryAllowInParty = Bounded(
+            "AzerothVoices.Personality.Backstory.AllowInParty", 0, 0, 1) != 0;
+        c.personalityBackstoryAllowInGuild = Bounded(
+            "AzerothVoices.Personality.Backstory.AllowInGuild", 0, 0, 1) != 0;
+        c.personalityBackstoryAllowInWorld = Bounded(
+            "AzerothVoices.Personality.Backstory.AllowInWorld", 0, 0, 1) != 0;
 
         c.sentimentEnabled = Bounded("AzerothVoices.Sentiment.Enable", 0, 0, 1) != 0;
         c.sentimentUseInRandom = Bounded(
@@ -779,6 +789,7 @@ namespace AzerothVoices
         c.guildLoginGreetingMaxResponders = Bounded("AzerothVoices.GuildChatter.LoginGreeting.MaxResponders", 2, 1, 3);
         c.guildLoginGreetingPlayerNameChance = Percent("AzerothVoices.GuildChatter.LoginGreeting.PlayerNameChance", 60);
         c.guildLoginGreetingMaxCharacters = Bounded("AzerothVoices.GuildChatter.LoginGreeting.MaxCharacters", 100, 20, 500);
+        c.guildPromptToneOnly = Bounded("AzerothVoices.Guild.PromptToneOnly", 1, 0, 1) != 0;
 
         c.memoryEnabled = sConfig.GetBoolDefault("AzerothVoices.Memory.Enable", true);
         c.memoryRetentionDays = Bounded("AzerothVoices.Memory.RetentionDays", 180, 1, 3650);
@@ -942,6 +953,7 @@ namespace AzerothVoices
         c.snapshotIncludeCombat = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeCombat", true);
         c.snapshotIncludeGroup = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeGroup", true);
         c.snapshotIncludeSpells = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeSpells", true);
+        c.snapshotIncludeSpellsInParty = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeSpellsInParty", false);
         c.snapshotIncludeQuests = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeQuests", true);
         c.snapshotIncludeLineOfSight = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeLineOfSight", true);
         c.snapshotIncludeNearbyPlayers = sConfig.GetBoolDefault("AzerothVoices.Snapshot.IncludeNearbyPlayers", true);

@@ -531,6 +531,23 @@ namespace AzerothVoices
         return block.str();
     }
 
+    std::string BuildGuildTonePromptBlock(Config const& config, BotPersonality const& personality)
+    {
+        if (!config.personalityEnabled)
+            return "";
+
+        std::ostringstream block;
+        if (!personality.tone.empty())
+            block << "Tone: " << personality.tone << ".";
+        else if (!personality.traits.empty())
+            block << "Tone: " << JoinPersonalityTraits(personality.traits) << ".";
+
+        if (block.tellp() > 0)
+            block << " Speak naturally as a fellow guildmate.";
+
+        return block.str();
+    }
+
     std::string BuildBackstoryPromptBlock(Config const& config, BotPersonality const& personality,
                                           bool /*isDirectInquiry*/)
     {
@@ -573,16 +590,54 @@ namespace AzerothVoices
     }
 
     bool ShouldIncludeBackstory(Config const& config, BotPersonality const& personality,
-                                ChatScope /*scope*/, std::string const& trigger,
+                                ChatScope scope, std::string const& trigger,
                                 std::string const& /*message*/, bool /*directConversation*/, bool ambient)
     {
+        if (!config.personalityEnabled || personality.background.empty())
+            return false;
+
+        // Scope-level gating for token optimization
+        switch (scope)
+        {
+            case ChatScope::Whisper:
+                if (!config.personalityBackstoryAllowInWhisper)
+                    return false;
+                break;
+            case ChatScope::Say:
+            case ChatScope::Yell:
+                if (!config.personalityBackstoryAllowInSay)
+                    return false;
+                break;
+            case ChatScope::Party:
+            case ChatScope::Raid:
+                if (!config.personalityBackstoryAllowInParty)
+                    return false;
+                break;
+            case ChatScope::Guild:
+            case ChatScope::Officer:
+                if (!config.personalityBackstoryAllowInGuild)
+                    return false;
+                break;
+            case ChatScope::Channel:
+            case ChatScope::World:
+                if (!config.personalityBackstoryAllowInWorld)
+                    return false;
+                break;
+        }
+
         return ShouldIncludeBackstory(config, personality, trigger, ambient);
     }
 
     std::string BuildPersonalityPromptBlock(Config const& config, BotPersonality const& personality,
-                                            ChatScope /*scope*/, std::string const& trigger,
-                                            std::string const& /*message*/, bool /*directConversation*/, bool ambient)
+                                            ChatScope scope, std::string const& trigger,
+                                            std::string const& message, bool directConversation, bool ambient)
     {
+        // Guild tone-only optimization: keep prompt lean and focused on tone for guild chat
+        if ((scope == ChatScope::Guild || scope == ChatScope::Officer) && config.guildPromptToneOnly)
+        {
+            return BuildGuildTonePromptBlock(config, personality);
+        }
+
         std::string voice = BuildVoicePromptBlock(config, personality);
         if (voice.empty())
             return "";
@@ -590,7 +645,7 @@ namespace AzerothVoices
         std::ostringstream block;
         block << voice;
 
-        if (ShouldIncludeBackstory(config, personality, trigger, ambient))
+        if (ShouldIncludeBackstory(config, personality, scope, trigger, message, directConversation, ambient))
         {
             std::string backstory = BuildBackstoryPromptBlock(config, personality);
             if (!backstory.empty())

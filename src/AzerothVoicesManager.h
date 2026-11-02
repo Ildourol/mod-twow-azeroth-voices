@@ -166,6 +166,7 @@ namespace AzerothVoices
         StatusSnapshot GetStatus() const;
         bool IsWorldChannel(std::string const& channelName) const;
         bool HasActiveBarrensScene(std::string const& channelName) const;
+        bool HasActiveGeneralConversation(std::string const& channelName) const;
         void NotePlayerWorldChat(std::string const& channelName);
 
     private:

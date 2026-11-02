@@ -37,14 +37,14 @@
 2. [Provider and HTTPS](#provider-and-https) (25 settings)
 3. [Worker pool, queue, limits, and cooldowns](#worker-pool-queue-limits-and-cooldowns) (13 settings)
 4. [Shared prompts and PlayerBots-compatible prompt names](#shared-prompts-and-playerbots-compatible-prompt-names) (14 settings)
-5. [Persistent PlayerBot personalities](#persistent-playerbot-personalities) (17 settings)
+5. [Persistent PlayerBot personalities](#persistent-playerbot-personalities) (22 settings)
 6. [PlayerBot-to-real-player sentiment](#playerbot-to-real-player-sentiment) (11 settings)
 7. [PlayerBot delivery scopes, response selection, and distances](#playerbot-delivery-scopes-response-selection-and-distances) (42 settings)
 8. [NPC dialogue: reactions, combat-start, and the ordered /say reply chain](#npc-dialogue-reactions-combat-start-and-the-ordered-say-reply-chain) (22 settings)
 9. [Dedicated proximity chatter (ordinary Say)](#dedicated-proximity-chatter-ordinary-say) (26 settings)
 10. [Boss and miniboss pre-aggro dialogue (dungeons and raids only)](#boss-and-miniboss-pre-aggro-dialogue-dungeons-and-raids-only) (18 settings)
 11. [Party and raid chatter](#party-and-raid-chatter) (70 settings)
-12. [Guild chatter](#guild-chatter) (44 settings)
+12. [Guild chatter](#guild-chatter) (45 settings)
 13. [Deterministic bot memory ledger](#deterministic-bot-memory-ledger) (17 settings)
 14. [Random nearby, guild, and world chatter](#random-nearby-guild-and-world-chatter) (12 settings)
 15. [Automated World/custom-channel pacing](#automated-worldcustom-channel-pacing) (11 settings)
@@ -54,7 +54,7 @@
 18. [Event chatter](#event-chatter) (28 settings)
 19. [Reply length and PlayerBots-compatible typing delay](#reply-length-and-playerbots-compatible-typing-delay) (11 settings)
 20. [Bounded conversation and surrounding-chat history](#bounded-conversation-and-surrounding-chat-history) (17 settings)
-21. [SNAPSHOT SYSTEM](#snapshot-system) (23 settings)
+21. [SNAPSHOT SYSTEM](#snapshot-system) (24 settings)
 22. [Structured local RAG (optional, no embeddings or extra provider call)](#structured-local-rag-optional-no-embeddings-or-extra-provider-call) (7 settings)
 23. [Azeroth Voices Companion addon and Chatter compatibility](#azeroth-voices-companion-addon-and-chatter-compatibility) (2 settings)
 24. [Deployment recommendations](#deployment-recommendations)
@@ -588,6 +588,11 @@
 | [`AzerothVoices.Personality.Prompt.Traits`](#azerothvoicespersonalityprompttraits) | String | `traits must be an array of exactly 3 distinct concise descriptors...` | System guidance prompt used when generating a bot's 3 personality traits. |
 | [`AzerothVoices.Personality.Prompt.Tone`](#azerothvoicespersonalityprompttone) | String | `tone must be a concise speaking-style description derived from the traits...` | System guidance prompt used when generating a bot's persistent speaking style. |
 | [`AzerothVoices.Personality.Backstory.SuppressInAmbientAndEvents`](#azerothvoicespersonalitybackstorysuppressinambientandevents) | Boolean (`0` or `1`) | `1` | Suppresses injection of bot backstory context in ambient banter, event reactions, and bot question replies. Saves ~35-50% prompt tokens. |
+| [`AzerothVoices.Personality.Backstory.AllowInWhisper`](#azerothvoicespersonalitybackstoryallowinwhisper) | Boolean (`0` or `1`) | `1` | Controls whether bot backstory is included in private 1-on-1 whispers. Recommended enabled for rich dialogue. |
+| [`AzerothVoices.Personality.Backstory.AllowInSay`](#azerothvoicespersonalitybackstoryallowinsay) | Boolean (`0` or `1`) | `1` | Controls whether bot backstory is included in proximity /say and /yell chat prompts. |
+| [`AzerothVoices.Personality.Backstory.AllowInParty`](#azerothvoicespersonalitybackstoryallowinparty) | Boolean (`0` or `1`) | `0` | Controls whether bot backstory is included in party/raid chat. Disabled by default to optimize token usage. |
+| [`AzerothVoices.Personality.Backstory.AllowInGuild`](#azerothvoicespersonalitybackstoryallowinguild) | Boolean (`0` or `1`) | `0` | Controls whether bot backstory is included in guild chatter prompts. Disabled by default to prioritize guild tone and brevity. |
+| [`AzerothVoices.Personality.Backstory.AllowInWorld`](#azerothvoicespersonalitybackstoryallowinworld) | Boolean (`0` or `1`) | `0` | Controls whether bot backstory is included in World and Barrens chat prompts. Disabled by default for maximum token efficiency. |
 
 
 ### <a id="azerothvoicespersonalityenable"></a>`AzerothVoices.Personality.Enable`
@@ -708,6 +713,41 @@
 - **Default Value**: `1`
 - **Description**: Suppresses injection of bot backstory context in ambient world banter, event chatter (kills, deaths, wipes, level-ups, loot), and bot question replies.
 - **Operator Guidance & Impact**: When enabled (`1`), bot backstories are omitted from non-conversational quips, saving 35-50% LLM prompt tokens and eliminating hallucinated personal lore in brief reactions. Backstories remain 100% active in direct 1-on-1 whispers, direct backstory questions, and normal party/guild conversational turns. Set to `0` to always include backstories in all situations.
+
+### <a id="azerothvoicespersonalitybackstoryallowinwhisper"></a>`AzerothVoices.Personality.Backstory.AllowInWhisper`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Controls whether bot backstory context is injected into private 1-on-1 whisper prompts.
+- **Operator Guidance & Impact**: Recommended enabled (`1`) to allow players to learn their companions' personal backgrounds, origins, and personal lore during intimate one-on-one whisper conversations. Set to `0` to omit backstory in whispers for lower token consumption.
+
+### <a id="azerothvoicespersonalitybackstoryallowinsay"></a>`AzerothVoices.Personality.Backstory.AllowInSay`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Controls whether bot backstory context is injected into local proximity (`/say` and `/yell`) prompts.
+- **Operator Guidance & Impact**: Enabled (`1`) by default for rich local open-world immersion. Set to `0` to reduce prompt sizes in busy proximity hubs.
+
+### <a id="azerothvoicespersonalitybackstoryallowinparty"></a>`AzerothVoices.Personality.Backstory.AllowInParty`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `0`
+- **Description**: Controls whether bot backstory context is injected into party and raid chat prompts.
+- **Operator Guidance & Impact**: Disabled (`0`) by default to optimize token usage. In party scenarios, tactical surroundings (combat state, party member statuses, health/mana) are far more pertinent than biographical origin stories. Set to `1` if you want party members to frequently reference their deep past during dungeon runs.
+
+### <a id="azerothvoicespersonalitybackstoryallowinguild"></a>`AzerothVoices.Personality.Backstory.AllowInGuild`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `0`
+- **Description**: Controls whether bot backstory context is injected into guild chatter prompts.
+- **Operator Guidance & Impact**: Disabled (`0`) by default. Guild chat focuses on member greetings, banter, questions, and shared guild identity. Omitting backstories saves ~120-180 tokens per guild generation while maintaining distinctive vocal tone via traits. Set to `1` if full life histories are desired in guild banter.
+
+### <a id="azerothvoicespersonalitybackstoryallowinworld"></a>`AzerothVoices.Personality.Backstory.AllowInWorld`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `0`
+- **Description**: Controls whether bot backstory context is injected into broad public channels (World and Barrens chat).
+- **Operator Guidance & Impact**: Disabled (`0`) by default. Broad public chat relies on witty banter, quick jokes, topic replies, and trolling rather than personal autobiographies. Suppressing backstory saves ~120-180 tokens per public message. Set to `1` to re-enable backstory injection in public channels.
 
 ---
 
@@ -2330,6 +2370,7 @@ conservative defaults below; raise only the ones you want.
 | [`AzerothVoices.GuildChatter.PlayerReplies.RecentSpeakerPenalty`](#azerothvoicesguildchatterplayerrepliesrecentspeakerpenalty) | Percentage (`0` - `100`) | `60` | Soft penalty applied to recent speakers during candidate weighting. (Percen... |
 | [`AzerothVoices.GuildChatter.PlayerReplies.FirstDelayMinSeconds`](#azerothvoicesguildchatterplayerrepliesfirstdelayminseconds) | Integer (Seconds, 0-60; default 2) | `2` | Minimum delay before the first guild reply line is delivered. (Seconds, 0-6... |
 | [`AzerothVoices.GuildChatter.PlayerReplies.FirstDelayMaxSeconds`](#azerothvoicesguildchatterplayerrepliesfirstdelaymaxseconds) | Integer (Seconds, 0-60; default 6) | `6` | Maximum delay before the first guild reply line is delivered. (Seconds, 0-6... |
+| [`AzerothVoices.Guild.PromptToneOnly`](#azerothvoicesguildprompttoneonly) | Boolean (`0` or `1`) | `1` | Creates an ultra-lean guild prompt profile containing only Tone and Talent Spec, omitting generic personality preambles. Saves ~35 tokens per guild line. |
 
 
 ### <a id="azerothvoicesguildchatterenable"></a>`AzerothVoices.GuildChatter.Enable`
@@ -2639,6 +2680,13 @@ conservative defaults below; raise only the ones you want.
 - **Default Value**: `6`
 - **Description**: Maximum delay before the first guild reply line is delivered. (Seconds, 0-60; default 6)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+
+### <a id="azerothvoicesguildprompttoneonly"></a>`AzerothVoices.Guild.PromptToneOnly`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: When enabled, builds an ultra-lean persona prompt profile for guild messages containing strictly the bot's Tone and Talent Specialization, omitting generic personality preambles and traits.
+- **Operator Guidance & Impact**: Recommended enabled (`1`) for token optimization. Keeps guild prompts streamlined (~170 tokens) and focused on voice rhythm and character class flavor without redundant generic personality headers. Set to `0` to inject the complete standard personality trait block.
 
 ---
 
@@ -3991,6 +4039,7 @@ human within SayDistance; Party actors require a real human in the same party su
 | [`AzerothVoices.Snapshot.IncludeCombat`](#azerothvoicessnapshotincludecombat) | Boolean (`0` or `1`) | `1` | Adds current health, active power resource, combat state, victim name/level... |
 | [`AzerothVoices.Snapshot.IncludeGroup`](#azerothvoicessnapshotincludegroup) | Boolean (`0` or `1`) | `1` | Adds bounded same-map group members with class, race, health, distance, and... |
 | [`AzerothVoices.Snapshot.IncludeSpells`](#azerothvoicessnapshotincludespells) | Boolean (`0` or `1`) | `1` | Adds bounded active known spells after removing passive/internal entries an... |
+| [`AzerothVoices.Snapshot.IncludeSpellsInParty`](#azerothvoicessnapshotincludespellsinparty) | Boolean (`0` or `1`) | `0` | Controls whether the detailed spell list is included in party chat snapshots. Disabled by default for token optimization. |
 | [`AzerothVoices.Snapshot.IncludeQuests`](#azerothvoicessnapshotincludequests) | Boolean (`0` or `1`) | `1` | Adds bounded quest-log titles and whether each active quest is in progress,... |
 | [`AzerothVoices.Snapshot.IncludeLineOfSight`](#azerothvoicessnapshotincludelineofsight) | Boolean (`0` or `1`) | `1` | Adds bounded nearby creatures and spawned game objects that pass the bot's ... |
 | [`AzerothVoices.Snapshot.IncludeNearbyPlayers`](#azerothvoicessnapshotincludenearbyplayers) | Boolean (`0` or `1`) | `1` | Adds bounded non-GM players and PlayerBots within range and line of sight w... |
@@ -4039,6 +4088,13 @@ human within SayDistance; Party actors require a real human in the same party su
 - **Default Value**: `1`
 - **Description**: Adds bounded active known spells after removing passive/internal entries and keeping the highest useful rank for each spell name. (Default 1)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+
+### <a id="azerothvoicessnapshotincludespellsinparty"></a>`AzerothVoices.Snapshot.IncludeSpellsInParty`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `0`
+- **Description**: Controls whether the detailed learned spell catalog (with ranks, school, and mana costs) is included in party chat snapshot contexts.
+- **Operator Guidance & Impact**: Disabled (`0`) by default for massive token optimization, saving ~100-150 tokens per party generation. Party bots still retain complete awareness of active combat, party member vitals, nearby threats, and class role without enumerating every known ability in the LLM prompt. Set to `1` if you want party bots to explicitly discuss and strategize around specific spell ranks in their spellbook.
 
 ### <a id="azerothvoicessnapshotincludequests"></a>`AzerothVoices.Snapshot.IncludeQuests`
 

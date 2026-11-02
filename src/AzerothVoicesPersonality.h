@@ -28,13 +28,14 @@ namespace AzerothVoices
                                   std::string const& response, BotPersonality& personality,
                                   std::string& error);
     std::string BuildVoicePromptBlock(Config const& config, BotPersonality const& personality);
+    std::string BuildGuildTonePromptBlock(Config const& config, BotPersonality const& personality);
     std::string BuildBackstoryPromptBlock(Config const& config, BotPersonality const& personality,
                                           bool isDirectInquiry = false);
     bool ShouldIncludeBackstory(Config const& config, BotPersonality const& personality,
                                 std::string const& trigger, bool ambient = false);
     bool ShouldIncludeBackstory(Config const& config, BotPersonality const& personality,
                                 ChatScope scope, std::string const& trigger,
-                                std::string const& message, bool directConversation, bool ambient);
+                                std::string const& message = "", bool directConversation = false, bool ambient = false);
     std::string BuildPersonalityPromptBlock(Config const& config, BotPersonality const& personality,
                                             ChatScope scope, std::string const& trigger,
                                             std::string const& message, bool directConversation, bool ambient);
