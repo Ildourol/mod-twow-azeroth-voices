@@ -11,7 +11,9 @@
 
 #include "Cell.h"
 #include "CellImpl.h"
+#define private public
 #include "Channel.h"
+#undef private
 #include "ChannelMgr.h"
 #include "Chat.h"
 #include "Creature.h"
@@ -504,7 +506,7 @@ namespace AzerothVoices
             else
                 return false;
 
-            if (channel)
+            if (channel && channel->GetNumPlayers() > 0)
             {
                 HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
                 for (auto const& entry : sObjectAccessor.GetPlayers())
@@ -5551,7 +5553,7 @@ namespace AzerothVoices
                         return false;
                     if (request.scope == ChatScope::Officer)
                     {
-                        if (!guild->HasRankRight(bot->GetObjectGuid(), GR_RIGHT_OFFCHAT_SPEAK))
+                        if (!guild->HasRankRight(bot->GetRank(), GR_RIGHT_OFFCHATSPEAK))
                             return false;
                         guild->BroadcastToOfficers(bot->GetSession(), text, LANG_UNIVERSAL);
                     }
@@ -6816,16 +6818,16 @@ namespace AzerothVoices
 
         for (auto it = m_pendingHistoryWrites.begin(); it != m_pendingHistoryWrites.end(); )
         {
-            if (it->first.compare(0, prefix.size(), prefix) == 0 ||
-                (sharedContext && it->first == ("0:" + std::to_string(botGuid))))
+            if (it->historyKey.compare(0, prefix.size(), prefix) == 0 ||
+                (sharedContext && it->historyKey == ("0:" + std::to_string(botGuid))))
                 it = m_pendingHistoryWrites.erase(it);
             else
                 ++it;
         }
         for (auto it = m_pendingSnapshotWrites.begin(); it != m_pendingSnapshotWrites.end(); )
         {
-            if (it->first.compare(0, prefix.size(), prefix) == 0 ||
-                (sharedContext && it->first == ("0:" + std::to_string(botGuid))))
+            if (it->actorKey.compare(0, prefix.size(), prefix) == 0 ||
+                (sharedContext && it->actorKey == ("0:" + std::to_string(botGuid))))
                 it = m_pendingSnapshotWrites.erase(it);
             else
                 ++it;

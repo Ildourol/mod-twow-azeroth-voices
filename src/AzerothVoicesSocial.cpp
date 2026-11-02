@@ -1230,7 +1230,9 @@ namespace AzerothVoices
             return value;
         }
 
-            size_t FindUtf8CodePointBoundary(std::string const& s, size_t limit)
+    } // namespace
+
+    size_t FindUtf8CodePointBoundary(std::string const& s, size_t limit)
     {
         if (limit >= s.size())
             return s.size();
@@ -1264,6 +1266,9 @@ namespace AzerothVoices
 
         return pos;
     }
+
+    namespace
+    {
 
     std::vector<std::string> SplitSingleSentence(std::string const& s, size_t limit)
         {
