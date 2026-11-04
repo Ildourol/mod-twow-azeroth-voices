@@ -26,8 +26,6 @@ By directly embedding an asynchronous non-blocking HTTP/HTTPS provider client in
 - [System Architecture & Data Flow](#system-architecture--data-flow)
 - [System Requirements & Compatibility](#system-requirements--compatibility)
 - [Installation & Build Guide](#installation--build-guide)
-- [Database Setup & Schema Migrations](#database-setup--schema-migrations)
-- [Configuration & Deployment](#configuration--deployment)
 - [Configuration Presets & Quick-Start](#configuration-presets--quick-start)
 - [In-Game Administration Commands](#in-game-administration-commands)
 - [Client Companion AddOn](#client-companion-addon)
@@ -152,127 +150,31 @@ flowchart TD
 
 ## Installation & Build Guide
 
-These steps assume you have a working [TortoiseWoW](https://github.com/Penqle/tortoise-wow) source checkout, initialized core databases, and the server data files for your realm. Use a core revision compatible with this module. Run all build and SQL commands from the core source root, the directory containing the core's `CMakeLists.txt`.
-
-Install and configure a core-compatible [TortoiseBots](https://github.com/tortoise-wow-stack/TortoiseBots) checkout under `modules/TortoiseBots` for PlayerBot dialogue.
-
-### 1. Add the module and build on Linux
-
-Use Git, CMake, a C++17 compiler, and the core's build dependencies. On Debian or Ubuntu, a typical starting point is:
+From the TortoiseWoW source root, clone or copy the module directly into `modules/mod-twow-azeroth-voices/`. For PlayerBot integration, place [TortoiseBots](https://github.com/tortoise-wow-stack/TortoiseBots) in `modules/TortoiseBots` and add `-DMODULE_TORTOISEBOTS=static` to the configure command.
 
 ```bash
-sudo apt update
-sudo apt install git cmake build-essential libace-dev default-libmysqlclient-dev libssl-dev zlib1g-dev
-```
-
-Use your distribution's `mysql` or `mariadb` command-line client if importing SQL manually. Keep any additional dependency and CMake settings required by your core and other enabled modules.
-
-```bash
-cd /path/to/tortoise-wow
 git clone https://github.com/Ildourol/mod-twow-azeroth-voices.git modules/mod-twow-azeroth-voices
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/server-stage" -DMODULE_MOD_TWOW_AZEROTH_VOICES=static -DMODULE_TORTOISEBOTS=static
-cmake --build build --parallel
-cmake --install build
 ```
-
-### 2. Add the module and build on Windows
-
-Install Git for Windows, CMake 3.21 or later, and Visual Studio 2022 or its Build Tools with **Desktop development with C++** and a Windows SDK. Open PowerShell with Git and CMake on `PATH`. Use an x64 build and the dependency setup of your working core.
-
-```powershell
-Set-Location 'C:\src\tortoise-wow'
-git clone https://github.com/Ildourol/mod-twow-azeroth-voices.git modules/mod-twow-azeroth-voices
-cmake -S . -B build-vs -G "Visual Studio 17 2022" -A x64 "-DCMAKE_INSTALL_PREFIX=$PWD/server-stage" -DMODULE_MOD_TWOW_AZEROTH_VOICES=static -DMODULE_TORTOISEBOTS=static
-cmake --build build-vs --config Release --parallel
-cmake --install build-vs --config Release
-```
-
-Check each command for errors before continuing. Both builds include `mangosd`. If the configure output reports an unused module switch, verify the source placement before building. The two build sections are platform alternatives. If you already have a module checkout, use it in place of the clone. A full directory copy, a Linux symlink, or a Windows directory junction works as long as `modules/mod-twow-azeroth-voices/src/` is directly below the module directory. The module directory name determines the CMake switch and loader symbol. If reusing a build directory, keep its generator and architecture and preserve the switches for your other modules. Reconfigure after adding the module and verify CMake lists it as static.
-
-The staged world server is normally `server-stage/bin/mangosd` on Linux and `server-stage/mangosd.exe` on Windows. Stop the running world server before deploying the rebuilt executable and any required runtime libraries or module assets. Preserve the live configuration and data files. The paths below assume the standard staged layout. For an existing deployment, use the directory containing the active `mangosd.conf`, including a custom path passed via `-c`.
-
-## Database Setup & Schema Migrations
-
-Back up the affected databases. The examples use `tw_char` and `tw_world` as database names. Substitute the names from the active `CharacterDatabase.Info` and `WorldDatabase.Info` settings as applicable, plus your database user and any connection options.
-
-Choose 1 import method. For the core auto-updater, verify that `Database.AutoUpdate.Enabled` and `Database.AutoUpdate.SortByName` are enabled, that `Database.AutoUpdate.AllowedModules` includes `mod-twow-azeroth-voices` (or uses `all`), and that the runtime host can access the module checkout at the source path embedded by the build. The updater uses the configured `CharUpdateName` and `WorldUpdateName` under `data/sql/` (normally `character` and `world`). Check the first startup log for applied updates. If importing manually, exclude this module from the updater allowlist to avoid replaying the same files. Preserve other modules that use automatic updates.
-
-**Manual import on Linux (Bash)**
-
-```bash
-mysql -u root -p tw_char < "modules/mod-twow-azeroth-voices/data/sql/character/20260827_01_azeroth_voices_history.sql"
-mysql -u root -p tw_char < "modules/mod-twow-azeroth-voices/data/sql/character/20260829_01_azeroth_voices_personality.sql"
-mysql -u root -p tw_char < "modules/mod-twow-azeroth-voices/data/sql/character/20260902_01_azeroth_voices_sentiment.sql"
-mysql -u root -p tw_char < "modules/mod-twow-azeroth-voices/data/sql/character/20260912_01_azeroth_voices_addon_contacts.sql"
-mysql -u root -p tw_char < "modules/mod-twow-azeroth-voices/data/sql/character/20260912_02_azeroth_voices_memories.sql"
-mysql -u root -p tw_char < "modules/mod-twow-azeroth-voices/data/sql/character/20261022_01_azeroth_voices_personality_text.sql"
-```
-
-**Manual import on Windows (PowerShell)**
-
-Run `Get-Command mysql.exe` first. If it is unavailable, install the MySQL or MariaDB command-line client and add its `bin` directory to the current PowerShell session. Replace the example path below with your installation path. Use `mariadb.exe` in the import commands if that is the client you installed. Run imports in the order shown and stop if any command reports an error. `cmd.exe` handles input redirection so the SQL file reaches the client directly.
-
-```powershell
-# Only needed when mysql.exe is installed but missing from PATH
-# $env:Path = 'C:\Program Files\MySQL\MySQL Server 8.0\bin;' + $env:Path
-cmd.exe /d /c 'mysql.exe -u root -p tw_char < modules\mod-twow-azeroth-voices\data\sql\character\20260827_01_azeroth_voices_history.sql'
-if ($LASTEXITCODE -ne 0) { throw "Module SQL import failed" }
-cmd.exe /d /c 'mysql.exe -u root -p tw_char < modules\mod-twow-azeroth-voices\data\sql\character\20260829_01_azeroth_voices_personality.sql'
-if ($LASTEXITCODE -ne 0) { throw "Module SQL import failed" }
-cmd.exe /d /c 'mysql.exe -u root -p tw_char < modules\mod-twow-azeroth-voices\data\sql\character\20260902_01_azeroth_voices_sentiment.sql'
-if ($LASTEXITCODE -ne 0) { throw "Module SQL import failed" }
-cmd.exe /d /c 'mysql.exe -u root -p tw_char < modules\mod-twow-azeroth-voices\data\sql\character\20260912_01_azeroth_voices_addon_contacts.sql'
-if ($LASTEXITCODE -ne 0) { throw "Module SQL import failed" }
-cmd.exe /d /c 'mysql.exe -u root -p tw_char < modules\mod-twow-azeroth-voices\data\sql\character\20260912_02_azeroth_voices_memories.sql'
-if ($LASTEXITCODE -ne 0) { throw "Module SQL import failed" }
-cmd.exe /d /c 'mysql.exe -u root -p tw_char < modules\mod-twow-azeroth-voices\data\sql\character\20261022_01_azeroth_voices_personality_text.sql'
-if ($LASTEXITCODE -ne 0) { throw "Module SQL import failed" }
-```
-
-## Configuration & Deployment
-
-Create `mod-azeroth-voices.conf` inside the `modules/` subdirectory beside the active `mangosd.conf`. For a first install using the example staging directory, the following commands copy the shipped template. If an active module config already exists, retain it and merge new settings from the template.
 
 **Linux**
 
 ```bash
-mkdir -p server-stage/etc/modules
-cp -n "modules/mod-twow-azeroth-voices/conf/mod-azeroth-voices.conf.dist" "server-stage/etc/modules/mod-azeroth-voices.conf"
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMODULE_MOD_TWOW_AZEROTH_VOICES=static
+cmake --build build --parallel
 ```
 
-**Windows (PowerShell)**
+**Windows** (PowerShell, Visual Studio 2022 with C++ tools)
 
 ```powershell
-New-Item -ItemType Directory -Force 'server-stage/modules' | Out-Null
-if (-not (Test-Path 'server-stage/modules/mod-azeroth-voices.conf')) {
-    Copy-Item 'modules/mod-twow-azeroth-voices/conf/mod-azeroth-voices.conf.dist' 'server-stage/modules/mod-azeroth-voices.conf'
-}
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DMODULE_MOD_TWOW_AZEROTH_VOICES=static
+cmake --build build --config Release --parallel
 ```
 
-Keep the template's section header and confirm `AzerothVoices.Enable = 1` in the active file.
+Preserve the CMake options for your existing server and modules. Deploy the rebuilt `mangosd` (`mangosd.exe` on Windows). Copy the module’s `conf/mod-azeroth-voices.conf.dist` to `modules/mod-azeroth-voices.conf` beside the active `mangosd.conf` and restart after completing any setup below.
 
-Before starting the server, configure the provider, endpoint, model and credentials using the presets below. For `env:VARIABLE_NAME` credentials, set the variable in the environment of the account or service launching `mangosd`. The module install hook stages runtime data under `server-stage/modules/mod-azeroth-voices/data`. Deploy it alongside the new server files if your configuration uses the bundled data. Start the rebuilt server with your normal launcher and active `mangosd.conf`. Check the startup log for module configuration, database, and dependency errors.
+**Database.** No manual import is needed when `Database.AutoUpdate.Enabled = 1`, `Database.AutoUpdate.AllowedModules` is `all` or includes `mod-twow-azeroth-voices`, and the server can read the module’s SQL at the source path used by the build. With the standard database folder names, the core applies `data/sql/character/` at startup. Keep `Database.AutoUpdate.SortByName = 1` and check the startup log. For a manual install, back up the affected databases, apply the files in filename order to the matching databases, and exclude this module from the updater.
 
-### Install the optional client addon
-
-Exit the Turtle WoW client and copy the full `client/AzerothVoices` folder to the client's `Interface/AddOns/` directory. The `AzerothVoices.toc` file must be directly inside `Interface/AddOns/AzerothVoices/`. For example, from the core source root:
-
-```bash
-mkdir -p "/path/to/TurtleWoW/Interface/AddOns"
-cp -R "modules/mod-twow-azeroth-voices/client/AzerothVoices" "/path/to/TurtleWoW/Interface/AddOns/"
-```
-
-```powershell
-$AddOns = 'C:\Games\TurtleWoW\Interface\AddOns'
-New-Item -ItemType Directory -Force $AddOns | Out-Null
-Copy-Item -Recurse -Force 'modules/mod-twow-azeroth-voices/client/AzerothVoices' $AddOns
-```
-
-Restart the client and enable the addon from the character selection screen.
-
-### Verify the installation
-
-Use `.av status` and `.av test` with an authorized account. Confirm the server process can reach the configured endpoint and has access to its credential environment variable.
+Before startup, set the LLM endpoint, model, and credentials using the presets below. Deploy `modules/mod-azeroth-voices/data` from the installed server files if using bundled data. For the optional client addon, copy `client/AzerothVoices` to the client’s `Interface/AddOns/`.
 
 ## Configuration Presets & Quick-Start
 
