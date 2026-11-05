@@ -1,4 +1,5 @@
 #include "AzerothVoicesProvider.h"
+#include "AzerothVoicesHttpPolicy.h"
 
 #include "AzerothVoicesReasoning.h"
 #include "AzerothVoicesSocial.h"
@@ -69,6 +70,7 @@ namespace AzerothVoices
         struct ParsedEndpoint
         {
             std::string base;
+            std::string host;
             std::string path;
             bool secure = false;
             bool local = false;
@@ -434,6 +436,7 @@ namespace AzerothVoices
                 }
             }
 
+            parsed.host = hostPart;
             parsed.base = scheme + "://" + authority;
             parsed.path = match[3].matched ? match[3].str() : "/";
             parsed.secure = scheme == "https";
@@ -825,9 +828,9 @@ namespace AzerothVoices
         ParsedEndpoint endpoint;
         if (!ParseEndpoint(config.endpoint, endpoint, completion.error))
             return finish();
-        if (!endpoint.secure && !endpoint.local)
+        if (!endpoint.secure && !endpoint.local && !IsAllowedHttpHost(endpoint.host, config.allowedHttpHosts))
         {
-            completion.error = "plain HTTP is allowed only for localhost endpoints";
+            completion.error = "plain HTTP to this host is disabled; use HTTPS or explicitly list the trusted host in AzerothVoices.AllowedHttpHosts";
             return finish();
         }
         if (!endpoint.secure && endpoint.local && !config.allowInsecureLocalHttp)
@@ -939,6 +942,8 @@ namespace AzerothVoices
             {
                 completion.httpStatus = responseStatus;
                 completion.error = std::string("HTTP transport error: ") + httplib::to_string(result.error());
+                if (result.error() == httplib::Error::Connection)
+                    completion.error += "; check provider DNS, port and listening address from the mangosd network environment; in Docker/VMs, 127.0.0.1 refers to that container/VM";
                 return finish();
             }
 

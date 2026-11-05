@@ -103,6 +103,7 @@ namespace AzerothVoices
         std::string apiJsonTemplate;
         std::string caCertFile;
         bool allowInsecureLocalHttp = true;
+        std::string allowedHttpHosts;
         uint32_t connectTimeoutSeconds = 10;
         uint32_t requestTimeoutSeconds = 60;
         uint32_t maxResponseBytes = 65536;

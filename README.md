@@ -294,9 +294,37 @@ This example assumes Ollama and mangosd run in the same host/network environment
 
 Start with 1 worker to limit concurrent local inference; increase it only if the model host can handle the load. The 120-second generation timeout allows more time for model loading and slower hardware.
 
-`127.0.0.1` refers to mangosd's own network environment. A separate PC, VM, or container may need a different setup. `AzerothVoices.AllowLocalHttp` permits local/loopback HTTP only; remote plain HTTP is rejected, so use a supported HTTPS endpoint for a remote provider. For LocalAI, LM Studio, or an authenticated proxy, use that server's actual endpoint, model identifier, and authentication requirements.
+`127.0.0.1` refers to mangosd's own network environment. A separate PC, VM, or container may need a different setup. `AzerothVoices.AllowLocalHttp` controls loopback HTTP. For a trusted Docker/VM host outside loopback, explicitly set `AzerothVoices.AllowedHttpHosts` as described below; otherwise use HTTPS. For LocalAI, LM Studio, or an authenticated proxy, use that server's actual endpoint, model identifier, and authentication requirements.
 
 The current keys are `AzerothVoices.AllowLocalHttp` and `AiPlayerbot.LLMGenerationTimeout`; replace the outdated `AllowInsecureHttp` and `RequestTimeoutSeconds` entries from older README examples.
+
+### Preset B in Docker or a VM
+
+Choose the endpoint from mangosd's network environment. The allowlist contains the exact host only, without a scheme, port, or path. These overrides require a build containing `AzerothVoices.AllowedHttpHosts`.
+
+| Ollama location | `AiPlayerbot.LLMApiEndpoint` | `AzerothVoices.AllowedHttpHosts` |
+| :--- | :--- | :--- |
+| Same Compose network, service named `ollama` | `http://ollama:11434/v1/chat/completions` | `ollama` |
+| Docker Desktop host | `http://host.docker.internal:11434/v1/chat/completions` | `host.docker.internal` |
+| Reachable VM/LAN address (example) | `http://192.168.1.20:11434/v1/chat/completions` | `192.168.1.20` |
+
+On Linux Docker Engine, a host-based Ollama may also need this in the **mangosd service** in Compose:
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+Both services must share a Docker network when using a Compose service name. For host/VM access, Ollama must listen on a reachable interface, not only its own loopback. Set `OLLAMA_HOST=0.0.0.0:11434` in the Ollama process/service environment and restart Ollama if needed; restrict access to the trusted network. A VM also needs a reachable bridged/routed address or appropriate NAT port forwarding. A firewall must permit the selected connection. The allowlist permits plaintext prompts and credentials to that host, so use it only for trusted networks and keep it empty for HTTPS providers.
+
+Test **inside the mangosd container/VM**, replacing the host as appropriate:
+
+```bash
+curl http://ollama:11434/api/tags
+curl http://ollama:11434/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"llama3.2:latest","messages":[{"role":"user","content":"Say hello"}],"stream":false}'
+```
+
+Match the model tag to the installed model. A connection failure here must be fixed in DNS, routing, port/listening configuration, or the firewall before `.av test` can work. If curl works but the module rejects HTTP, check the exact `AllowedHttpHosts` value and rebuild/redeploy mangosd with this module update. Restart mangosd after changing the runtime configuration.
 
 ### Preset C: Authentic Barrens World Chat Banter
 ```ini

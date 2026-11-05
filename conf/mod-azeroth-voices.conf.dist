@@ -58,7 +58,7 @@ AzerothVoices.Console.ApiCallStatsIntervalSeconds = 60
 AzerothVoices.ProviderMode = ChatCompletions
 
 # AiPlayerbot.LLMApiEndpoint
-#     Description: Full provider endpoint. Remote plain HTTP is rejected. (URL.)
+#     Description: Full provider endpoint. Non-loopback HTTP requires AllowedHttpHosts. (URL.)
 #     Default:     OpenAI chat/completions
 AiPlayerbot.LLMApiEndpoint = https://api.openai.com/v1/chat/completions
 
@@ -93,10 +93,21 @@ AzerothVoices.ParserMode = ProviderJson
 AzerothVoices.CACertFile = 
 
 # AzerothVoices.AllowLocalHttp
-#     Description: Allows plain HTTP only for local/loopback providers, never remote
-#                  HTTP.
+#     Description: Allows plain HTTP for local/loopback providers. Non-loopback HTTP
+#                  requires an explicit AllowedHttpHosts entry.
 #     Default:     1
 AzerothVoices.AllowLocalHttp = 1
+
+# AzerothVoices.AllowedHttpHosts
+#     Description: Comma-separated exact hosts permitted to use unencrypted HTTP
+#                  outside loopback, e.g. ollama,host.docker.internal,192.168.1.20.
+#                  Host names only, without scheme, port, or path; bracket IPv6.
+#                  Empty rejects all non-loopback HTTP. No wildcards or DNS-based
+#                  trust inference. Use only for trusted Docker/VM/LAN endpoints;
+#                  prompts and the API key travel in plaintext. Prefer HTTPS otherwise.
+#                  This opt-in is independent of AllowLocalHttp.
+#     Default:     empty
+AzerothVoices.AllowedHttpHosts =
 
 # AzerothVoices.ConnectTimeoutSeconds
 #     Description: TCP/TLS connection timeout. (Seconds, minimum 1.)

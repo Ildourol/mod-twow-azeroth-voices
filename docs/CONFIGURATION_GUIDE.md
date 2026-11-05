@@ -116,13 +116,13 @@
 | Setting Name | Type / Range | Default | Summary |
 | :--- | :--- | :--- | :--- |
 | [`AzerothVoices.ProviderMode`](#azerothvoicesprovidermode) | Enum (`ChatCompletions/Responses`) | `ChatCompletions` | ChatCompletions supports OpenAI, Gemini's OpenAI-compatible endpoint, OpenR... |
-| [`AiPlayerbot.LLMApiEndpoint`](#aiplayerbotllmapiendpoint) | String (HTTP/HTTPS URL) | `https://api.openai.com/v1/chat/completions` | Full provider endpoint. Remote plain HTTP is rejected. (URL; default OpenAI... |
+| [`AiPlayerbot.LLMApiEndpoint`](#aiplayerbotllmapiendpoint) | String (HTTP/HTTPS URL) | `https://api.openai.com/v1/chat/completions` | Full provider endpoint. Non-loopback plain HTTP requires an explicit `AzerothVoices.AllowedHttpHosts` entry. (URL; default OpenAI... |
 | [`AiPlayerbot.LLMApiKey`](#aiplayerbotllmapikey) | String (API Key or `env:VARIABLE`) | `env:OPENAI_API_KEY` | Supplies the Bearer API token. (Secret or env:VARIABLE; default env:OPENAI_... |
 | [`AzerothVoices.Model`](#azerothvoicesmodel) | String | `gpt-4o-mini` | Exact model identifier accepted by the selected endpoint. (String; default ... |
 | [`AiPlayerbot.LLMApiJson`](#aiplayerbotllmapijson) | String (Template with placeholders) | `# AzerothVoices.ParserMode` | Empty lets the module generate provider-safe JSON; a custom legacy template... |
 | [`AzerothVoices.ParserMode`](#azerothvoicesparsermode) | Enum (`ProviderJson/LegacyRegex`) | `ProviderJson` | ProviderJson parses OpenAI chat/Responses, Gemini candidates, and Ollama JS... |
 | [`AzerothVoices.CACertFile`](#azerothvoicescacertfile) | String | `# AzerothVoices.AllowLocalHttp` | Empty uses system CAs; otherwise uses this custom CA bundle. (File path; de... |
-| [`AzerothVoices.AllowLocalHttp`](#azerothvoicesallowlocalhttp) | Boolean (`0` or `1`) | `1` | Allows plain HTTP only for local/loopback providers, never remote HTTP. (De... |
+| [`AzerothVoices.AllowLocalHttp`](#azerothvoicesallowlocalhttp) | Boolean (`0` or `1`) | `1` | Controls plain HTTP for loopback providers; non-loopback HTTP requires an explicit `AzerothVoices.AllowedHttpHosts` entry. (De... |
 | [`AzerothVoices.ConnectTimeoutSeconds`](#azerothvoicesconnecttimeoutseconds) | Integer (Seconds, minimum 1; default 10.) | `10` | TCP/TLS connection timeout. (Seconds, minimum 1; default 10.) |
 | [`AiPlayerbot.LLMGenerationTimeout`](#aiplayerbotllmgenerationtimeout) | Integer (Seconds, minimum 1; default 60.) | `60` | Provider read/write generation timeout. (Seconds, minimum 1; default 60.) |
 | [`AzerothVoices.MaxResponseBytes`](#azerothvoicesmaxresponsebytes) | Integer | `65536` | Rejects oversized HTTP responses. (Bytes, minimum 1024; default 65536) |
@@ -153,7 +153,7 @@
 
 - **Data Type**: String (HTTP/HTTPS URL)
 - **Default Value**: `https://api.openai.com/v1/chat/completions`
-- **Description**: Full provider endpoint. Remote plain HTTP is rejected. (URL; default OpenAI chat/completions.)
+- **Description**: Full provider endpoint. Non-loopback plain HTTP requires an explicit `AzerothVoices.AllowedHttpHosts` entry. (URL; default OpenAI chat/completions.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
 
 ### <a id="aiplayerbotllmapikey"></a>`AiPlayerbot.LLMApiKey`
@@ -195,8 +195,16 @@
 
 - **Data Type**: Boolean (`0` or `1`)
 - **Default Value**: `1`
-- **Description**: Allows plain HTTP only for local/loopback providers, never remote HTTP. (Default 1.)
+- **Description**: Controls plain HTTP for loopback providers; non-loopback HTTP requires an explicit `AzerothVoices.AllowedHttpHosts` entry. (Default 1.)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+
+### `AzerothVoices.AllowedHttpHosts`
+
+- **Type**: Comma-separated exact host names/IP addresses; default empty.
+- **Purpose**: Explicitly permits unencrypted HTTP to trusted Docker service names, host gateways, or VM/LAN addresses outside loopback. Example: `ollama,host.docker.internal,192.168.1.20`.
+- **Matching**: Case-insensitive whole host, with whitespace trimmed; no scheme, port, path, suffix matching, wildcards, or automatic DNS trust. IPv6 hosts use brackets, such as `[fd00::20]`.
+- **Security**: Prompts and the configured API key travel in plaintext. Use only on trusted networks; prefer HTTPS otherwise. Empty preserves the default rejection of non-loopback HTTP. This explicit opt-in is independent of `AllowLocalHttp`, which controls loopback only.
+- **Deployment**: Rebuild/redeploy the module, edit the runtime conf, and restart mangosd. See [Docker/VM examples](../README.md#preset-b-in-docker-or-a-vm). This setting does not fix DNS, routing, listener binding, firewall rules, or Ollama readiness.
 
 ### <a id="azerothvoicesconnecttimeoutseconds"></a>`AzerothVoices.ConnectTimeoutSeconds`
 

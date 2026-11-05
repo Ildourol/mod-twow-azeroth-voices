@@ -307,6 +307,7 @@ namespace AzerothVoices
         c.apiJsonTemplate = Trim(sConfig.GetStringDefault("AiPlayerbot.LLMApiJson", ""));
         c.caCertFile = Trim(sConfig.GetStringDefault("AzerothVoices.CACertFile", ""));
         c.allowInsecureLocalHttp = sConfig.GetBoolDefault("AzerothVoices.AllowLocalHttp", true);
+        c.allowedHttpHosts = Trim(sConfig.GetStringDefault("AzerothVoices.AllowedHttpHosts", ""));
         c.connectTimeoutSeconds = Positive("AzerothVoices.ConnectTimeoutSeconds", 10, 1);
         c.requestTimeoutSeconds = Positive("AiPlayerbot.LLMGenerationTimeout", 60, 1);
         c.maxResponseBytes = Positive("AzerothVoices.MaxResponseBytes", 65536, 1024);
