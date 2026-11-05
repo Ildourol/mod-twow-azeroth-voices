@@ -243,7 +243,9 @@ AzerothVoices.Model = gpt-4o-mini
 
 ## Configuration Presets & Quick-Start
 
-### Preset A: High-Performance Cloud (OpenAI / DeepSeek)
+Apply these overrides to the existing keys in `etc/modules/mod-azeroth-voices.conf` after copying the full template. Choose Preset A or B for the provider; Preset C is an optional addition to either. These are tuning examples, not a list of compiled defaults.
+
+### Preset A: Cloud (OpenAI example)
 ```ini
 [worldserver]
 AzerothVoices.Enable = 1
@@ -251,6 +253,10 @@ AzerothVoices.ProviderMode = ChatCompletions
 AiPlayerbot.LLMApiEndpoint = https://api.openai.com/v1/chat/completions
 AiPlayerbot.LLMApiKey = env:OPENAI_API_KEY
 AzerothVoices.Model = gpt-4o-mini
+AiPlayerbot.LLMApiJson =
+AzerothVoices.ParserMode = ProviderJson
+AzerothVoices.ConnectTimeoutSeconds = 10
+AiPlayerbot.LLMGenerationTimeout = 60
 AzerothVoices.WorkerThreads = 8
 AzerothVoices.TokenRange.Mode = 2
 AzerothVoices.MinTokens = 20
@@ -259,20 +265,38 @@ AzerothVoices.AdaptiveLengthGuidance.Enable = 1
 AzerothVoices.GlobalRequestsPerMinute = 120
 ```
 
-### Preset B: Local & Self-Hosted (Ollama / LocalAI)
+For another OpenAI-compatible cloud provider, change the full endpoint, API-key environment variable, and model together to the values supplied by that provider. Ensure the environment variable is available to the mangosd process.
+
+### Preset B: Local Ollama (Llama 3.2)
 ```ini
 [worldserver]
 AzerothVoices.Enable = 1
 AzerothVoices.ProviderMode = ChatCompletions
 AiPlayerbot.LLMApiEndpoint = http://127.0.0.1:11434/v1/chat/completions
 AiPlayerbot.LLMApiKey = ollama
-AzerothVoices.AllowInsecureHttp = 1
+AzerothVoices.AllowLocalHttp = 1
 AzerothVoices.Model = llama3.2:latest
-AzerothVoices.WorkerThreads = 4
+AiPlayerbot.LLMApiJson =
+AzerothVoices.ParserMode = ProviderJson
+AzerothVoices.WorkerThreads = 1
 AzerothVoices.TokenRange.Mode = 1
 AzerothVoices.MaxTokens = 80
-AzerothVoices.RequestTimeoutSeconds = 8
+AzerothVoices.ConnectTimeoutSeconds = 10
+AiPlayerbot.LLMGenerationTimeout = 120
 ```
+
+This example assumes Ollama and mangosd run in the same host/network environment. `ollama` is a placeholder API key ignored by a standard local Ollama server; it is not a cloud API credential. See [Ollama's OpenAI compatibility documentation](https://docs.ollama.com/api/openai-compatibility).
+
+1. Start Ollama and run `ollama pull llama3.2` if the model is not installed.
+2. Run `ollama list` and set `AzerothVoices.Model` to the exact installed model name/tag.
+3. From the environment running mangosd, run `curl http://127.0.0.1:11434/api/tags` (`curl.exe` in Windows PowerShell) to check reachability.
+4. Restart mangosd after editing the configuration, then run `.av test` in-game.
+
+Start with 1 worker to limit concurrent local inference; increase it only if the model host can handle the load. The 120-second generation timeout allows more time for model loading and slower hardware.
+
+`127.0.0.1` refers to mangosd's own network environment. A separate PC, VM, or container may need a different setup. `AzerothVoices.AllowLocalHttp` permits local/loopback HTTP only; remote plain HTTP is rejected, so use a supported HTTPS endpoint for a remote provider. For LocalAI, LM Studio, or an authenticated proxy, use that server's actual endpoint, model identifier, and authentication requirements.
+
+The current keys are `AzerothVoices.AllowLocalHttp` and `AiPlayerbot.LLMGenerationTimeout`; replace the outdated `AllowInsecureHttp` and `RequestTimeoutSeconds` entries from older README examples.
 
 ### Preset C: Authentic Barrens World Chat Banter
 ```ini
