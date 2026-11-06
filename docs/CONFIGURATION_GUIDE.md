@@ -57,6 +57,7 @@
 21. [SNAPSHOT SYSTEM](#snapshot-system) (24 settings)
 22. [Structured local RAG (optional, no embeddings or extra provider call)](#structured-local-rag-optional-no-embeddings-or-extra-provider-call) (7 settings)
 23. [Azeroth Voices Companion addon and Chatter compatibility](#azeroth-voices-companion-addon-and-chatter-compatibility) (2 settings)
+24. [Shared secondary language](#24-shared-secondary-language) (9 settings)
 24. [Deployment recommendations](#deployment-recommendations)
 25. [Maintenance and updates](#maintenance-and-updates)
 
@@ -4327,10 +4328,69 @@ human within SayDistance; Party actors require a real human in the same party su
 
 ---
 
+## 24. Shared secondary language
+
+All conversational PlayerBots understand English plus one shared secondary language. Percentages govern bot-started speech, not which bots understand that language. No language SQL, population assignment, per-bot editor or custom language prompt is required.
+
+### Presets
+
+| Code | Language | Output |
+|---|---|---|
+| GR | Greeklish | Accept Greek script or Greeklish; reply in Latin Greeklish |
+| DE | German | Normal German spelling |
+| FR | French | Normal French spelling |
+| ES | Spanish | Normal Spanish spelling |
+| IT | Italian | Normal Italian spelling |
+| PT | Portuguese | Normal Portuguese spelling |
+| PL | Polish | Normal Polish spelling |
+| RU | Russian | Cyrillic, except protected references |
+| TR | Turkish | Normal Turkish spelling |
+| NL | Dutch | Normal Dutch spelling |
+
+### Settings and shipped defaults
+
+| Setting (prefix `AzerothVoices.Language.`) | Default | Behavior |
+|---|---|---|
+| `Enable` | `0` | Master switch; disabled bypasses language prompts, classification and repair. |
+| `Secondary` | `"GR"` | One preset shared by all bots; codes are case-insensitive. Invalid enabled selection disables language support with a diagnostic. |
+| `World.Enable` | `0` | Allow secondary-language world speech. When off, world speech stays English regardless of the percentage. |
+| `ScopeSecondaryChance` | See example below | Percentage for each scope's bot-started speech; one choice persists through a conversation. |
+| `PreserveGameTerms` | `1` | Preserve supplied English terminology, game names and class/race labels; translate surrounding prose. Names, commands and functional links remain protected in either mode. |
+| `NaturalPhrasing` | `1` | Prefer idiomatic conversational wording over literal translation. |
+| `GenderAgreement` | `1` | Match known character gender grammatically; use neutral phrasing when unknown. |
+| `PreventContextLanguageDrift` | `1` | Older history, memories and quotations must not override the chosen output language. |
+| `Repair.Enable` | `1` | Permit at most one extra API request after a detectable language/protocol error. Valid replies need no extra call. |
+
+```ini
+AzerothVoices.Language.Enable = 0
+AzerothVoices.Language.Secondary = "GR"
+AzerothVoices.Language.World.Enable = 0
+AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100"
+AzerothVoices.Language.PreserveGameTerms = 1
+AzerothVoices.Language.NaturalPhrasing = 1
+AzerothVoices.Language.GenderAgreement = 1
+AzerothVoices.Language.PreventContextLanguageDrift = 1
+AzerothVoices.Language.Repair.Enable = 1
+```
+
+### Percentages and world switch
+
+A percentage of 0 selects English, 50 selects either language equally over many conversations, and 100 selects the secondary language. Events and bot-started chatter use scope percentages; direct replies match supported player input or explicit language requests. Whole conversations retain their choice, including participating bots and Barrens follow-ups.
+
+`World.Enable=0` forces English even for replies to secondary-language player input. With `World.Enable=1` and `World:0`, bots initiate in English but can still reply in the secondary language. General, Trade and other public channels remain English.
+
+Scope names are case-insensitive. Missing scopes receive World:50 and 100 for other listed scopes. Unknown/duplicate scopes, malformed integers or values outside 0?100 invalidate the entire list and restore those defaults with a diagnostic. Percentages are chosen in C++, not rolled by the model.
+
+### Repair and verification
+
+Repair detects issues such as required metadata being absent/conflicting, empty output or Greek-script output where Latin Greeklish was requested. With repair enabled, one additional API request may consume additional input/output tokens. With repair disabled, or if repair fails, the bot asks for clarification in English. Protocol validation cannot guarantee semantic understanding or correct translation.
+
+Use `.av language status` for effective settings. In the addon, open Full Overview and read Server languages below Sentiment; Up/Down controls reveal overflow. Waiting means no valid server capability payload has arrived. Install the addon manually and use a server binary containing the matching LANGUAGE_INFO protocol. Source/config edits alone do not update a running binary.
+
 ## Deployment recommendations
 
 Start with the defaults in `conf/mod-azeroth-voices.conf.dist`. Adjust provider credentials and request limits for your environment, then tune the relevant proximity, group, guild, and random chatter settings directly in your live configuration. Keep a copy of local overrides before updating the module.
 
 ## Maintenance and updates
 
-The canonical default values are the assignments in [`conf/mod-azeroth-voices.conf.dist`](../conf/mod-azeroth-voices.conf.dist), not the examples in this guide. When upgrading, compare your live configuration with that template, preserve local overrides, and check new/retired keys. This reference tracks the repository template as reviewed on 25 October 2026; runtime validation and fallback behavior depend on the installed module revision.
+The canonical default values are the assignments in [`conf/mod-azeroth-voices.conf.dist`](../conf/mod-azeroth-voices.conf.dist), not the examples in this guide. When upgrading, compare your live configuration with that template, preserve local overrides, and check new/retired keys. This reference includes the category 24 language settings reviewed on 6 November 2026; runtime validation and fallback behavior depend on the installed module revision.

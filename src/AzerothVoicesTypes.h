@@ -213,6 +213,11 @@ namespace AzerothVoices
 
     struct ChatRequest
     {
+        bool languageActive = false, languageClassify = false, languageAccepted = true;
+        std::string languageSecondary, languagePrevious, languageKey;
+        uint32_t languageEpoch = 0;
+        char languageDecision = 0;
+
         uint64_t id = 0;
         RequestKind kind = RequestKind::Dialogue;
         RequestPriority priority = RequestPriority::Ambient;

@@ -382,6 +382,10 @@ namespace AzerothVoices
                     return false;
                 }
 
+                if (subcommand == "language") {
+                    handler->SendSysMessage(Manager::Instance().LanguageStatus().c_str());
+                    return false;
+                }
                 if (subcommand.empty() || subcommand == "status")
                 {
                     StatusSnapshot status = Manager::Instance().GetStatus();

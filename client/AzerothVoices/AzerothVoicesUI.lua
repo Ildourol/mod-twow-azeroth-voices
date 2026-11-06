@@ -324,6 +324,43 @@ function AzerothVoices:BuildEditor(panel)
         "Click a bot name to edit traits. Check bots to forget memories.", 16, -38)
     hint:SetFontObject(GameFontHighlightSmall)
 
+    -- Header Server Language Badge / Button (Always visible without scrolling)
+    local langHeaderBtn = CreateFrame("Button", nil, panel)
+    langHeaderBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -36, -16)
+    langHeaderBtn:SetWidth(260)
+    langHeaderBtn:SetHeight(22)
+    langHeaderBtn:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 8,
+        edgeSize = 8,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    langHeaderBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.75)
+
+    local langHeaderLabel = langHeaderBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    langHeaderLabel:SetPoint("RIGHT", langHeaderBtn, "RIGHT", -6, 0)
+    langHeaderLabel:SetText(AzerothVoices.serverLanguageShort or "|cffffd100Lang:|r |cff888888Waiting for server...|r")
+    langHeaderBtn.label = langHeaderLabel
+    panel.langHeaderButton = langHeaderBtn
+
+    langHeaderBtn:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_BOTTOMRIGHT")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("Azeroth Voices Server Languages", 1, 0.82, 0)
+        GameTooltip:AddLine(AzerothVoices.serverLanguageSummary or "Waiting for server language settings...", 1, 1, 1, 1)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Click to refresh language settings.", 0.6, 0.6, 0.6, 1)
+        GameTooltip:Show()
+    end)
+    langHeaderBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    langHeaderBtn:SetScript("OnClick", function()
+        AzerothVoices:RequestRoster()
+    end)
+
     -- Left Column: Roster, Search & Forget (Width 144, Height 530)
     local left = CreateFrame("Frame", nil, panel)
     left:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, -76)
@@ -340,9 +377,10 @@ function AzerothVoices:BuildEditor(panel)
     list:SetHeight(384)
     list:EnableMouseWheel(true)
 
-    local bar = slider(list)
-    bar:SetPoint("TOPRIGHT", list, "TOPRIGHT", 0, 0)
-    bar:SetPoint("BOTTOMRIGHT", list, "BOTTOMRIGHT", 0, 0)
+    local rosterSlider = slider(list)
+    rosterSlider:SetPoint("TOPRIGHT", list, "TOPRIGHT", 0, 0)
+    rosterSlider:SetPoint("BOTTOMRIGHT", list, "BOTTOMRIGHT", 0, 0)
+    panel.rosterSlider = rosterSlider
 
     local rows = {}
     local empty = createLabel(list, "No known bots", 2, -6)
@@ -432,7 +470,7 @@ function AzerothVoices:BuildEditor(panel)
         applyEditorScroll(scrollOffset - delta * 20)
     end
 
-    scroll:SetScript("OnSizeChanged", function()
+    scroll:SetScript("OnShow", function()
         updateEditorScroll()
     end)
 
@@ -440,6 +478,11 @@ function AzerothVoices:BuildEditor(panel)
     scroll:SetScript("OnMouseWheel", onEditorMouseWheel)
     content:EnableMouseWheel(true)
     content:SetScript("OnMouseWheel", onEditorMouseWheel)
+    local languageScrollUp = button(panel, "Up", 40, function() applyEditorScroll(scrollOffset - 80) end, 18)
+    languageScrollUp:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -60, 40)
+    local languageScrollDown = button(panel, "Down", 48, function() applyEditorScroll(scrollOffset + 80) end, 18)
+    languageScrollDown:SetPoint("LEFT", languageScrollUp, "RIGHT", 4, 0)
+
 
     local contentWidth = 460
 
@@ -489,10 +532,14 @@ function AzerothVoices:BuildEditor(panel)
     panel.regenToneBtn = regenToneBtn
 
     panel.tone = createToneBox(content, 0, -158, contentWidth, 50)
+    panel.tone:EnableMouseWheel(true)
+    panel.tone:SetScript("OnMouseWheel", onEditorMouseWheel)
 
     -- Background Story
     local lStory = createLabel(content, "Background Story", 0, -216)
     panel.backstory = createBackstoryBox(content, 0, -232, contentWidth, 160)
+    panel.backstory:EnableMouseWheel(true)
+    panel.backstory:SetScript("OnMouseWheel", onEditorMouseWheel)
 
     -- Regenerate Story Button
     local regenStoryBtn = button(content, "Generate Story", 120, function()
@@ -557,22 +604,22 @@ function AzerothVoices:BuildEditor(panel)
     barHolder:SetBackdropColor(0, 0, 0, 0.85)
     barHolder:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
 
-    local bar = CreateFrame("StatusBar", nil, barHolder)
-    bar:SetPoint("TOPLEFT", barHolder, "TOPLEFT", 3, -3)
-    bar:SetPoint("BOTTOMRIGHT", barHolder, "BOTTOMRIGHT", -3, 3)
-    bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    if bar:GetStatusBarTexture() and bar:GetStatusBarTexture().SetHorizTile then
-        bar:GetStatusBarTexture():SetHorizTile(false)
+    local sentimentBar = CreateFrame("StatusBar", nil, barHolder)
+    sentimentBar:SetPoint("TOPLEFT", barHolder, "TOPLEFT", 3, -3)
+    sentimentBar:SetPoint("BOTTOMRIGHT", barHolder, "BOTTOMRIGHT", -3, 3)
+    sentimentBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    if sentimentBar:GetStatusBarTexture() and sentimentBar:GetStatusBarTexture().SetHorizTile then
+        sentimentBar:GetStatusBarTexture():SetHorizTile(false)
     end
-    bar:SetMinMaxValues(0, 200)
-    bar:SetValue(100)
-    bar:SetStatusBarColor(0.9, 0.82, 0.2)
+    sentimentBar:SetMinMaxValues(0, 200)
+    sentimentBar:SetValue(100)
+    sentimentBar:SetStatusBarColor(0.9, 0.82, 0.2)
 
-    local barText = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    barText:SetPoint("CENTER", bar, "CENTER", 0, 0)
+    local barText = sentimentBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    barText:SetPoint("CENTER", sentimentBar, "CENTER", 0, 0)
     barText:SetText("Score: 0 | Neutral")
-    bar.text = barText
-    panel.sentimentBar = bar
+    sentimentBar.text = barText
+    panel.sentimentBar = sentimentBar
     panel.sentimentBarHolder = barHolder
 
     barHolder:EnableMouse(true)
@@ -623,6 +670,17 @@ function AzerothVoices:BuildEditor(panel)
 
     content:SetHeight(488)
 
+    -- Server-wide language capability (read only).
+    local lLanguage = createLabel(content, "Server languages", 0, -488)
+    panel.languageLabel = lLanguage
+    local lLangSource = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    lLangSource:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -508)
+    lLangSource:SetWidth(contentWidth)
+    lLangSource:SetHeight(66)
+    lLangSource:SetJustifyH("LEFT")
+    lLangSource:SetText(AzerothVoices.serverLanguageSummary or "Waiting for server language settings...")
+    panel.languageSourceText = lLangSource
+
     -- Status label at bottom
     local status = createLabel(panel, "", 16, 8)
     status:ClearAllPoints()
@@ -649,6 +707,7 @@ function AzerothVoices:BuildEditor(panel)
             scaleLow:Hide(); scaleMid:Hide(); scaleHigh:Hide()
             forgetBtn:Show()
             all:Show(); clear:Show()
+            lLanguage:Hide(); lLangSource:Hide()
             content:SetHeight(230)
         elseif mode == "stories" then
             l1:Hide(); t1.holder:Hide()
@@ -665,6 +724,7 @@ function AzerothVoices:BuildEditor(panel)
             scaleLow:Hide(); scaleMid:Hide(); scaleHigh:Hide()
             forgetBtn:Hide()
             all:Hide(); clear:Hide()
+            lLanguage:Hide(); lLangSource:Hide()
             content:SetHeight(380)
         else
             -- "full" mode
@@ -681,7 +741,8 @@ function AzerothVoices:BuildEditor(panel)
             scaleLow:Show(); scaleMid:Show(); scaleHigh:Show()
             forgetBtn:Show()
             all:Show(); clear:Show()
-            content:SetHeight(488)
+            lLanguage:Show(); lLangSource:Show()
+            content:SetHeight(590)
         end
         updateEditorScroll()
         AzerothVoices:UpdateSaveButton()
@@ -699,10 +760,10 @@ function AzerothVoices:BuildEditor(panel)
         local totalFiltered = table.getn(filtered)
         local visible = 16
         local maximum = math.max(0, totalFiltered - visible)
-        bar:SetMinMaxValues(0, maximum)
-        local offset = math.min(maximum, math.floor(bar:GetValue() or 0))
-        bar:SetValue(offset)
-        if maximum > 0 then bar:Show() else bar:Hide() end
+        rosterSlider:SetMinMaxValues(0, maximum)
+        local offset = math.min(maximum, math.floor(rosterSlider:GetValue() or 0))
+        rosterSlider:SetValue(offset)
+        if maximum > 0 then rosterSlider:Show() else rosterSlider:Hide() end
 
         for i = 1, visible do
             if not rows[i] then
@@ -714,15 +775,22 @@ function AzerothVoices:BuildEditor(panel)
                 row:EnableMouseWheel(true)
                 row:SetScript("OnMouseWheel", function()
                     local delta = arg1 or 0
-                    local _, maxVal = bar:GetMinMaxValues()
-                    local cur = bar:GetValue() or 0
-                    bar:SetValue(math.max(0, math.min(maxVal, cur - (delta * 3))))
+                    local _, maxVal = rosterSlider:GetMinMaxValues()
+                    local cur = rosterSlider:GetValue() or 0
+                    rosterSlider:SetValue(math.max(0, math.min(maxVal, cur - (delta * 3))))
                 end)
 
                 local check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
                 check:SetWidth(24)
                 check:SetHeight(24)
                 check:SetPoint("LEFT", row, "LEFT", 0, 0)
+                check:EnableMouseWheel(true)
+                check:SetScript("OnMouseWheel", function()
+                    local delta = arg1 or 0
+                    local _, maxVal = rosterSlider:GetMinMaxValues()
+                    local cur = rosterSlider:GetValue() or 0
+                    rosterSlider:SetValue(math.max(0, math.min(maxVal, cur - (delta * 3))))
+                end)
                 row.check = check
 
                 local text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -825,15 +893,15 @@ function AzerothVoices:BuildEditor(panel)
         updating = false
     end
 
-    bar:SetScript("OnValueChanged", panel.refreshList)
+    rosterSlider:SetScript("OnValueChanged", panel.refreshList)
     list:SetScript("OnMouseWheel", function()
         local delta = arg1 or 0
-        local _, maximum = bar:GetMinMaxValues()
-        local cur = bar:GetValue() or 0
-        bar:SetValue(math.max(0, math.min(maximum, cur - (delta * 3))))
+        local _, maximum = rosterSlider:GetMinMaxValues()
+        local cur = rosterSlider:GetValue() or 0
+        rosterSlider:SetValue(math.max(0, math.min(maximum, cur - (delta * 3))))
     end)
     search:SetScript("OnTextChanged", function()
-        bar:SetValue(0)
+        rosterSlider:SetValue(0)
         panel.refreshList()
     end)
 

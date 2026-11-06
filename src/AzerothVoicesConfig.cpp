@@ -1,4 +1,5 @@
 #include "AzerothVoicesConfig.h"
+#include "AzerothVoicesLanguage.h"
 
 #include "Config/Config.h"
 #include "Log.h"
@@ -287,6 +288,41 @@ namespace AzerothVoices
     Config Config::Load()
     {
         Config c;
+        c.languageEnabled = sConfig.GetBoolDefault("AzerothVoices.Language.Enable", false);
+        if (c.languageEnabled) {
+            c.languageSecondary = Language::Normalize(Trim(sConfig.GetStringDefault("AzerothVoices.Language.Secondary", "GR")));
+            c.languageWorldEnabled = sConfig.GetBoolDefault("AzerothVoices.Language.World.Enable", false);
+            c.languageNatural = sConfig.GetBoolDefault("AzerothVoices.Language.NaturalPhrasing", true);
+            c.languageGender = sConfig.GetBoolDefault("AzerothVoices.Language.GenderAgreement", true);
+            c.languagePreventDrift = sConfig.GetBoolDefault("AzerothVoices.Language.PreventContextLanguageDrift", true);
+            c.languageRepair = sConfig.GetBoolDefault("AzerothVoices.Language.Repair.Enable", true);
+            std::map<std::string,uint32_t> defaults = {{"world",50},{"guild",100},{"party",100},{"raid",100},{"whisper",100},{"say",100},{"yell",100}};
+            auto parsed = defaults;
+            std::set<std::string> seen;
+            std::string raw = Trim(sConfig.GetStringDefault("AzerothVoices.Language.ScopeSecondaryChance", "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100"));
+            bool valid = !raw.empty() && raw.back() != ',';
+            std::istringstream scopes(raw); std::string part;
+            while (std::getline(scopes, part, ',')) {
+                auto colon = part.find(':');
+                if (colon == std::string::npos) {valid=false;break;}
+                auto key = Lower(Trim(part.substr(0,colon)));
+                auto number = Trim(part.substr(colon+1));
+                if (!defaults.count(key) || !seen.insert(key).second || number.empty() || number.size()>3 ||
+                    !std::all_of(number.begin(),number.end(),[](unsigned char ch){return ch>='0'&&ch<='9';})) {valid=false;break;}
+                unsigned value = static_cast<unsigned>(std::stoul(number));
+                if(value>100) {valid=false;break;}
+                parsed[key]=value;
+            }
+            c.languageScopeChances = valid ? parsed : defaults;
+            if (!valid) sLog.outError("[AzerothVoices][LANGUAGE] Invalid scope percentages; using defaults.");
+            c.languageWorldSecondaryChance = c.languageScopeChances["world"];
+            c.languagePreserveGameTerms = sConfig.GetBoolDefault("AzerothVoices.Language.PreserveGameTerms", true);
+            if (!Language::Valid(c.languageSecondary)) {
+                sLog.outError("[AzerothVoices][LANGUAGE] Invalid shared secondary language; disabling language feature.");
+                c.languageEnabled = false;
+            }
+        }
+
         c.enabled = sConfig.GetBoolDefault("AzerothVoices.Enable", true);
         c.debug = sConfig.GetBoolDefault("AzerothVoices.Debug", false);
         c.playerbotsLlmEnabled = sConfig.GetBoolDefault("AiPlayerbot.LLMEnabled", false);

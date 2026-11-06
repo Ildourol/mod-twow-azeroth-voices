@@ -94,3 +94,15 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
     set_property(TARGET azeroth_voices_tests PROPERTY CXX_STANDARD 17)
   endif()
 endif()
+
+if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS"
+   AND (BUILD_TESTING OR AZEROTH_VOICES_BUILD_TESTS)
+   AND EXISTS "${CMAKE_CURRENT_LIST_DIR}/tests/LanguageTests.cpp"
+   AND NOT TARGET azeroth_voices_language_tests)
+  add_executable(azeroth_voices_language_tests
+    "${CMAKE_CURRENT_LIST_DIR}/tests/LanguageTests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesLanguage.cpp")
+  target_include_directories(azeroth_voices_language_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src")
+  set_property(TARGET azeroth_voices_language_tests PROPERTY CXX_STANDARD 17)
+  add_test(NAME azeroth_voices_language_tests COMMAND azeroth_voices_language_tests)
+endif()

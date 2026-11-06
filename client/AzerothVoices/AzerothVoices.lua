@@ -15,6 +15,7 @@ AzerothVoices.backstoryPollRemaining = 0
 AzerothVoices.loadedSentiment = 0
 AzerothVoices.requestId = 0
 AzerothVoices.inboundBuffers = {}
+AzerothVoices.backstoryPages = {}
 AzerothVoices.sendQueue = {}
 AzerothVoices.sendElapsed = 0
 AzerothVoices.saveLocked = false
@@ -23,6 +24,11 @@ AzerothVoices.uploadGuid = nil
 AzerothVoices.uploadState = nil
 AzerothVoices.unsavedTraits = nil
 AzerothVoices.loadedTraits = nil
+AzerothVoices.generatingAllInfo = nil
+AzerothVoices.genAllStep = nil
+AzerothVoices.genAllTimer = 0
+AzerothVoices.serverLanguageSummary = nil
+AzerothVoices.serverLanguageShort = nil
 
 local SEND_INTERVAL = 0.3
 local SAVE_LOCK_TIMEOUT = 20
@@ -204,6 +210,8 @@ function AzerothVoices:AbortUpload(message, r, g, b)
     self.uploadGuid = nil
     self.uploadState = nil
     self.generatingAllInfo = nil
+    self.genAllStep = nil
+    self.genAllTimer = 0
     self:StopTonePoll()
     self:StopBackstoryPoll()
     self:RestoreUnsavedTraits()
@@ -251,6 +259,8 @@ function AzerothVoices:HandleTonePoll(elapsed)
             1, 0.82, 0
         )
         self.generatingAllInfo = nil
+        self.genAllStep = nil
+        self.genAllTimer = 0
         self:StopTonePoll()
         return
     end
@@ -439,6 +449,8 @@ function AzerothVoices:HandleBackstoryPoll(elapsed)
             1, 0.82, 0
         )
         self.generatingAllInfo = nil
+        self.genAllStep = nil
+        self.genAllTimer = 0
         self:StopBackstoryPoll()
         return
     end
@@ -593,11 +605,15 @@ function AzerothVoices:ApplyProfile(profile)
             local bName = profile.name or self:GetSelectedBotName() or "bot"
             if self.generatingAllInfo then
                 self.generatingAllInfo = nil
+                self.genAllStep = nil
+                self.genAllTimer = 0
                 self:SetRegenStoryEnabled(true)
                 self:SetStatus("All info generated for " .. bName .. "!", 0.3, 1, 0.3)
                 if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
                     DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r All info generated for |cff00ff00" .. bName .. "|r (Traits -> Backstory -> Tone).")
                 end
+                self:SendCommand("get " .. profile.guid)
+                self:UpdateRosterViews()
             else
                 self:SetStatus("Generated tone for " .. bName .. ".", 0.3, 1, 0.3)
             end
@@ -884,7 +900,9 @@ function AzerothVoices:RegenBackstory()
 end
 
 function AzerothVoices:RegenAll()
-    if self.pendingProfileGuid or self.forgetQueue or self.pendingToneGuid or self.pendingBackstoryGuid then return end
+    if self.generatingAllInfo or self.pendingProfileGuid or self.forgetQueue or self.pendingToneGuid or self.pendingBackstoryGuid then
+        return
+    end
     if not self.selectedGuid then
         self:SetStatus("Select a bot first.", 1, 0.2, 0.2)
         if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
@@ -894,9 +912,11 @@ function AzerothVoices:RegenAll()
     end
 
     self.generatingAllInfo = true
+    self.genAllStep = "traits"
+    self.genAllTimer = 0
     self:SetRegenStoryEnabled(false)
     local bName = self:GetSelectedBotName() or "bot"
-    self:SetStatus("Generating all info for " .. bName .. " (1/3: Traits)...", 1, 0.82, 0)
+    self:SetStatus("Generating all info for " .. bName .. " (step 1/3: Traits)...", 1, 0.82, 0)
     if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
         DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generating all info for |cff00ff00" .. bName .. "|r sequentially (Traits -> Backstory -> Tone)...")
     end
@@ -1039,11 +1059,12 @@ function AzerothVoices:HandleBackstoryPayload(rest)
             self:StopBackstoryPoll()
             local bName = self:GetSelectedBotName() or "bot"
             if self.generatingAllInfo then
-                self:SetStatus("Backstory generated! Generating tone via LLM (step 3/3)...", 1, 0.82, 0)
+                self:SetStatus("Backstory generated for " .. bName .. "! Waiting before tone generation (step 3/3)...", 1, 0.82, 0)
                 if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
-                    DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generated background story for |cff00ff00" .. bName .. "|r. Now generating tone...")
+                    DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Generated background story for |cff00ff00" .. bName .. "|r. Preparing tone...")
                 end
-                self:RegenTone()
+                self.genAllStep = "wait_tone"
+                self.genAllTimer = 1.2
             else
                 self:SetStatus("Backstory generated for " .. bName .. ".", 0.3, 1, 0.3)
                 if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
@@ -1076,11 +1097,13 @@ function AzerothVoices:HandleUpdatedPayload(rest)
         self:SetSaveEnabled(false)
 
         if self.generatingAllInfo then
-            self:SetStatus("Traits saved! Generating background story via LLM (step 2/3)...", 1, 0.82, 0)
+            local bName = botName or "bot"
+            self:SetStatus("Traits saved for " .. bName .. "! Waiting before backstory generation (step 2/3)...", 1, 0.82, 0)
             if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
-                DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Traits saved for |cff00ff00" .. botName .. "|r. Now generating background story...")
+                DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[AzerothVoices]|r Traits saved for |cff00ff00" .. bName .. "|r. Preparing background story...")
             end
-            self:RegenBackstory()
+            self.genAllStep = "wait_backstory"
+            self.genAllTimer = 1.2
         else
             if not self.pendingToneGuid then
                 self:StopTonePoll()
@@ -1159,6 +1182,8 @@ function AzerothVoices:HandleErrorPayload(rest)
     end
     self.pendingRoster = nil
     self.generatingAllInfo = nil
+    self.genAllStep = nil
+    self.genAllTimer = 0
     self:StopTonePoll()
     self:StopBackstoryPoll()
     local _, _, _, encoded = string.find(
@@ -1173,12 +1198,77 @@ function AzerothVoices:HandleErrorPayload(rest)
     end
 end
 
+function AzerothVoices:UpdateLanguageUI()
+    local text = self.serverLanguageSummary or "Waiting for server language settings..."
+    local short = self.serverLanguageShort or "|cffffd100Lang:|r |cff888888Waiting for server...|r"
+    if self.frame then
+        if self.frame.languageSourceText then
+            self.frame.languageSourceText:SetText(text)
+        end
+        if self.frame.langHeaderButton and self.frame.langHeaderButton.label then
+            self.frame.langHeaderButton.label:SetText(short)
+        end
+    end
+end
+
 function AzerothVoices:HandlePayload(payload)
     local _, _, command, rest = string.find(payload, "^(%S+)%s*(.*)$")
     if not command then
         return
     end
 
+    if command == "LANGUAGE_INFO" then
+        local fields = {}
+        for value in string.gfind(rest, "%S+") do table.insert(fields, value) end
+        if table.getn(fields) < 2 then return end
+
+        local enabled = (fields[1] == "1")
+        local rawLang = fields[2] or "NONE"
+        local upperLang = string.upper(rawLang)
+        local worldEnabled = (fields[3] == "1")
+
+        local names = {
+            GR = "Greeklish", GREEKLISH = "Greeklish",
+            DE = "German", GERMAN = "German",
+            FR = "French", FRENCH = "French",
+            ES = "Spanish", SPANISH = "Spanish",
+            IT = "Italian", ITALIAN = "Italian",
+            PT = "Portuguese", PORTUGUESE = "Portuguese",
+            PL = "Polish", POLISH = "Polish",
+            RU = "Russian", RUSSIAN = "Russian",
+            TR = "Turkish", TURKISH = "Turkish",
+            NL = "Dutch", DUTCH = "Dutch"
+        }
+
+        local langName = names[upperLang] or rawLang
+
+        if not enabled or upperLang == "NONE" or upperLang == "0" or upperLang == "" then
+            self.serverLanguageSummary = "Secondary language disabled"
+            self.serverLanguageShort = "|cffffd100Lang:|r |cffaaaaaaEnglish Only|r"
+        else
+            if table.getn(fields) >= 10 then
+                for i = 4, 10 do
+                    local n = tonumber(fields[i] or "")
+                    if not n or n > 100 or n < 0 then return end
+                end
+            end
+            local wPct = fields[4] or "50"
+            local gPct = fields[5] or "100"
+            local pPct = fields[6] or "100"
+            local rPct = fields[7] or "100"
+            local whPct = fields[8] or "100"
+            local sPct = fields[9] or "100"
+            local yPct = fields[10] or "100"
+
+            self.serverLanguageSummary = "English + " .. langName .. " (all bots)\n" ..
+                "World: " .. (worldEnabled and (wPct .. "%") or "English only") ..
+                " | Guild: " .. gPct .. "% | Party: " .. pPct .. "% | Raid: " .. rPct .. "%\n" ..
+                "Whisper: " .. whPct .. "% | Say: " .. sPct .. "% | Yell: " .. yPct .. "%"
+            self.serverLanguageShort = "|cffffd100Lang:|r |cff00ff00English + " .. langName .. "|r"
+        end
+        self:UpdateLanguageUI()
+        return
+    end
     if command == "ROSTER_BEGIN" then
         self.pendingRoster = {}
         return
@@ -1239,6 +1329,34 @@ function AzerothVoices:HandlePayload(payload)
 
     if command == "FORGOTTEN" then
         self:HandleForgottenPayload(rest)
+        return
+    end
+
+    if command == "BACKSTORY_PAGE" then
+        local _, _, guid, pageIdxStr, pageCountStr, chunk =
+            string.find(rest, "^(%d+)%s+(%d+)%s+(%d+)%s*(.*)$")
+        if guid and pageIdxStr and pageCountStr then
+            local pageIdx = tonumber(pageIdxStr)
+            local pageCount = tonumber(pageCountStr)
+            local pageKey = (self.currentReqId or "0") .. ":" .. guid
+            self.backstoryPages = self.backstoryPages or {}
+            if not self.backstoryPages[pageKey] then
+                self.backstoryPages[pageKey] = { pages = {}, count = 0 }
+            end
+            local buf = self.backstoryPages[pageKey]
+            if not buf.pages[pageIdx] then
+                buf.pages[pageIdx] = chunk or ""
+                buf.count = buf.count + 1
+            end
+            if buf.count >= pageCount then
+                local full = ""
+                for p = 1, pageCount do
+                    full = full .. (buf.pages[p] or "")
+                end
+                self.backstoryPages[pageKey] = nil
+                self:HandleBackstoryPayload(guid .. " " .. full)
+            end
+        end
         return
     end
 
@@ -1306,6 +1424,7 @@ function AzerothVoices:HandleAddonMessage(prefix, message, channel, sender)
             payload = payload .. (buf.parts[i] or "")
         end
         self.inboundBuffers[bufferKey] = nil
+        self.currentReqId = reqId
         self:HandlePayload(payload)
     end
 end
@@ -1360,6 +1479,32 @@ end
 
 SlashCmdList["CHATTER"] = SlashCmdList["AZEROTHVOICES"]
 
+function AzerothVoices:HandleGenerateAll(elapsed)
+    if not self.generatingAllInfo or not self.genAllStep then
+        return
+    end
+
+    if self.genAllTimer and self.genAllTimer > 0 then
+        self.genAllTimer = self.genAllTimer - elapsed
+        if self.genAllTimer > 0 then
+            return
+        end
+        self.genAllTimer = 0
+    end
+
+    if self.genAllStep == "wait_backstory" then
+        self.genAllStep = "backstory"
+        local bName = self:GetSelectedBotName() or "bot"
+        self:SetStatus("Generating background story for " .. bName .. " via LLM (step 2/3)...", 1, 0.82, 0)
+        self:RegenBackstory()
+    elseif self.genAllStep == "wait_tone" then
+        self.genAllStep = "tone"
+        local bName = self:GetSelectedBotName() or "bot"
+        self:SetStatus("Generating tone for " .. bName .. " via LLM (step 3/3)...", 1, 0.82, 0)
+        self:RegenTone()
+    end
+end
+
 AzerothVoices:SetScript("OnUpdate", function()
     local self = this
     local elapsed = arg1 or 0
@@ -1376,6 +1521,7 @@ AzerothVoices:SetScript("OnUpdate", function()
     self:HandleForgetQueue(elapsed)
     self:HandleTonePoll(elapsed)
     self:HandleBackstoryPoll(elapsed)
+    self:HandleGenerateAll(elapsed)
 end)
 
 function AzerothVoices:HandleSystemMessage(msg)

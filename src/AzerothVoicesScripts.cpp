@@ -1,5 +1,10 @@
+#include "AzerothVoicesChannelMembership.h"
 #include "AzerothVoicesManager.h"
 
+#include "Channel.h"
+#include <map>
+#include <mutex>
+#include <utility>
 #include "Creature.h"
 #include "GameObject.h"
 #include "Guild.h"
@@ -106,6 +111,7 @@ namespace AzerothVoices
 
             void OnUpdate(uint32 diff) override
             {
+                ChannelMembership::Drain();
                 Manager::Instance().Update(diff);
             }
 
@@ -256,6 +262,7 @@ namespace AzerothVoices
                     std::lock_guard<std::mutex> lock(s_whisperTargetsMutex);
                     s_pendingWhisperTargets.erase(player->GetObjectGuid().GetRawValue());
                 }
+                if (player) ChannelMembership::Logout(player->GetObjectGuid().GetRawValue());
                 Manager::Instance().HandlePlayerLogout(player);
                 Manager::Instance().HandleEvent(player, "player_logout");
             }
@@ -314,8 +321,36 @@ namespace AzerothVoices
         {
         public:
             AzerothVoicesServerScript()
-                : ServerScript("AzerothVoicesServerScript", { SERVERHOOK_CAN_PACKET_RECEIVE })
+                : ServerScript("AzerothVoicesServerScript", { SERVERHOOK_CAN_PACKET_RECEIVE, SERVERHOOK_CAN_PACKET_SEND })
             {
+            }
+
+            bool CanPacketSend(WorldSession* session, WorldPacket const& original) override
+            {
+                if (!session || session->IsHeadless() || !session->GetPlayer() ||
+                    original.GetOpcode() != SMSG_CHANNEL_NOTIFY)
+                    return true;
+                try
+                {
+                    WorldPacket packet(original);
+                    packet.rpos(0);
+                    uint8 notification = 0;
+                    std::string channel;
+                    packet >> notification >> channel;
+                    uint64_t guid = session->GetPlayer()->GetObjectGuid().GetRawValue();
+                    if (notification == CHAT_YOU_JOINED_NOTICE)
+                        ChannelMembership::Observe(guid, channel, true);
+                    else if (notification == CHAT_YOU_LEFT_NOTICE || notification == CHAT_NOT_MEMBER_NOTICE)
+                        ChannelMembership::Observe(guid, channel, false);
+                    else if (notification == CHAT_PLAYER_KICKED_NOTICE || notification == CHAT_PLAYER_BANNED_NOTICE)
+                    {
+                        ObjectGuid target;
+                        packet >> target;
+                        ChannelMembership::Observe(target.GetRawValue(), channel, false);
+                    }
+                }
+                catch (ByteBufferException const&) { }
+                return true;
             }
 
             bool CanPacketReceive(WorldSession* session, WorldPacket const& original) override

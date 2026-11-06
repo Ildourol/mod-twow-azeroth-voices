@@ -1,4 +1,5 @@
 #include "AzerothVoicesManager.h"
+#include "AzerothVoicesLanguage.h"
 
 #include "AzerothVoicesAddon.h"
 #include "AzerothVoicesBossDialogue.h"
@@ -11,9 +12,8 @@
 
 #include "Cell.h"
 #include "CellImpl.h"
-#define private public
 #include "Channel.h"
-#undef private
+#include "AzerothVoicesChannelMembership.h"
 #include "ChannelMgr.h"
 #include "Chat.h"
 #include "Creature.h"
@@ -514,7 +514,7 @@ namespace AzerothVoices
                     Player* player = entry.second;
                     if (!player || !player->IsInWorld() || !player->GetSession())
                         continue;
-                    if (!Script_IsAIControlled(player) && channel->IsOn(player->GetObjectGuid()))
+                    if (!Script_IsAIControlled(player) && ChannelMembership::Contains(player->GetObjectGuid().GetRawValue(), channelName))
                         return true;
                 }
                 return false;
@@ -1237,6 +1237,7 @@ namespace AzerothVoices
         LoadRag();
         LoadInstanceLore();
         ++m_epoch;
+        m_languageTurns.clear();
         m_stopping = false;
         m_started = true;
         m_lastErrorLog = Clock::time_point();
@@ -1623,6 +1624,20 @@ namespace AzerothVoices
                 std::this_thread::sleep_for(std::chrono::milliseconds(
                     m_config->retryBackoffMilliseconds * retries));
             } while (Clock::now() <= request.expires);
+            if (request.languageActive && m_config->languageRepair && completion.success &&
+                !Language::ResponseValid(completion.responseText, request.languageSecondary, request.languageClassify, request.actor.name, request.speaker.name) &&
+                !m_stopping && Clock::now() <= request.expires) {
+                ChatRequest repair = request;
+                repair.systemPrompt += "\nYour previous response violated the language protocol. Regenerate the answer with the exact classification prefix when requested and Latin Greeklish for Greek output.";
+                completion = Provider::Execute(*m_config, repair);
+                httpAttempts += completion.httpAttemptCount;
+                // Keep the original prompt out of history and diagnostics.
+                completion.request = request;
+                if (!completion.success) {
+                    completion.success = true;
+                    completion.responseText.clear();
+                }
+            }
             completion.httpAttemptCount = httpAttempts;
             --m_inFlight;
 
@@ -2020,8 +2035,61 @@ namespace AzerothVoices
         return false;
     }
 
+    void Manager::PruneLanguageTurns()
+    {
+        auto now = Clock::now();
+        for (auto it = m_languageTurns.begin(); it != m_languageTurns.end(); ) {
+            if (now - it->second.touched >= std::chrono::minutes(15)) it = m_languageTurns.erase(it);
+            else ++it;
+        }
+        if (m_languageTurns.size() >= 4096) {
+            auto oldest = std::min_element(m_languageTurns.begin(), m_languageTurns.end(),
+                [](auto const& a, auto const& b) { return a.second.touched < b.second.touched; });
+            if (oldest != m_languageTurns.end()) m_languageTurns.erase(oldest);
+        }
+    }
+
+    std::string Manager::LanguageStatus() const
+    {
+        if (!m_config || !m_config->languageEnabled) return "Language support disabled (no language prompt overhead).";
+        std::string status = "English + " + Language::Name(m_config->languageSecondary) +
+            "; world=" + (m_config->languageWorldEnabled ? "enabled" : "English only");
+        for (auto const& entry : m_config->languageScopeChances)
+            status += "; " + entry.first + ":" + std::to_string(entry.second) + "%";
+        return status;
+    }
+
     bool Manager::Enqueue(ChatRequest request)
     {
+        if (m_config && m_config->languageEnabled && request.kind == RequestKind::Dialogue &&
+            request.actor.kind == ActorKind::PlayerBot) {
+            request.languageActive = true;
+            request.languageEpoch = m_epoch;
+            bool const publicEnglish = request.scope == ChatScope::Channel ||
+                (request.scope == ChatScope::World && !m_config->languageWorldEnabled);
+            request.languageSecondary = publicEnglish ? "" : m_config->languageSecondary;
+            request.languageClassify = !publicEnglish && !request.ambient &&
+                !request.speaker.isBot && !request.incomingMessage.empty() && request.trigger.compare(0,6,"event:") != 0 &&
+                (request.scope != ChatScope::World || request.priority != RequestPriority::Ambient);
+            if (request.barrensScene)
+                request.languageKey = "barrens:" + std::to_string(request.barrensSceneId);
+            else if (request.exchangeId.IsValid())
+                request.languageKey = "exchange:" + std::to_string(request.exchangeId.domain) + ":" + std::to_string(request.exchangeId.id);
+            else if (request.trigger.compare(0,6,"event:") == 0)
+                request.languageKey = "event:" + std::to_string(request.id);
+            else
+                request.languageKey = "direct:" + std::to_string(request.actor.guid) + ":" +
+                    std::to_string(request.speaker.guid) + ":" + request.scopeKey;
+            PruneLanguageTurns();
+            auto prior = m_languageTurns.find(request.languageKey);
+            bool const known = prior != m_languageTurns.end() && Clock::now() - prior->second.touched < std::chrono::minutes(15);
+            if (!publicEnglish && known) request.languagePrevious = prior->second.code;
+            if (!publicEnglish && !request.languageClassify && !known) {
+                request.languagePrevious = Roll(m_config->languageScopeChances.count(Lower(ScopeName(request.scope))) ? m_config->languageScopeChances.at(Lower(ScopeName(request.scope))) : 100) ? request.languageSecondary : "";
+
+            }
+        }
+
         if (!m_started || m_stopping || m_paused || !m_config)
             return false;
 
@@ -2123,6 +2191,11 @@ namespace AzerothVoices
             queueMissingPersonality = !personalityRequest && request.personalityGenerationNeeded;
             if (queueMissingPersonality)
                 personalityActor = request.actor;
+            if (request.languageActive && !request.languageClassify && !request.languageSecondary.empty()) {
+                auto existing = m_languageTurns.find(request.languageKey);
+                if (existing == m_languageTurns.end())
+                    m_languageTurns[request.languageKey] = {request.languagePrevious, 0, now, request.actor.guid, request.speaker.guid, true};
+            }
             m_queues[priorityIndex].push_back(std::move(request));
             m_requestBudget.push_back(now);
             if (!personalityRequest && cooldownSeconds > 0)
@@ -4873,6 +4946,25 @@ namespace AzerothVoices
                 continue;
             }
 
+            if (completion.request.languageActive) {
+                completion.request.languageDecision = Language::Extract(completion.responseText,
+                    !completion.request.languageSecondary.empty());
+                bool const invalid = !Language::ResponseValid(completion.responseText,
+                    completion.request.languageSecondary, false, completion.request.actor.name, completion.request.speaker.name) ||
+                    (completion.request.languageClassify && !completion.request.languageDecision);
+                if (invalid) {
+                    completion.responseText = "Sorry, could you rephrase that in English?";
+                    completion.request.sentimentDeltaLimit = 0;
+                    completion.request.languageDecision = 0;
+                    completion.request.languageAccepted = false;
+                    sLog.outError("[AzerothVoices][LANGUAGE] Invalid response metadata; clarification used.");
+                }
+                if (completion.request.languageDecision == 'U') {
+                    completion.responseText = "Sorry, I understand English and " + Language::Name(completion.request.languageSecondary) + ". Could you rephrase that?";
+                }
+                if (completion.request.languageDecision == 'U' || completion.request.languageDecision == 'A')
+                    completion.request.sentimentDeltaLimit = 0;
+            }
             int32_t sentimentDelta = 0;
             bool const hasSentimentDelta = ExtractSentimentDelta(completion.responseText,
                 completion.request.sentimentDeltaLimit, sentimentDelta);
@@ -5301,6 +5393,13 @@ namespace AzerothVoices
 
                 if (line.firstLine)
                 {
+                    if (line.request.languageActive && line.request.languageAccepted && (!line.request.languageClassify || line.request.languageDecision == 'E' || line.request.languageDecision == 'S')) {
+                        PruneLanguageTurns();
+                        auto& turn = m_languageTurns[line.request.languageKey];
+                        if (line.request.id >= turn.sequence)
+                            turn = {!line.request.languageClassify ? line.request.languagePrevious : (line.request.languageDecision == 'S' ? line.request.languageSecondary : ""), line.request.id, Clock::now(), line.request.actor.guid, line.request.speaker.guid, false};
+                    }
+
                     if (line.request.barrensScene)
                     {
                         OnBarrensDelivered(line.request, line.text);
@@ -5429,6 +5528,9 @@ namespace AzerothVoices
     bool Manager::Deliver(ScheduledLine const& line)
     {
         ChatRequest const& request = line.request;
+        if (request.languageActive && (!m_config || !m_config->languageEnabled || request.languageEpoch != m_epoch))
+            return false;
+
         if (!m_started || m_stopping || !m_config || Clock::now() > request.expires)
             return false;
         {
@@ -6927,8 +7029,22 @@ namespace AzerothVoices
         }
 
         uint64_t const playerGuid = player->GetObjectGuid().GetRawValue();
+        {
+            std::string payload = "LANGUAGE_INFO " + std::to_string(m_config->languageEnabled ? 1 : 0) + " " + m_config->languageSecondary + " " + std::to_string(m_config->languageWorldEnabled ? 1 : 0);
+            for (auto const* scope : {"world","guild","party","raid","whisper","say","yell"}) {
+                auto value = m_config->languageScopeChances.find(scope);
+                payload += " " + std::to_string(value == m_config->languageScopeChances.end() ? (std::string(scope)=="world"?50:100) : value->second);
+            }
+            logicalPayloads.push_back(payload);
+        }
         switch (command.kind)
         {
+            case Addon::CommandKind::Status:
+            {
+                // LANGUAGE_INFO is already pushed at the top of HandleAddonCommandLogical
+                break;
+            }
+
             case Addon::CommandKind::Roster:
             {
                 // Collect contacts from active party bots and persistent DB
@@ -7236,6 +7352,13 @@ namespace AzerothVoices
 
     void Manager::HandlePlayerLogout(Player* player)
     {
+        if (player) {
+            uint64_t guid = player->GetObjectGuid().GetRawValue();
+            for (auto it = m_languageTurns.begin(); it != m_languageTurns.end(); ) {
+                if (it->second.actor == guid || it->second.player == guid) it = m_languageTurns.erase(it);
+                else ++it;
+            }
+        }
         if (player)
         {
             uint64_t const guid = player->GetObjectGuid().GetRawValue();

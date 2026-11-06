@@ -225,6 +225,17 @@ namespace AzerothVoices
             }
 
             std::string const verb = Lower(tokens[0]);
+            if (verb == "status")
+            {
+                if (tokens.size() != 1)
+                {
+                    error = "Usage: .llmc status";
+                    return false;
+                }
+                command.kind = CommandKind::Status;
+                return true;
+            }
+
             if (verb == "roster")
             {
                 if (tokens.size() != 1)

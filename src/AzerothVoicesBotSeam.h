@@ -3,6 +3,7 @@
 
 #include "Player.h"
 #include "WorldSession.h"
+#include "WorldPacket.h"
 #include "ScriptMgr.h"
 #include "ObjectAccessor.h"
 #include "GameObject.h"
@@ -68,14 +69,14 @@ namespace AzerothVoices
 
     inline void BotWhisperPlayer(Player* bot, Player* receiver, std::string const& text)
     {
-        if (!bot || !receiver)
+        if (!bot || !receiver || !receiver->GetSession() || receiver->GetSession()->IsHeadless())
             return;
         WorldPacket data;
         ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, text.c_str(), LANG_UNIVERSAL, bot->GetChatTag(), bot->GetObjectGuid(), bot->GetName());
         receiver->GetSession()->SendPacket(&data);
         data.clear();
         ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER_INFORM, text.c_str(), LANG_UNIVERSAL, receiver->GetChatTag(), receiver->GetObjectGuid(), receiver->GetName());
-        if (bot->GetSession())
+        if (bot->GetSession() && !bot->GetSession()->IsHeadless())
             bot->GetSession()->SendPacket(&data);
     }
 }

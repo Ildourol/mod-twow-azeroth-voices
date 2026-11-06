@@ -40,7 +40,8 @@ namespace AzerothVoices
             Set,
             RegenBackstory,
             RegenTone,
-            Forget
+            Forget,
+            Status
         };
 
         struct Command

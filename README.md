@@ -419,3 +419,17 @@ Pull requests and issues are warmly welcomed! When contributing:
 ## License
 
 This project is licensed under the open-source **Affero General Public License (AGPLv3)** / **MIT**, matching the underlying custom vMaNGOS ecosystem.
+
+## 24. Shared secondary language
+
+Every conversational bot understands English and one preset: GR (Greeklish), DE, FR, ES, IT, PT, PL, RU, TR or NL. Custom languages/prompts and per-bot assignments are not supported. GR accepts Greek script and Greeklish and replies in Latin Greeklish.
+
+Enable `AzerothVoices.Language.Enable` and choose `AzerothVoices.Language.Secondary`. Disabled mode adds no language prompts or repair calls. The optional World.Enable switch permits secondary speech in the configured world channel; General and Trade remain English.
+
+`AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100"` controls bot-started speech, not comprehension. A conversation retains its language across participants. Direct replies match supported player input. Missing scopes use these defaults; invalid lists use the complete defaults.
+
+PreserveGameTerms retains supplied English game terminology and functional references. NaturalPhrasing, GenderAgreement and PreventContextLanguageDrift improve conversational output. Repair.Enable permits at most one additional language repair call. All use the AzerothVoices.Language prefix. Accuracy depends on the configured model.
+
+Use `.av language status` or the addon Server languages section below Sentiment. Up/Down controls expose overflow. Install the shipped addon manually; the server must be compiled with the matching LANGUAGE_INFO payload. No language SQL is needed.
+
+Category 24 contains all nine language options. See the [complete configuration reference](docs/CONFIGURATION_GUIDE.md#24-shared-secondary-language) for presets, defaults and validation. `World.Enable=0` overrides the World percentage; `World.Enable=1` with `World:0` still permits secondary-language replies to players. Repair is an extra API request only after a detected error, with additional token usage; it is not called for every message.

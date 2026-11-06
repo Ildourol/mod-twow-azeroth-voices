@@ -111,6 +111,7 @@ namespace AzerothVoices
     public:
         static Manager& Instance();
 
+        std::string LanguageStatus() const;
         void Start();
         void Reload();
         void Stop();
@@ -695,6 +696,9 @@ namespace AzerothVoices
         std::atomic<bool> m_stopping;
         std::atomic<bool> m_paused;
         std::atomic<uint32_t> m_inFlight;
+        struct LanguageTurn { std::string code; uint64_t sequence = 0; std::chrono::steady_clock::time_point touched; uint64_t actor = 0, player = 0; bool pending = false; };
+        void PruneLanguageTurns();
+        std::map<std::string, LanguageTurn> m_languageTurns;
         std::atomic<uint64_t> m_nextRequestId;
         std::atomic<uint64_t> m_accepted;
         std::atomic<uint64_t> m_completed;
