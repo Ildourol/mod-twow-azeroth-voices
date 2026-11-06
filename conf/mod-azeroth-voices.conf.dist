@@ -3247,18 +3247,6 @@ AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid
 #     Names, commands and functional links remain protected in either mode.
 AzerothVoices.Language.PreserveGameTerms = 1
 
-# Natural conversational wording
-#     1 = prefer idiomatic speech over literal, word-for-word translation.
-AzerothVoices.Language.NaturalPhrasing = 1
-
-# Grammatical gender
-#     1 = use known character gender correctly; prefer neutral phrasing when unknown.
-AzerothVoices.Language.GenderAgreement = 1
-
-# Keep the chosen conversation language
-#     1 = do not copy the language of older history, memories or quoted examples.
-AzerothVoices.Language.PreventContextLanguageDrift = 1
-
 # Repair an invalid language response
 #     1 = allow one extra repair request; 0 = clarify immediately after a detected error.
 #     An extra repair request can use additional tokens when language support is enabled.

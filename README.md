@@ -424,11 +424,11 @@ This project is licensed under the open-source **Affero General Public License (
 
 Every conversational bot understands English and one preset: GR (Greeklish), DE, FR, ES, IT, PT, PL, RU, TR or NL. Custom languages/prompts and per-bot assignments are not supported. GR accepts Greek script and Greeklish and replies in Latin Greeklish.
 
-Enable `AzerothVoices.Language.Enable` and choose `AzerothVoices.Language.Secondary`. Disabled mode adds no language prompts or repair calls. The optional World.Enable switch permits secondary speech in the configured world channel; General and Trade remain English.
+Enable `AzerothVoices.Language.Enable` and choose `AzerothVoices.Language.Secondary`. Disabled mode adds no language prompts or repair calls. The scope percentages control which chat scopes allow the secondary language.
 
-`AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100"` controls bot-started speech, not comprehension. A conversation retains its language across participants. Direct replies match supported player input. Missing scopes use these defaults; invalid lists use the complete defaults.
+`AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100,Channel:0"` controls bot-started speech. A scope set to 0 stays English. A conversation retains its language across participants. Direct replies match supported player input. Missing scopes use these defaults; invalid lists use the complete defaults.
 
-PreserveGameTerms retains supplied English game terminology and functional references. NaturalPhrasing, GenderAgreement and PreventContextLanguageDrift improve conversational output. Repair.Enable permits at most one additional language repair call. All use the AzerothVoices.Language prefix. Accuracy depends on the configured model.
+PreserveGameTerms retains supplied English game terminology and functional references. Language-enabled prompts ask for natural wording and keep prior context from overriding the reply language. Repair.Enable permits at most one additional language repair call. All use the AzerothVoices.Language prefix. Accuracy depends on the configured model.
 
 Use `.av language status` or the addon Server languages section below Sentiment. Up/Down controls expose overflow. Install the shipped addon manually; the server must be compiled with the matching LANGUAGE_INFO payload. No language SQL is needed.
 

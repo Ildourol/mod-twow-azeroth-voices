@@ -4355,21 +4355,17 @@ All conversational PlayerBots understand English plus one shared secondary langu
 | `Secondary` | `"GR"` | One preset shared by all bots; codes are case-insensitive. Invalid enabled selection disables language support with a diagnostic. |
 | `ScopeSecondaryChance` | See example below | Percentage for each scope's bot-started speech (e.g. World:50, Channel:0). Set `World:0` to keep World chat strictly English. |
 | `PreserveGameTerms` | `1` | Preserve supplied English terminology, game names and class/race labels; translate surrounding prose. Names, commands and functional links remain protected in either mode. |
-| `NaturalPhrasing` | `1` | Prefer idiomatic conversational wording over literal translation. |
-| `GenderAgreement` | `1` | Match known character gender grammatically; use neutral phrasing when unknown. |
-| `PreventContextLanguageDrift` | `1` | Older history, memories and quotations must not override the chosen output language. |
-| `Repair.Enable` | `1` | Permit at most one extra API request after a detectable language/protocol error. Valid replies need no extra call. |
+| `Repair.Enable` | `0` | Permit at most one extra API request after a detectable language/protocol error. Valid replies need no extra call. If the key is omitted, the code fallback is enabled. |
 
 ```ini
 AzerothVoices.Language.Enable = 0
 AzerothVoices.Language.Secondary = "GR"
 AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100,Channel:0"
 AzerothVoices.Language.PreserveGameTerms = 1
-AzerothVoices.Language.NaturalPhrasing = 1
-AzerothVoices.Language.GenderAgreement = 1
-AzerothVoices.Language.PreventContextLanguageDrift = 1
-AzerothVoices.Language.Repair.Enable = 1
+AzerothVoices.Language.Repair.Enable = 0
 ```
+
+The prompt asks for natural wording and treats conversation history, memories and examples as context. The selected reply language takes precedence.
 
 ### Percentages and scope control
 

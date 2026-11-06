@@ -144,6 +144,8 @@ std::string Instruction(std::string const& secondary, std::string const& previou
              ", [[AV_LANG:U]] for unsupported languages, or [[AV_LANG:A]] for ambiguous text. Do not omit this tag.";
     }
 
+    s += " Use natural conversational phrasing. History, memories and examples provide context, not the reply language.";
+
     if (secondary == "GR" && (classify || previous == "GR")) {
         s += "\nGREEKLISH GUIDELINES: Both Greek alphabet script and Latin-alphabet Greeklish (e.g. 'ti kaneis', 'ola kala', 'ti nea', 'geia sou', 'kalimera', 'pame') are Greek. Write only the conversational Greek prose in Latin-character Greeklish. This is not an instruction to translate or transliterate protected English game terms.";
     }

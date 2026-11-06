@@ -92,7 +92,7 @@ namespace AzerothVoices
         bool languageEnabled = false;
         bool languagePreserveGameTerms = true;
         std::map<std::string, uint32_t> languageScopeChances;
-        bool languageNatural = true, languageGender = true, languagePreventDrift = true, languageRepair = true;
+        bool languageRepair = true;
         std::string languageSecondary = "GR";
 
         bool enabled = true;

@@ -291,9 +291,6 @@ namespace AzerothVoices
         c.languageEnabled = sConfig.GetBoolDefault("AzerothVoices.Language.Enable", false);
         if (c.languageEnabled) {
             c.languageSecondary = Language::Normalize(Trim(sConfig.GetStringDefault("AzerothVoices.Language.Secondary", "GR")));
-            c.languageNatural = sConfig.GetBoolDefault("AzerothVoices.Language.NaturalPhrasing", true);
-            c.languageGender = sConfig.GetBoolDefault("AzerothVoices.Language.GenderAgreement", true);
-            c.languagePreventDrift = sConfig.GetBoolDefault("AzerothVoices.Language.PreventContextLanguageDrift", true);
             c.languageRepair = sConfig.GetBoolDefault("AzerothVoices.Language.Repair.Enable", true);
             std::map<std::string,uint32_t> defaults = {{"world",50},{"guild",100},{"party",100},{"raid",100},{"whisper",100},{"say",100},{"yell",100},{"channel",0}};
             auto parsed = defaults;

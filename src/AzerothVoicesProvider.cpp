@@ -724,9 +724,6 @@ namespace AzerothVoices
                 std::string previous = prepared.languagePrevious;
                 prepared.systemPrompt += "\n" + Language::Instruction(secondary,
                     previous, prepared.languageClassify, config.languagePreserveGameTerms);
-                if (config.languageNatural) prepared.systemPrompt += " Use natural, idiomatic conversational phrasing.";
-                if (config.languageGender) prepared.systemPrompt += " Match known character gender grammatically; use neutral phrasing when unknown.";
-                if (config.languagePreventDrift) prepared.systemPrompt += " History, memories and examples supply subject matter, never the required output language.";
 
             }
             Json body;
