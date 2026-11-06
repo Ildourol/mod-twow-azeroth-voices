@@ -291,15 +291,14 @@ namespace AzerothVoices
         c.languageEnabled = sConfig.GetBoolDefault("AzerothVoices.Language.Enable", false);
         if (c.languageEnabled) {
             c.languageSecondary = Language::Normalize(Trim(sConfig.GetStringDefault("AzerothVoices.Language.Secondary", "GR")));
-            c.languageWorldEnabled = sConfig.GetBoolDefault("AzerothVoices.Language.World.Enable", false);
             c.languageNatural = sConfig.GetBoolDefault("AzerothVoices.Language.NaturalPhrasing", true);
             c.languageGender = sConfig.GetBoolDefault("AzerothVoices.Language.GenderAgreement", true);
             c.languagePreventDrift = sConfig.GetBoolDefault("AzerothVoices.Language.PreventContextLanguageDrift", true);
             c.languageRepair = sConfig.GetBoolDefault("AzerothVoices.Language.Repair.Enable", true);
-            std::map<std::string,uint32_t> defaults = {{"world",50},{"guild",100},{"party",100},{"raid",100},{"whisper",100},{"say",100},{"yell",100}};
+            std::map<std::string,uint32_t> defaults = {{"world",50},{"guild",100},{"party",100},{"raid",100},{"whisper",100},{"say",100},{"yell",100},{"channel",0}};
             auto parsed = defaults;
             std::set<std::string> seen;
-            std::string raw = Trim(sConfig.GetStringDefault("AzerothVoices.Language.ScopeSecondaryChance", "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100"));
+            std::string raw = Trim(sConfig.GetStringDefault("AzerothVoices.Language.ScopeSecondaryChance", "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100,Channel:0"));
             bool valid = !raw.empty() && raw.back() != ',';
             std::istringstream scopes(raw); std::string part;
             while (std::getline(scopes, part, ',')) {
@@ -315,7 +314,6 @@ namespace AzerothVoices
             }
             c.languageScopeChances = valid ? parsed : defaults;
             if (!valid) sLog.outError("[AzerothVoices][LANGUAGE] Invalid scope percentages; using defaults.");
-            c.languageWorldSecondaryChance = c.languageScopeChances["world"];
             c.languagePreserveGameTerms = sConfig.GetBoolDefault("AzerothVoices.Language.PreserveGameTerms", true);
             if (!Language::Valid(c.languageSecondary)) {
                 sLog.outError("[AzerothVoices][LANGUAGE] Invalid shared secondary language; disabling language feature.");

@@ -508,13 +508,14 @@ namespace AzerothVoices
 
             if (channel && channel->GetNumPlayers() > 0)
             {
+                std::string const normalizedChannel = ChannelMembership::Normalize(channelName);
                 HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
                 for (auto const& entry : sObjectAccessor.GetPlayers())
                 {
                     Player* player = entry.second;
                     if (!player || !player->IsInWorld() || !player->GetSession())
                         continue;
-                    if (!Script_IsAIControlled(player) && ChannelMembership::Contains(player->GetObjectGuid().GetRawValue(), channelName))
+                    if (!Script_IsAIControlled(player) && ChannelMembership::ContainsNormalized(player->GetObjectGuid().GetRawValue(), normalizedChannel))
                         return true;
                 }
                 return false;
@@ -1238,6 +1239,7 @@ namespace AzerothVoices
         LoadInstanceLore();
         ++m_epoch;
         m_languageTurns.clear();
+        ChannelMembership::Clear();
         m_stopping = false;
         m_started = true;
         m_lastErrorLog = Clock::time_point();
@@ -1342,6 +1344,8 @@ namespace AzerothVoices
         m_pendingSnapshotWrites.clear();
         m_pendingSentimentWrites.clear();
         m_pendingMemoryWrites.clear();
+        m_languageTurns.clear();
+        ChannelMembership::Clear();
         m_proximityScenes.clear();
         m_proximityZoneScenes.clear();
         m_proximitySpeakerCooldowns.clear();
@@ -2052,8 +2056,10 @@ namespace AzerothVoices
     std::string Manager::LanguageStatus() const
     {
         if (!m_config || !m_config->languageEnabled) return "Language support disabled (no language prompt overhead).";
+        auto const wIt = m_config->languageScopeChances.find("world");
+        uint32_t const wChance = (wIt != m_config->languageScopeChances.end()) ? wIt->second : 50;
         std::string status = "English + " + Language::Name(m_config->languageSecondary) +
-            "; world=" + (m_config->languageWorldEnabled ? "enabled" : "English only");
+            "; world=" + (wChance > 0 ? (std::to_string(wChance) + "%") : "English only");
         for (auto const& entry : m_config->languageScopeChances)
             status += "; " + entry.first + ":" + std::to_string(entry.second) + "%";
         return status;
@@ -2065,8 +2071,10 @@ namespace AzerothVoices
             request.actor.kind == ActorKind::PlayerBot) {
             request.languageActive = true;
             request.languageEpoch = m_epoch;
-            bool const publicEnglish = request.scope == ChatScope::Channel ||
-                (request.scope == ChatScope::World && !m_config->languageWorldEnabled);
+            std::string const scopeKey = Lower(ScopeName(request.scope));
+            auto const scopeIt = m_config->languageScopeChances.find(scopeKey);
+            uint32_t const scopeChance = (scopeIt != m_config->languageScopeChances.end()) ? scopeIt->second : 100;
+            bool const publicEnglish = (scopeChance == 0);
             request.languageSecondary = publicEnglish ? "" : m_config->languageSecondary;
             request.languageClassify = !publicEnglish && !request.ambient &&
                 !request.speaker.isBot && !request.incomingMessage.empty() && request.trigger.compare(0,6,"event:") != 0 &&
@@ -2076,7 +2084,7 @@ namespace AzerothVoices
             else if (request.exchangeId.IsValid())
                 request.languageKey = "exchange:" + std::to_string(request.exchangeId.domain) + ":" + std::to_string(request.exchangeId.id);
             else if (request.trigger.compare(0,6,"event:") == 0)
-                request.languageKey = "event:" + std::to_string(request.id);
+                request.languageKey = "event:" + std::to_string(request.actor.guid) + ":" + request.trigger;
             else
                 request.languageKey = "direct:" + std::to_string(request.actor.guid) + ":" +
                     std::to_string(request.speaker.guid) + ":" + request.scopeKey;
@@ -2085,8 +2093,7 @@ namespace AzerothVoices
             bool const known = prior != m_languageTurns.end() && Clock::now() - prior->second.touched < std::chrono::minutes(15);
             if (!publicEnglish && known) request.languagePrevious = prior->second.code;
             if (!publicEnglish && !request.languageClassify && !known) {
-                request.languagePrevious = Roll(m_config->languageScopeChances.count(Lower(ScopeName(request.scope))) ? m_config->languageScopeChances.at(Lower(ScopeName(request.scope))) : 100) ? request.languageSecondary : "";
-
+                request.languagePrevious = Roll(scopeChance) ? request.languageSecondary : "";
             }
         }
 
@@ -4959,7 +4966,7 @@ namespace AzerothVoices
                     completion.request.languageAccepted = false;
                     sLog.outError("[AzerothVoices][LANGUAGE] Invalid response metadata; clarification used.");
                 }
-                if (completion.request.languageDecision == 'U') {
+                if (completion.request.languageDecision == 'U' && completion.responseText.empty()) {
                     completion.responseText = "Sorry, I understand English and " + Language::Name(completion.request.languageSecondary) + ". Could you rephrase that?";
                 }
                 if (completion.request.languageDecision == 'U' || completion.request.languageDecision == 'A')
@@ -7030,10 +7037,13 @@ namespace AzerothVoices
 
         uint64_t const playerGuid = player->GetObjectGuid().GetRawValue();
         {
-            std::string payload = "LANGUAGE_INFO " + std::to_string(m_config->languageEnabled ? 1 : 0) + " " + m_config->languageSecondary + " " + std::to_string(m_config->languageWorldEnabled ? 1 : 0);
-            for (auto const* scope : {"world","guild","party","raid","whisper","say","yell"}) {
+            uint32_t const worldChance = m_config->languageScopeChances.count("world") ? m_config->languageScopeChances.at("world") : 50;
+            bool const worldAllowed = (worldChance > 0);
+            std::string payload = "LANGUAGE_INFO " + std::to_string(m_config->languageEnabled ? 1 : 0) + " " +
+                m_config->languageSecondary + " " + std::to_string(worldAllowed ? 1 : 0);
+            for (auto const* scope : {"world","guild","party","raid","whisper","say","yell","channel"}) {
                 auto value = m_config->languageScopeChances.find(scope);
-                payload += " " + std::to_string(value == m_config->languageScopeChances.end() ? (std::string(scope)=="world"?50:100) : value->second);
+                payload += " " + std::to_string(value == m_config->languageScopeChances.end() ? (std::string(scope)=="world"?50:(std::string(scope)=="channel"?0:100)) : value->second);
             }
             logicalPayloads.push_back(payload);
         }

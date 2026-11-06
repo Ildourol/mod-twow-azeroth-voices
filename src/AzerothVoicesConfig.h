@@ -89,9 +89,8 @@ namespace AzerothVoices
 
     struct Config
     {
-        bool languageEnabled = false, languageWorldEnabled = false;
+        bool languageEnabled = false;
         bool languagePreserveGameTerms = true;
-        uint32_t languageWorldSecondaryChance = 50;
         std::map<std::string, uint32_t> languageScopeChances;
         bool languageNatural = true, languageGender = true, languagePreventDrift = true, languageRepair = true;
         std::string languageSecondary = "GR";

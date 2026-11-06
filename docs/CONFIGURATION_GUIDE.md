@@ -4353,8 +4353,7 @@ All conversational PlayerBots understand English plus one shared secondary langu
 |---|---|---|
 | `Enable` | `0` | Master switch; disabled bypasses language prompts, classification and repair. |
 | `Secondary` | `"GR"` | One preset shared by all bots; codes are case-insensitive. Invalid enabled selection disables language support with a diagnostic. |
-| `World.Enable` | `0` | Allow secondary-language world speech. When off, world speech stays English regardless of the percentage. |
-| `ScopeSecondaryChance` | See example below | Percentage for each scope's bot-started speech; one choice persists through a conversation. |
+| `ScopeSecondaryChance` | See example below | Percentage for each scope's bot-started speech (e.g. World:50, Channel:0). Set `World:0` to keep World chat strictly English. |
 | `PreserveGameTerms` | `1` | Preserve supplied English terminology, game names and class/race labels; translate surrounding prose. Names, commands and functional links remain protected in either mode. |
 | `NaturalPhrasing` | `1` | Prefer idiomatic conversational wording over literal translation. |
 | `GenderAgreement` | `1` | Match known character gender grammatically; use neutral phrasing when unknown. |
@@ -4364,8 +4363,7 @@ All conversational PlayerBots understand English plus one shared secondary langu
 ```ini
 AzerothVoices.Language.Enable = 0
 AzerothVoices.Language.Secondary = "GR"
-AzerothVoices.Language.World.Enable = 0
-AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100"
+AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100,Channel:0"
 AzerothVoices.Language.PreserveGameTerms = 1
 AzerothVoices.Language.NaturalPhrasing = 1
 AzerothVoices.Language.GenderAgreement = 1
@@ -4373,13 +4371,13 @@ AzerothVoices.Language.PreventContextLanguageDrift = 1
 AzerothVoices.Language.Repair.Enable = 1
 ```
 
-### Percentages and world switch
+### Percentages and scope control
 
-A percentage of 0 selects English, 50 selects either language equally over many conversations, and 100 selects the secondary language. Events and bot-started chatter use scope percentages; direct replies match supported player input or explicit language requests. Whole conversations retain their choice, including participating bots and Barrens follow-ups.
+A percentage of 0 selects English only, 50 selects either language equally over many conversations, and 100 selects the secondary language. Events and bot-started chatter use scope percentages; direct replies match supported player input or explicit language requests when the scope percentage is > 0. Whole conversations retain their choice, including participating bots and Barrens follow-ups.
 
-`World.Enable=0` forces English even for replies to secondary-language player input. With `World.Enable=1` and `World:0`, bots initiate in English but can still reply in the secondary language. General, Trade and other public channels remain English.
+Setting `World:0` forces English in World chat for both bot-initiated speech and replies. `Channel:0` ensures General, Trade, and other public channels remain in English.
 
-Scope names are case-insensitive. Missing scopes receive World:50 and 100 for other listed scopes. Unknown/duplicate scopes, malformed integers or values outside 0?100 invalidate the entire list and restore those defaults with a diagnostic. Percentages are chosen in C++, not rolled by the model.
+Scope names are case-insensitive. Missing scopes receive World:50, Channel:0, and 100 for other listed scopes. Unknown/duplicate scopes, malformed integers or values outside 0–100 invalidate the entire list and restore those defaults with a diagnostic. Percentages are chosen in C++, not rolled by the model.
 
 ### Repair and verification
 

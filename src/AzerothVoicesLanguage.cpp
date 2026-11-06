@@ -52,7 +52,9 @@ char Extract(std::string& text, bool secondary) {
             break;
         }
         auto v = text.substr(pos + fullPrefix.size(), end - pos - fullPrefix.size());
-        char c = v.size() == 1 ? v[0] : 0;
+        auto first = v.find_first_not_of(" \t\r\n");
+        auto last = v.find_last_not_of(" \t\r\n");
+        char c = (first != std::string::npos && first == last) ? v[first] : 0;
         if ((c != 'E' && c != 'S' && c != 'U' && c != 'A') || (c == 'S' && !secondary) || (decision && decision != c))
             invalid = true;
         else

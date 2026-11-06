@@ -3217,7 +3217,7 @@ AzerothVoices.Addon.MaximumRosterEntries = 200
 # Select the language below; use percentages to control bot-started conversations.
 #
 # Available language codes:
-#     GR = Greeklish       DE = German       FR = French       ES = Spanish
+#     GR = Greeklish      DE = German       FR = French       ES = Spanish
 #     IT = Italian        PT = Portuguese   PL = Polish       RU = Russian
 #     TR = Turkish        NL = Dutch
 #
@@ -3231,18 +3231,16 @@ AzerothVoices.Language.Enable = 0
 
 # Secondary language shared by all bots
 #     Choose one code from the language list above. English is always understood.
-AzerothVoices.Language.Secondary = "GR"
-
-# Secondary language in world chat
-#     0 = world stays English; 1 = allow the secondary language. General/Trade stay English.
-AzerothVoices.Language.World.Enable = 0
+AzerothVoices.Language.Secondary = ""
 
 # Secondary-language chance by chat scope
-#     Each number is a percentage: 0 = English, 50 = half, 100 = secondary language.
+#     Each number is a percentage: 0 = English only, 50 = half, 100 = secondary language.
+#     To keep World chat strictly in English, set World:0. To allow secondary language in World, set World:50 (or 1-100).
+#     General/Trade and custom public channels default to English (Channel:0).
 #     Choose once per bot-started conversation; all participants and follow-ups keep it.
-#     Direct player replies match supported input instead of rolling this percentage.
-#     Missing scopes use World:50 and 100 for the other listed scopes.
-AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100"
+#     Direct player replies match supported input when the scope percentage is > 0.
+#     Default: "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100,Channel:0"
+AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100,Channel:0"
 
 # Keep game terminology unchanged
 #     1 = preserve English game terms and supplied names; translate surrounding speech.

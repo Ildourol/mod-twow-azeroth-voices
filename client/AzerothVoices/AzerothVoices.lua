@@ -634,6 +634,10 @@ function AzerothVoices:SelectBot(guid)
         return
     end
 
+    if self.generatingAllInfo and self.selectedGuid and self.selectedGuid ~= guid then
+        self:AbortUpload("Cancelled Generate All due to bot selection change.", 1, 0.4, 0.4)
+    end
+
     if self.pendingToneGuid and self.pendingToneGuid ~= guid then
         self:StopTonePoll()
         self.generatingAllInfo = nil
@@ -1260,8 +1264,9 @@ function AzerothVoices:HandlePayload(payload)
             local sPct = fields[9] or "100"
             local yPct = fields[10] or "100"
 
+            local worldActive = worldEnabled and (wPct ~= "0")
             self.serverLanguageSummary = "English + " .. langName .. " (all bots)\n" ..
-                "World: " .. (worldEnabled and (wPct .. "%") or "English only") ..
+                "World: " .. (worldActive and (wPct .. "%") or "English only") ..
                 " | Guild: " .. gPct .. "% | Party: " .. pPct .. "% | Raid: " .. rPct .. "%\n" ..
                 "Whisper: " .. whPct .. "% | Say: " .. sPct .. "% | Yell: " .. yPct .. "%"
             self.serverLanguageShort = "|cffffd100Lang:|r |cff00ff00English + " .. langName .. "|r"
@@ -1484,6 +1489,7 @@ function AzerothVoices:HandleGenerateAll(elapsed)
         return
     end
 
+    elapsed = elapsed or 0
     if self.genAllTimer and self.genAllTimer > 0 then
         self.genAllTimer = self.genAllTimer - elapsed
         if self.genAllTimer > 0 then

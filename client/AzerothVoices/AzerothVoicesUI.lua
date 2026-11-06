@@ -358,7 +358,7 @@ function AzerothVoices:BuildEditor(panel)
         GameTooltip:Hide()
     end)
     langHeaderBtn:SetScript("OnClick", function()
-        AzerothVoices:RequestRoster()
+        AzerothVoices:RequestStatus()
     end)
 
     -- Left Column: Roster, Search & Forget (Width 144, Height 530)
