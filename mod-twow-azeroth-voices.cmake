@@ -62,7 +62,7 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
   # enables CTest; AZEROTH_VOICES_BUILD_TESTS lets a module-only build opt in
   # without changing the core.
   option(AZEROTH_VOICES_BUILD_TESTS "Build the mod-azeroth-voices unit tests." OFF)
-  if((BUILD_TESTING OR AZEROTH_VOICES_BUILD_TESTS) AND EXISTS "${CMAKE_CURRENT_LIST_DIR}/tests/AzerothVoicesTests.cpp")
+  if(BUILD_TESTING OR AZEROTH_VOICES_BUILD_TESTS)
     enable_testing()
     if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
       # The core calls enable_testing() only when its own test switch is on, so
@@ -73,22 +73,7 @@ if(TORTOISE_MODULE_CMAKE_PHASE STREQUAL "POST_TARGETS")
       cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL enable_testing)
     endif()
     add_executable(azeroth_voices_tests
-      "${CMAKE_CURRENT_LIST_DIR}/tests/AzerothVoicesTests.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesAddon.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesBarrens.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesBossDialogue.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesBossRegistry.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesInstanceLore.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesMemory.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesPacing.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesPartyGate.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesPersonality.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesProximity.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesReasoning.cpp"
-      "${CMAKE_CURRENT_LIST_DIR}/src/AzerothVoicesSocial.cpp")
-    target_include_directories(azeroth_voices_tests PRIVATE
-      "${CMAKE_CURRENT_LIST_DIR}/src"
-      "${CMAKE_SOURCE_DIR}/src/shared")
+      "${CMAKE_CURRENT_LIST_DIR}/tests/HttpPolicyTests.cpp")
     set_target_properties(azeroth_voices_tests PROPERTIES FOLDER "modules")
     add_test(NAME azeroth_voices_tests COMMAND azeroth_voices_tests)
     set_property(TARGET azeroth_voices_tests PROPERTY CXX_STANDARD 17)
