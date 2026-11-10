@@ -664,6 +664,30 @@ namespace AzerothVoices
         c.proximitySpeakerDenyEntries = UnsignedSet("AzerothVoices.Proximity.Speaker.DenyEntries", "");
         c.proximitySpeakerNonHumanoidAllowEntries = UnsignedSet("AzerothVoices.Proximity.Speaker.AllowNonHumanoidEntries", "");
 
+        c.npcRandomEnabled = sConfig.GetBoolDefault("AzerothVoices.NPC.Random.Enable", true);
+        c.npcRandomMinimumIntervalSeconds = Positive("AzerothVoices.NPC.Random.MinimumIntervalSeconds", 300, 10);
+        c.npcRandomMaximumIntervalSeconds = Positive("AzerothVoices.NPC.Random.MaximumIntervalSeconds", 600, c.npcRandomMinimumIntervalSeconds);
+        c.npcRandomChance = Percent("AzerothVoices.NPC.Random.Chance", 25);
+        c.npcRandomDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.NPC.Random.Distance", 10.0f));
+        c.npcRandomEntityCooldownSeconds = Positive("AzerothVoices.NPC.Random.EntityCooldownSeconds", 900, 0);
+        c.npcRandomCategoryWeights = ParseCategoryWeights(sConfig.GetStringDefault(
+            "AzerothVoices.NPC.Random.CategoryWeights", "player_inquiry:35,rumors:25,dailylife:20,zonelore:10,humor:10"));
+        c.npcRandomPlayerInquiries = Split(sConfig.GetStringDefault("AzerothVoices.NPC.Random.PlayerInquiries",
+            "Ask where the traveler is headed.|Notice their armor or weapon.|Ask what brings them here.|"
+            "Give a quick word of warning.|Ask how the roads are."), '|');
+        c.npcRandomRumors = Split(sConfig.GetStringDefault("AzerothVoices.NPC.Random.Rumors",
+            "Share a short rumor about the zone.|Warn of recent troubles nearby.|"
+            "Mention strange sightings.|Whisper a local secret."), '|');
+        c.npcRandomDailyLife = Split(sConfig.GetStringDefault("AzerothVoices.NPC.Random.DailyLife",
+            "Complain about daily chores or patrol.|Comment on the weather or time.|"
+            "Sigh about long hours.|Mention needing a stiff drink."), '|');
+        c.npcRandomZoneLore = Split(sConfig.GetStringDefault("AzerothVoices.NPC.Random.ZoneLore",
+            "Mention local history or ruins.|Comment on the danger of this region.|"
+            "Speak of ancient conflicts here."), '|');
+        c.npcRandomHumor = Split(sConfig.GetStringDefault("AzerothVoices.NPC.Random.Humor",
+            "Make a dry observation about adventurers.|Make a short, lighthearted joke.|"
+            "Mutter an ironic remark."), '|');
+
         c.bossDialogueEnabled = sConfig.GetBoolDefault("AzerothVoices.BossDialogue.Enable", true);
         c.bossDialogueScanSeconds = Bounded("AzerothVoices.BossDialogue.ScanSeconds", 2, 1, 60);
         c.bossDialogueMaximumDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.BossDialogue.MaximumDistance", 80.0f));
@@ -910,6 +934,8 @@ namespace AzerothVoices
         c.environmentIncludeBackpack = sConfig.GetBoolDefault("AzerothVoices.Environment.IncludeBackpack", false);
 
         c.eventChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.Events.Enable", true);
+        c.eventAllowNpcSay = sConfig.GetBoolDefault("AzerothVoices.Events.AllowNpcSay", true);
+        c.eventMaximumSayNpcResponders = Positive("AzerothVoices.Events.MaximumSayNpcResponders", 1, 0);
         c.eventResponderChance = Percent("AzerothVoices.Events.ResponderChance", 15);
         c.eventSelfCommentChance = Percent("AzerothVoices.Events.SelfCommentChance", 5);
         c.eventMaximumResponders = Positive("AzerothVoices.Events.MaximumResponders", 2, 1);

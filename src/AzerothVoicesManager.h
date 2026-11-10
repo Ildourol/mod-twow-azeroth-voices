@@ -446,6 +446,8 @@ namespace AzerothVoices
         bool Deliver(ScheduledLine const& line);
         void RunAmbient();
         void ScheduleNextAmbient();
+        void RunNpcRandomChat();
+        void ScheduleNextNpcRandomChat();
         void MaybeQueueFollowup(ChatRequest const& request, std::string const& reply);
         void MaybeQueueBotQuestionAnswer(ChatRequest const& request, std::string const& questionText);
         void RunProximity();
@@ -705,6 +707,8 @@ namespace AzerothVoices
         std::atomic<uint64_t> m_failed;
         std::atomic<uint64_t> m_dropped;
         std::chrono::steady_clock::time_point m_nextAmbient;
+        std::chrono::steady_clock::time_point m_nextNpcRandomChat;
+        std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_npcRandomCooldowns;
         std::chrono::steady_clock::time_point m_nextBarrensCheck;
         uint32_t m_barrensEpoch = 1;
         uint64_t m_nextBarrensSceneId = 1;

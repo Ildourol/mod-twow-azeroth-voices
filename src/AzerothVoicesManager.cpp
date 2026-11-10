@@ -1269,6 +1269,7 @@ namespace AzerothVoices
         ScheduleNextAmbient();
         ScheduleNextGeneralTrigger();
         ScheduleNextBarrensCheck();
+        ScheduleNextNpcRandomChat();
 
         if (m_config->playerbotsLlmEnabled)
         {
@@ -1301,6 +1302,7 @@ namespace AzerothVoices
         Provider::CancelAll();
         ++m_barrensEpoch;
         m_barrensScenes.clear();
+        m_npcRandomCooldowns.clear();
         m_queueReady.notify_all();
         for (std::thread& worker : m_workers)
             if (worker.joinable())
@@ -1484,6 +1486,11 @@ namespace AzerothVoices
             RunBarrensChatter();
             ScheduleNextBarrensCheck();
         }
+        if (!m_paused && m_config->npcRandomEnabled && Clock::now() >= m_nextNpcRandomChat)
+        {
+            RunNpcRandomChat();
+            ScheduleNextNpcRandomChat();
+        }
     }
 
     void Manager::ScheduleNextAmbient()
@@ -1491,6 +1498,14 @@ namespace AzerothVoices
         uint32_t seconds = m_config ? RandomUInt(m_config->randomMinimumIntervalSeconds,
                                                   m_config->randomMaximumIntervalSeconds) : 120;
         m_nextAmbient = Clock::now() + std::chrono::seconds(seconds);
+    }
+
+    void Manager::ScheduleNextNpcRandomChat()
+    {
+        uint32_t const minSec = m_config ? m_config->npcRandomMinimumIntervalSeconds : 300;
+        uint32_t const maxSec = m_config ? std::max(minSec, m_config->npcRandomMaximumIntervalSeconds) : 600;
+        uint32_t const seconds = RandomUInt(minSec, maxSec);
+        m_nextNpcRandomChat = Clock::now() + std::chrono::seconds(seconds);
     }
 
     void Manager::ScheduleNextGeneralTrigger()
@@ -1827,8 +1842,9 @@ namespace AzerothVoices
             bool const sayChatReaction = scope == ChatScope::Say &&
                 (trigger == "direct-chat" || trigger == "overheard-chat" ||
                  trigger.compare(0, 13, "targeted-npc-") == 0);
+            bool const npcRandomTrigger = trigger == "npc-random";
             bool const legalNpcTrigger = ambient || trigger.compare(0, 6, "event:") == 0 ||
-                sayChatReaction || proximityTrigger || bossTrigger;
+                sayChatReaction || proximityTrigger || bossTrigger || npcRandomTrigger;
             if (!m_config->npcReplies || scope != ChatScope::Say || !legalNpcTrigger)
             {
                 RecordPreflightRejection(PreflightReason::InvalidScope);
@@ -1856,10 +1872,11 @@ namespace AzerothVoices
             }
             else
             {
-                ProximitySpeakerDecision const decision = proximityTrigger
+                bool const usesProximityEvaluation = proximityTrigger || npcRandomTrigger;
+                ProximitySpeakerDecision const decision = usesProximityEvaluation
                     ? EvaluateProximityCreature(creature, *m_config)
                     : ProximitySpeakerDecision { true, ProximityRejection::None };
-                NpcEligibilityResult const eligibility = proximityTrigger
+                NpcEligibilityResult const eligibility = usesProximityEvaluation
                     ? (decision.eligible ? NpcEligibilityResult::Eligible : NpcEligibilityResult::Filtered)
                     : EvaluateNpcSpeaker(creature, m_config->sayDistance, *m_config);
                 if (eligibility != NpcEligibilityResult::Eligible)
@@ -2454,6 +2471,14 @@ namespace AzerothVoices
                     request.systemPrompt += " \"" + recent + "\"";
                 request.systemPrompt += '.';
             }
+        }
+        if (actor.kind == ActorKind::Creature && trigger == "npc-random")
+        {
+            request.systemPrompt += "\nThis is a single standalone ambient line spoken aloud in /say. Say one short, punchy, in-character line (at most 120 characters) with no quotes and no speaker name prefix. Do not invite a back-and-forth dialogue.";
+        }
+        if (actor.kind == ActorKind::Creature && trigger.compare(0, 6, "event:") == 0)
+        {
+            request.systemPrompt += "\nYou witnessed an event nearby. Say one short in-character reaction in /say (at most 100 characters) matching your disposition and role. Do not narrate actions; speak dialogue only.";
         }
         request.systemPrompt += "\nThe reply will be sent through " +
             (channelName.empty() ? ScopeName(scope) : channelName) +
@@ -3589,20 +3614,25 @@ namespace AzerothVoices
             }
         }
 
-        if (count >= m_config->eventMaximumResponders ||
-            !IsScopeEnabled(*m_config, ChatScope::Say))
+        if (!IsScopeEnabled(*m_config, ChatScope::Say) || !m_config->eventAllowNpcSay)
             return;
+
+        uint32_t sayCount = 0;
+        uint32_t const maxSay = m_config->eventMaximumSayNpcResponders > 0 ? m_config->eventMaximumSayNpcResponders : 1;
         std::vector<Candidate> sayCandidates = CollectCandidates(subject, ChatScope::Say, "",
             description, true, true, subject->GetObjectGuid().GetRawValue());
         for (Candidate const& candidate : sayCandidates)
         {
-            if (count >= m_config->eventMaximumResponders)
+            if (sayCount >= maxSay)
                 break;
             if (selectedActors.count(candidate.actor.guid))
                 continue;
             if (QueueDialogue(candidate.actor, subjectSnapshot, ChatScope::Say, "",
                 "event:" + event, description, RequestPriority::Nearby, false, true))
-                ++count;
+            {
+                selectedActors.insert(candidate.actor.guid);
+                ++sayCount;
+            }
         }
     }
 
@@ -3709,6 +3739,168 @@ namespace AzerothVoices
     {
         if (ForceAmbient(nullptr) && m_config->debug)
             sLog.outDebug("[AzerothVoices] Queued ambient chatter.");
+    }
+
+    void Manager::RunNpcRandomChat()
+    {
+        if (!m_started || !m_config || !m_config->enabled || m_paused || !m_config->npcRandomEnabled)
+            return;
+
+        if (m_config->npcRandomChance == 0 || !Roll(m_config->npcRandomChance))
+            return;
+
+        std::vector<Player*> realPlayers;
+        {
+            HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
+            for (auto const& entry : sObjectAccessor.GetPlayers())
+            {
+                Player* player = entry.second;
+                if (player && player->IsInWorld() && player->IsAlive() && !Script_IsAIControlled(player))
+                    realPlayers.push_back(player);
+            }
+        }
+        if (realPlayers.empty())
+            return;
+
+        std::shuffle(realPlayers.begin(), realPlayers.end(), RandomEngine());
+        Player* anchor = nullptr;
+        std::vector<Creature*> eligible;
+
+        float const dist = m_config->npcRandomDistance > 0.0f ? m_config->npcRandomDistance : 10.0f;
+        auto const now = Clock::now();
+
+        if (m_npcRandomCooldowns.size() > 512)
+        {
+            for (auto it = m_npcRandomCooldowns.begin(); it != m_npcRandomCooldowns.end();)
+            {
+                if (it->second <= now)
+                    it = m_npcRandomCooldowns.erase(it);
+                else
+                    ++it;
+            }
+        }
+
+        for (Player* candidatePlayer : realPlayers)
+        {
+            if (!candidatePlayer || !candidatePlayer->IsInWorld() || !candidatePlayer->IsAlive())
+                continue;
+
+            Map const* map = candidatePlayer->FindMap();
+            if (!map)
+                continue;
+
+            uint32_t const mapId = candidatePlayer->GetMapId();
+            uint32_t const instanceId = CurrentInstanceId(candidatePlayer);
+
+            MaNGOS::AllCreaturesInRange check(candidatePlayer, dist);
+            std::list<Creature*> creatures;
+            MaNGOS::CreatureListSearcher<MaNGOS::AllCreaturesInRange> searcher(creatures, check);
+            Cell::VisitGridObjects(candidatePlayer, searcher, dist);
+
+            std::vector<Creature*> found;
+            for (Creature* creature : creatures)
+            {
+                if (!creature || creature->GetMapId() != mapId)
+                    continue;
+                if (CurrentInstanceId(creature) != instanceId || creature->IsInCombat())
+                    continue;
+                if (!creature->IsWithinLOSInMap(candidatePlayer) ||
+                    !creature->IsVisibleForOrDetect(candidatePlayer, candidatePlayer, true))
+                    continue;
+
+                auto cd = m_npcRandomCooldowns.find(creature->GetObjectGuid().GetRawValue());
+                if (cd != m_npcRandomCooldowns.end() && cd->second > now)
+                    continue;
+
+                auto proxCd = m_proximitySpeakerCooldowns.find(creature->GetObjectGuid().GetRawValue());
+                if (proxCd != m_proximitySpeakerCooldowns.end() && proxCd->second > now)
+                    continue;
+
+                if (!EvaluateProximityCreature(creature, *m_config).eligible)
+                    continue;
+
+                found.push_back(creature);
+            }
+
+            if (!found.empty())
+            {
+                anchor = candidatePlayer;
+                eligible = std::move(found);
+                break;
+            }
+        }
+
+        if (!anchor || eligible.empty())
+            return;
+
+        Creature* speaker = eligible[RandomUInt(0, static_cast<uint32_t>(eligible.size() - 1))];
+        if (!speaker)
+            return;
+
+        std::string category = "player_inquiry";
+        if (!m_config->npcRandomCategoryWeights.empty())
+            category = SampleCategory(m_config->npcRandomCategoryWeights, "player_inquiry");
+
+        std::string topic;
+        if (category == "player_inquiry")
+        {
+            std::string seed = !m_config->npcRandomPlayerInquiries.empty()
+                ? Pick(m_config->npcRandomPlayerInquiries)
+                : "Ask what brings them here.";
+            topic = "Address the nearby adventurer " + anchor->GetName() + " (" +
+                RaceName(anchor->GetRace()) + " " + ClassName(anchor->GetClass()) +
+                ", Level " + std::to_string(anchor->GetLevel()) + "): " + seed;
+        }
+        else if (category == "rumors")
+        {
+            topic = !m_config->npcRandomRumors.empty()
+                ? Pick(m_config->npcRandomRumors)
+                : "Share a short rumor about the zone.";
+        }
+        else if (category == "dailylife")
+        {
+            topic = !m_config->npcRandomDailyLife.empty()
+                ? Pick(m_config->npcRandomDailyLife)
+                : "Complain briefly about daily chores or patrol.";
+        }
+        else if (category == "zonelore")
+        {
+            topic = !m_config->npcRandomZoneLore.empty()
+                ? Pick(m_config->npcRandomZoneLore)
+                : "Mention local history or the danger of this region.";
+        }
+        else if (category == "humor")
+        {
+            topic = !m_config->npcRandomHumor.empty()
+                ? Pick(m_config->npcRandomHumor)
+                : "Make a dry, ironic observation about adventurers.";
+        }
+        else
+        {
+            topic = "Make a short casual observation or comment to yourself or anyone nearby.";
+        }
+
+        NpcDisposition const disposition = ClassifyNpcDisposition(speaker, anchor);
+        ActorSnapshot actor = SnapshotCreature(speaker, anchor, disposition, "npc-random");
+        SpeakerSnapshot observer = SnapshotSpeaker(anchor);
+
+        bool const queued = QueueDialogue(actor, observer, ChatScope::Say, "", "npc-random",
+            topic, RequestPriority::Ambient, false, false);
+
+        if (queued)
+        {
+            uint32_t const cdSec = m_config->npcRandomEntityCooldownSeconds > 0
+                ? m_config->npcRandomEntityCooldownSeconds : 900;
+            auto const cdUntil = now + std::chrono::seconds(cdSec);
+            m_npcRandomCooldowns[speaker->GetObjectGuid().GetRawValue()] = cdUntil;
+            m_proximitySpeakerCooldowns[speaker->GetObjectGuid().GetRawValue()] = cdUntil;
+
+            if (m_config->debug)
+            {
+                sLog.outDebug("[AzerothVoices] Queued solo NPC random chatter for %s near %s (category: %s).",
+                    speaker->GetName(), anchor->GetName(), category.c_str());
+            }
+        }
     }
 
     void Manager::RunGeneralChatter()
@@ -5729,7 +5921,7 @@ namespace AzerothVoices
             return true;
         }
 
-        if (request.proximityScene)
+        if (request.proximityScene || request.trigger == "npc-random")
         {
             // Every proximity speaker must still be visible, alive, out of
             // combat, in the same map and instance, within line of sight, and

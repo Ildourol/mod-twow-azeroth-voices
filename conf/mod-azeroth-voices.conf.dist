@@ -136,8 +136,8 @@ AzerothVoices.TokenRange.Mode = 2
 # AzerothVoices.MinTokens
 #     Description: Minimum token budget rolled per dialogue request when TokenRange.Mode = 2.
 #                  (Tokens, minimum 1.)
-#     Default:     20
-AzerothVoices.MinTokens = 20
+#     Default:     30
+AzerothVoices.MinTokens = 30
 
 # AzerothVoices.MaxTokens
 #     Description: Maximum token budget rolled per dialogue request. In TokenRange.Mode = 1,
@@ -1129,7 +1129,7 @@ AzerothVoices.Proximity.ScanSecondsInstance = 30
 # AzerothVoices.Proximity.OutdoorChance
 #     Description: Trigger chance per outdoor scan, before zone fatigue. (Percentage.)
 #     Default:     10
-AzerothVoices.Proximity.OutdoorChance = 10
+AzerothVoices.Proximity.OutdoorChance = 20
 
 # AzerothVoices.Proximity.InstanceChance
 #     Description: Trigger chance per dungeon/raid scan, before zone fatigue.
@@ -1188,13 +1188,13 @@ AzerothVoices.Proximity.EntityCooldownSeconds = 300
 #     Description: Scenes a zone may produce before its trigger chance starts decaying.
 #                  (Scenes, 1-100.)
 #     Default:     3
-AzerothVoices.Proximity.ZoneFatigueScenes = 3
+AzerothVoices.Proximity.ZoneFatigueScenes = 5
 
 # AzerothVoices.Proximity.ZoneFatigueDecayPercent
 #     Description: Decay applied per scene beyond ZoneFatigueScenes and per scene-free
 #                  scan, floored at 1 percent. (Percentage.)
 #     Default:     20
-AzerothVoices.Proximity.ZoneFatigueDecayPercent = 20
+AzerothVoices.Proximity.ZoneFatigueDecayPercent = 15
 
 # AzerothVoices.Proximity.MinimumSpeakers
 #     Description: Minimum speakers selected per scene. (Speakers, 1-8.)
@@ -1211,7 +1211,7 @@ AzerothVoices.Proximity.MaximumSpeakers = 2
 #     Description: Chance a scene becomes a multi-line conversation instead of one line.
 #                  (Percentage.)
 #     Default:     25
-AzerothVoices.Proximity.ConversationChance = 25
+AzerothVoices.Proximity.ConversationChance = 45
 
 # AzerothVoices.Proximity.MaximumLines
 #     Description: Lines a single scene may deliver. (Lines, 1-12.)
@@ -2214,6 +2214,83 @@ AzerothVoices.Random.WorldPrompts = Start a short topic about zones, dungeons, l
 AzerothVoices.Random.CategoryWeights = entertainment:30,toxic:25,reallife:25,lore:10,questions:10
 
 # --------------------------------------------
+# 14B. DEDICATED NPC SOLO RANDOM CHATTER (STANDALONE PROXIMITY SAY)
+# --------------------------------------------
+# Mirrors PlayerBots' Section 14 random chatter for nearby NPCs within 10 yards of real
+# players. Distinct from Section 9 proximity conversations (which require two NPCs to talk
+# to each other): this delivers a single, standalone ambient line spoken aloud in /say.
+# Includes direct player inquiries (asking questions or observing the real player's race,
+# class, level, and gear) alongside rumors, daily life, zone lore, and humor. Prompts are
+# compact and punchy. Followup dialogue is strictly disabled (allowFollowup = 0).
+# --------------------------------------------
+
+# AzerothVoices.NPC.Random.Enable
+#     Description: Enables solo standalone random chatter for nearby NPCs within distance
+#                  of online real players.
+#     Default:     1
+AzerothVoices.NPC.Random.Enable = 1
+
+# AzerothVoices.NPC.Random.MinimumIntervalSeconds
+#     Description: Lower interval bound between random NPC chatter attempts. (Seconds, minimum 10.)
+#     Default:     300
+AzerothVoices.NPC.Random.MinimumIntervalSeconds = 300
+
+# AzerothVoices.NPC.Random.MaximumIntervalSeconds
+#     Description: Upper interval bound between random NPC chatter attempts. (Seconds, at least MinimumIntervalSeconds.)
+#     Default:     600
+AzerothVoices.NPC.Random.MaximumIntervalSeconds = 600
+
+# AzerothVoices.NPC.Random.Chance
+#     Description: Roll chance for an NPC to speak when an interval elapses and an eligible
+#                  NPC is within distance of a real player. (Percentage, 0-100.)
+#     Default:     25
+AzerothVoices.NPC.Random.Chance = 25
+
+# AzerothVoices.NPC.Random.Distance
+#     Description: Maximum radius around a real player to find an eligible speaking NPC.
+#                  (Yards, minimum 1.0.)
+#     Default:     10.0
+AzerothVoices.NPC.Random.Distance = 10.0
+
+# AzerothVoices.NPC.Random.EntityCooldownSeconds
+#     Description: Repeat cooldown for an NPC that spoke random chatter. Also syncs with
+#                  proximity speaker cooldowns so the NPC does not immediately trigger
+#                  proximity scenes. (Seconds, minimum 0.)
+#     Default:     900
+AzerothVoices.NPC.Random.EntityCooldownSeconds = 900
+
+# AzerothVoices.NPC.Random.CategoryWeights
+#     Description: Percentage chance distribution for NPC solo random chatter categories:
+#                    - player_inquiry: Direct question or observation to the nearby player.
+#                    - rumors:         Local rumors, warnings of trouble, strange sightings.
+#                    - dailylife:      Complaints about patrols, chores, weather, long hours.
+#                    - zonelore:       Regional history, dangerous ruins, ancient conflicts.
+#                    - humor:          Dry observations about adventurers, light jokes.
+#     Default:     player_inquiry:35,rumors:25,dailylife:20,zonelore:10,humor:10
+AzerothVoices.NPC.Random.CategoryWeights = player_inquiry:35,rumors:25,dailylife:20,zonelore:10,humor:10
+
+# AzerothVoices.NPC.Random.PlayerInquiries
+#     Description: Compact prompt seeds for player-directed inquiries. The module injects
+#                  the player's name, race, class, and level. (Pipe-separated choices.)
+AzerothVoices.NPC.Random.PlayerInquiries = Ask where the traveler is headed.|Notice their armor or weapon.|Ask what brings them here.|Give a quick word of warning.|Ask how the roads are.
+
+# AzerothVoices.NPC.Random.Rumors
+#     Description: Compact prompt seeds for local rumors. (Pipe-separated choices.)
+AzerothVoices.NPC.Random.Rumors = Share a short rumor about the zone.|Warn of recent troubles nearby.|Mention strange sightings.|Whisper a local secret.
+
+# AzerothVoices.NPC.Random.DailyLife
+#     Description: Compact prompt seeds for everyday NPC remarks. (Pipe-separated choices.)
+AzerothVoices.NPC.Random.DailyLife = Complain about daily chores or patrol.|Comment on the weather or time.|Sigh about long hours.|Mention needing a stiff drink.
+
+# AzerothVoices.NPC.Random.ZoneLore
+#     Description: Compact prompt seeds for zone lore and regional danger. (Pipe-separated choices.)
+AzerothVoices.NPC.Random.ZoneLore = Mention local history or ruins.|Comment on the danger of this region.|Speak of ancient conflicts here.
+
+# AzerothVoices.NPC.Random.Humor
+#     Description: Compact prompt seeds for dry humor and irony. (Pipe-separated choices.)
+AzerothVoices.NPC.Random.Humor = Make a dry observation about adventurers.|Make a short, lighthearted joke.|Mutter an ironic remark.
+
+# --------------------------------------------
 # 15. AUTOMATED WORLD/CUSTOM-CHANNEL PACING & GENERAL CHATTER
 # --------------------------------------------
 # Controls automated ambient chatter across zones where real players are present.
@@ -2648,6 +2725,19 @@ AzerothVoices.Events.SelfCommentChance = 3
 #     Description: Maximum other responders to one event. (Actors, minimum 1.)
 #     Default:     1
 AzerothVoices.Events.MaximumResponders = 1
+
+# AzerothVoices.Events.AllowNpcSay
+#     Description: Allows nearby NPCs (and un-grouped bots) within NPC distance to react
+#                  to player events (kills, level-ups, deaths, quests, loot) aloud in /say.
+#     Default:     1
+AzerothVoices.Events.AllowNpcSay = 1
+
+# AzerothVoices.Events.MaximumSayNpcResponders
+#     Description: Dedicated responder quota for nearby NPC /say reactions to player events.
+#                  Decoupled from MaximumResponders so party bots in /party cannot starve or
+#                  block nearby NPCs from speaking. (Responders, minimum 0.)
+#     Default:     1
+AzerothVoices.Events.MaximumSayNpcResponders = 1
 
 # AzerothVoices.Events.CooldownSeconds
 #     Description: Per-subject/per-event repeat cooldown. (Seconds, minimum 0.)

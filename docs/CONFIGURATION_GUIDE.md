@@ -47,11 +47,12 @@
 12. [Guild chatter](#guild-chatter) (45 settings)
 13. [Deterministic bot memory ledger](#deterministic-bot-memory-ledger) (17 settings)
 14. [Random nearby, guild, and world chatter](#random-nearby-guild-and-world-chatter) (12 settings)
+14B. [Dedicated NPC Solo Random Chatter (Standalone Proximity Say)](#dedicated-npc-solo-random-chatter-standalone-proximity-say) (11 settings)
 15. [Automated World/custom-channel pacing](#automated-worldcustom-channel-pacing) (11 settings)
 15B. [World Chat — Barrens Conversations](#world-chat--barrens-conversations) (40 settings)
 16. [PartyGate per-party delivery pacing](#partygate-per-party-delivery-pacing) (8 settings)
 17. [Lightweight live environment context](#lightweight-live-environment-context) (6 settings)
-18. [Event chatter](#event-chatter) (28 settings)
+18. [Event chatter](#event-chatter) (30 settings)
 19. [Reply length and PlayerBots-compatible typing delay](#reply-length-and-playerbots-compatible-typing-delay) (11 settings)
 20. [Bounded conversation and surrounding-chat history](#bounded-conversation-and-surrounding-chat-history) (17 settings)
 21. [SNAPSHOT SYSTEM](#snapshot-system) (24 settings)
@@ -1402,7 +1403,7 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 | [`AzerothVoices.Proximity.Enable`](#azerothvoicesproximityenable) | Boolean (`0` or `1`) | `1` | Enables the proximity subsystem, which owns ordinary nearby NPC Say chatter. |
 | [`AzerothVoices.Proximity.ScanSecondsOutdoor`](#azerothvoicesproximityscansecondsoutdoor) | Integer (Seconds, 5-3600) | `60` | Delay between outdoor proximity scans. |
 | [`AzerothVoices.Proximity.ScanSecondsInstance`](#azerothvoicesproximityscansecondsinstance) | Integer (Seconds, 5-3600) | `30` | Delay between dungeon/raid proximity scans. |
-| [`AzerothVoices.Proximity.OutdoorChance`](#azerothvoicesproximityoutdoorchance) | Percentage (`0` - `100`) | `10` | Trigger chance per outdoor scan, before zone fatigue. |
+| [`AzerothVoices.Proximity.OutdoorChance`](#azerothvoicesproximityoutdoorchance) | Percentage (`0` - `100`) | `20` | Trigger chance per outdoor scan, before zone fatigue. |
 | [`AzerothVoices.Proximity.InstanceChance`](#azerothvoicesproximityinstancechance) | Percentage (`0` - `100`) | `35` | Trigger chance per dungeon/raid scan, before zone fatigue. |
 | [`AzerothVoices.Proximity.IncludeInstances`](#azerothvoicesproximityincludeinstances) | Boolean (`0` or `1`) | `1` | Includes dungeons and raids in proximity chatter evaluations. |
 | [`AzerothVoices.Proximity.PlayerDistance`](#azerothvoicesproximityplayerdistance) | Float (Yards, > 0.0) | `10.0` | Maximum distance from anchor player to primary NPC to trigger proximity chat. |
@@ -1413,11 +1414,11 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 | [`AzerothVoices.Proximity.Pacing.ReplyDelayMaxSeconds`](#azerothvoicesproximitypacingreplydelaymaxseconds) | Integer (Seconds, 0-60) | `9` | Maximum randomized delay before the next NPC turn delivers. |
 | [`AzerothVoices.Proximity.Pacing.PauseDuringPlayerChatSeconds`](#azerothvoicesproximitypacingpauseduringplayerchatseconds) | Integer (Seconds, 0-3600) | `45` | Suppresses ambient proximity chatter if a human player spoke in /say nearby. |
 | [`AzerothVoices.Proximity.EntityCooldownSeconds`](#azerothvoicesproximityentitycooldownseconds) | Integer (Seconds, 0-86400) | `300` | Per-speaker cooldown after a delivered proximity line (5 minutes). |
-| [`AzerothVoices.Proximity.ZoneFatigueScenes`](#azerothvoicesproximityzonefatiguescenes) | Integer (Scenes, 1-100) | `3` | Scenes a zone may produce before trigger chance decays. |
-| [`AzerothVoices.Proximity.ZoneFatigueDecayPercent`](#azerothvoicesproximityzonefatiguedecaypercent) | Percentage (`0` - `100`) | `20` | Decay applied per scene beyond ZoneFatigueScenes. |
+| [`AzerothVoices.Proximity.ZoneFatigueScenes`](#azerothvoicesproximityzonefatiguescenes) | Integer (Scenes, 1-100) | `5` | Scenes a zone may produce before trigger chance decays. |
+| [`AzerothVoices.Proximity.ZoneFatigueDecayPercent`](#azerothvoicesproximityzonefatiguedecaypercent) | Percentage (`0` - `100`) | `15` | Decay applied per scene beyond ZoneFatigueScenes. |
 | [`AzerothVoices.Proximity.MinimumSpeakers`](#azerothvoicesproximityminimumspeakers) | Integer (Speakers, 1-8) | `1` | Minimum speakers selected per scene. |
 | [`AzerothVoices.Proximity.MaximumSpeakers`](#azerothvoicesproximitymaximumspeakers) | Integer (Speakers, 1-8) | `2` | Maximum speakers selected per scene. |
-| [`AzerothVoices.Proximity.ConversationChance`](#azerothvoicesproximityconversationchance) | Percentage (`0` - `100`) | `25` | Chance a scene becomes a multi-line conversation instead of one line. |
+| [`AzerothVoices.Proximity.ConversationChance`](#azerothvoicesproximityconversationchance) | Percentage (`0` - `100`) | `45` | Chance a scene becomes a multi-line conversation instead of one line. |
 | [`AzerothVoices.Proximity.MaximumLines`](#azerothvoicesproximitymaximumlines) | Integer (Lines, 1-12) | `3` | Lines a single scene may deliver. |
 | [`AzerothVoices.Proximity.TurnGapSeconds`](#azerothvoicesproximityturngapseconds) | Integer (Seconds, 0-600) | `3` | Minimum gap between delivered lines of one conversation. |
 | [`AzerothVoices.Proximity.ReplyWindowSeconds`](#azerothvoicesproximityreplywindowseconds) | Integer (Seconds, 1-600) | `30` | Window in which a conversation may continue after its first line. |
@@ -1451,9 +1452,9 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 ### <a id="azerothvoicesproximityoutdoorchance"></a>`AzerothVoices.Proximity.OutdoorChance`
 
 - **Data Type**: Percentage (`0` - `100`)
-- **Default Value**: `10`
+- **Default Value**: `20`
 - **Description**: Trigger chance per outdoor scan, before zone fatigue.
-- **Operator Guidance & Impact**: Lowered to 10% to prevent excessive chatter in populated quest hubs.
+- **Operator Guidance & Impact**: Calibrated to 20% to achieve a natural 10-15 minute cadence between dialogues in quest hubs.
 
 ### <a id="azerothvoicesproximityinstancechance"></a>`AzerothVoices.Proximity.InstanceChance`
 
@@ -1528,16 +1529,16 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 ### <a id="azerothvoicesproximityzonefatiguescenes"></a>`AzerothVoices.Proximity.ZoneFatigueScenes`
 
 - **Data Type**: Integer (Scenes, 1-100)
-- **Default Value**: `3`
+- **Default Value**: `5`
 - **Description**: Scenes a zone may produce before its trigger chance starts decaying.
-- **Operator Guidance & Impact**: Dampens chatter in zones where players linger for extended periods.
+- **Operator Guidance & Impact**: Set to 5 to sustain lively dialogue in quest hubs before fatigue dampening engages.
 
 ### <a id="azerothvoicesproximityzonefatiguedecaypercent"></a>`AzerothVoices.Proximity.ZoneFatigueDecayPercent`
 
 - **Data Type**: Percentage (`0` - `100`)
-- **Default Value**: `20`
+- **Default Value**: `15`
 - **Description**: Decay applied per scene beyond ZoneFatigueScenes and per scene-free scan, floored at 1 percent.
-- **Operator Guidance & Impact**: Calibrates the rate of chatter decay in lingering zones.
+- **Operator Guidance & Impact**: Calibrated to 15% for gradual, organic dampening rather than abrupt silence.
 
 ### <a id="azerothvoicesproximityminimumspeakers"></a>`AzerothVoices.Proximity.MinimumSpeakers`
 
@@ -1556,9 +1557,9 @@ rows older than 90 days are removed by the existing hourly database cleanup.
 ### <a id="azerothvoicesproximityconversationchance"></a>`AzerothVoices.Proximity.ConversationChance`
 
 - **Data Type**: Percentage (`0` - `100`)
-- **Default Value**: `25`
+- **Default Value**: `45`
 - **Description**: Chance a scene becomes a multi-line conversation instead of a solo bark.
-- **Operator Guidance & Impact**: Balanced at 25% for occasional dialogue while keeping solo ambient barks common.
+- **Operator Guidance & Impact**: Calibrated to 45% so multi-NPC conversations occur roughly every 10-15 minutes outdoors.
 
 ### <a id="azerothvoicesproximitymaximumlines"></a>`AzerothVoices.Proximity.MaximumLines`
 
@@ -2960,6 +2961,113 @@ Forget button and `.av memory forget` delete them.
 
 ---
 
+## 14B. Dedicated NPC Solo Random Chatter (Standalone Proximity Say)
+
+> Mirrors PlayerBots' Section 14 random chatter for nearby NPCs within 10 yards of real players. Distinct from Section 9 proximity conversations (which require two NPCs to talk to each other): this delivers a single, standalone ambient line spoken aloud in `/say`. Includes direct player inquiries (asking questions or observing the real player's race, class, level, and gear) alongside rumors, daily life, zone lore, and humor. Prompts are compact and punchy. Followup dialogue is strictly disabled (`allowFollowup = 0`).
+
+| Setting Name | Type / Range | Default | Summary |
+| :--- | :--- | :--- | :--- |
+| [`AzerothVoices.NPC.Random.Enable`](#azerothvoicesnpcrandomenable) | Boolean (`0` or `1`) | `1` | Enables solo standalone random chatter for nearby NPCs within distance of online real players. |
+| [`AzerothVoices.NPC.Random.MinimumIntervalSeconds`](#azerothvoicesnpcrandomminimumintervalseconds) | Integer (Seconds, minimum 10) | `300` | Lower interval bound between random NPC chatter attempts. |
+| [`AzerothVoices.NPC.Random.MaximumIntervalSeconds`](#azerothvoicesnpcrandommaximumintervalseconds) | Integer (Seconds, >= Min) | `600` | Upper interval bound between random NPC chatter attempts. |
+| [`AzerothVoices.NPC.Random.Chance`](#azerothvoicesnpcrandomchance) | Percentage (`0`-`100`) | `25` | Roll chance for an NPC to speak when interval elapses and player is near. |
+| [`AzerothVoices.NPC.Random.Distance`](#azerothvoicesnpcrandomdistance) | Float (Yards, min 1.0) | `10.0` | Maximum radius around a real player to find an eligible speaking NPC. |
+| [`AzerothVoices.NPC.Random.EntityCooldownSeconds`](#azerothvoicesnpcrandomentitycooldownseconds) | Integer (Seconds, min 0) | `900` | Repeat cooldown per NPC; also syncs with proximity cooldowns. |
+| [`AzerothVoices.NPC.Random.CategoryWeights`](#azerothvoicesnpcrandomcategoryweights) | Weight String | `player_inquiry:35,rumors:25,dailylife:20,zonelore:10,humor:10` | Percentage chance distribution across NPC solo random chatter categories. |
+| [`AzerothVoices.NPC.Random.PlayerInquiries`](#azerothvoicesnpcrandomplayerinquiries) | String (Pipe-separated) | `Ask where the traveler is headed...` | Compact prompt seeds for player-directed questions and observations. |
+| [`AzerothVoices.NPC.Random.Rumors`](#azerothvoicesnpcrandomrumors) | String (Pipe-separated) | `Share a short rumor about the zone...` | Compact prompt seeds for local rumors. |
+| [`AzerothVoices.NPC.Random.DailyLife`](#azerothvoicesnpcrandomdailylife) | String (Pipe-separated) | `Complain about daily chores...` | Compact prompt seeds for everyday NPC remarks. |
+| [`AzerothVoices.NPC.Random.ZoneLore`](#azerothvoicesnpcrandomzonelore) | String (Pipe-separated) | `Mention local history or ruins...` | Compact prompt seeds for zone lore and regional danger. |
+| [`AzerothVoices.NPC.Random.Humor`](#azerothvoicesnpcrandomhumor) | String (Pipe-separated) | `Make a dry observation...` | Compact prompt seeds for dry humor and irony. |
+
+
+### <a id="azerothvoicesnpcrandomenable"></a>`AzerothVoices.NPC.Random.Enable`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Enables solo standalone random chatter for nearby NPCs within distance of online real players.
+- **Operator Guidance & Impact**: Keep enabled (`1`) for living world immersion where solitary guards, vendors, and townsfolk occasionally talk to passing adventurers or mutter aloud.
+
+### <a id="azerothvoicesnpcrandomminimumintervalseconds"></a>`AzerothVoices.NPC.Random.MinimumIntervalSeconds`
+
+- **Data Type**: Integer (Seconds, minimum 10)
+- **Default Value**: `300`
+- **Description**: Lower interval bound between random NPC chatter attempts.
+- **Operator Guidance & Impact**: Paired with `MaximumIntervalSeconds` to generate randomized pacing between 5 and 10 minutes.
+
+### <a id="azerothvoicesnpcrandommaximumintervalseconds"></a>`AzerothVoices.NPC.Random.MaximumIntervalSeconds`
+
+- **Data Type**: Integer (Seconds, at least MinimumIntervalSeconds)
+- **Default Value**: `600`
+- **Description**: Upper interval bound between random NPC chatter attempts.
+- **Operator Guidance & Impact**: Sets the ceiling for randomized evaluation pacing.
+
+### <a id="azerothvoicesnpcrandomchance"></a>`AzerothVoices.NPC.Random.Chance`
+
+- **Data Type**: Percentage (`0` - `100`)
+- **Default Value**: `25`
+- **Description**: Roll chance for an NPC to speak when an interval elapses and an eligible NPC is within distance of a real player.
+- **Operator Guidance & Impact**: Lower values ensure NPCs only speak occasionally rather than every cycle.
+
+### <a id="azerothvoicesnpcrandomdistance"></a>`AzerothVoices.NPC.Random.Distance`
+
+- **Data Type**: Float (Yards, minimum 1.0)
+- **Default Value**: `10.0`
+- **Description**: Maximum radius around a real player to find an eligible speaking NPC.
+- **Operator Guidance & Impact**: 10 yards ensures the NPC is immediately adjacent to the player, making the speech feel personal and physically present.
+
+### <a id="azerothvoicesnpcrandomentitycooldownseconds"></a>`AzerothVoices.NPC.Random.EntityCooldownSeconds`
+
+- **Data Type**: Integer (Seconds, minimum 0)
+- **Default Value**: `900`
+- **Description**: Repeat cooldown for an NPC that spoke random chatter. Also syncs with proximity speaker cooldowns so the NPC does not immediately trigger proximity scenes.
+- **Operator Guidance & Impact**: Default 900s (15 min) prevents the same NPC from repeating lines or immediately chain-triggering other dialogue.
+
+### <a id="azerothvoicesnpcrandomcategoryweights"></a>`AzerothVoices.NPC.Random.CategoryWeights`
+
+- **Data Type**: String (Colon/comma key-weight pairs)
+- **Default Value**: `player_inquiry:35,rumors:25,dailylife:20,zonelore:10,humor:10`
+- **Description**: Percentage chance distribution for NPC solo random chatter categories:
+  - `player_inquiry`: Direct question or observation to the nearby player referencing their race, class, and level.
+  - `rumors`: Local rumors, warnings of trouble, strange sightings.
+  - `dailylife`: Complaints about patrols, chores, weather, long hours.
+  - `zonelore`: Regional history, dangerous ruins, ancient conflicts.
+  - `humor`: Dry observations about adventurers, light jokes.
+- **Operator Guidance & Impact**: Adjust weights to favor direct inquiries or atmospheric lore.
+
+### <a id="azerothvoicesnpcrandomplayerinquiries"></a>`AzerothVoices.NPC.Random.PlayerInquiries`
+
+- **Data Type**: String (Pipe-separated choices)
+- **Default Value**: `Ask where the traveler is headed.|Notice their armor or weapon.|Ask what brings them here.|Give a quick word of warning.|Ask how the roads are.`
+- **Description**: Compact prompt seeds for player-directed inquiries. The module injects the player's name, race, class, and level.
+- **Operator Guidance & Impact**: Token-optimized compact prompts designed for maximum relevance and fast generation.
+
+### <a id="azerothvoicesnpcrandomrumors"></a>`AzerothVoices.NPC.Random.Rumors`
+
+- **Data Type**: String (Pipe-separated choices)
+- **Default Value**: `Share a short rumor about the zone.|Warn of recent troubles nearby.|Mention strange sightings.|Whisper a local secret.`
+- **Description**: Compact prompt seeds for local rumors.
+
+### <a id="azerothvoicesnpcrandomdailylife"></a>`AzerothVoices.NPC.Random.DailyLife`
+
+- **Data Type**: String (Pipe-separated choices)
+- **Default Value**: `Complain about daily chores or patrol.|Comment on the weather or time.|Sigh about long hours.|Mention needing a stiff drink.`
+- **Description**: Compact prompt seeds for everyday NPC remarks.
+
+### <a id="azerothvoicesnpcrandomzonelore"></a>`AzerothVoices.NPC.Random.ZoneLore`
+
+- **Data Type**: String (Pipe-separated choices)
+- **Default Value**: `Mention local history or ruins.|Comment on the danger of this region.|Speak of ancient conflicts here.`
+- **Description**: Compact prompt seeds for zone lore and regional danger.
+
+### <a id="azerothvoicesnpcrandomhumor"></a>`AzerothVoices.NPC.Random.Humor`
+
+- **Data Type**: String (Pipe-separated choices)
+- **Default Value**: `Make a dry observation about adventurers.|Make a short, lighthearted joke.|Mutter an ironic remark.`
+- **Description**: Compact prompt seeds for dry humor and irony.
+
+---
+
 ## 15. Automated World/custom-channel pacing & general chatter
 
 | Setting Name | Type / Range | Default | Summary |
@@ -3572,6 +3680,8 @@ human within SayDistance; Party actors require a real human in the same party su
 | [`AzerothVoices.Events.ResponderChance`](#azerothvoiceseventsresponderchance) | Percentage (`0` - `100`) | `8` | Second-stage chance that other actors react after the selected scope's real... |
 | [`AzerothVoices.Events.SelfCommentChance`](#azerothvoiceseventsselfcommentchance) | Percentage (`0` - `100`) | `3` | Chance an AI PlayerBot comments on its own event through Guild, preferred P... |
 | [`AzerothVoices.Events.MaximumResponders`](#azerothvoiceseventsmaximumresponders) | Integer | `1` | Maximum other responders to one event. (Actors, minimum 1; default 2) |
+| [`AzerothVoices.Events.AllowNpcSay`](#azerothvoiceseventsallownpcsay) | Boolean (`0` or `1`) | `1` | Allows nearby NPCs within NPC distance to react to player events aloud in /say. |
+| [`AzerothVoices.Events.MaximumSayNpcResponders`](#azerothvoiceseventsmaximumsaynpcresponders) | Integer | `1` | Dedicated responder quota for nearby NPC /say reactions; decoupled from party bots. |
 | [`AzerothVoices.Events.CooldownSeconds`](#azerothvoiceseventscooldownseconds) | Integer (Seconds, minimum 0; default 90) | `90` | Per-subject/per-event repeat cooldown. (Seconds, minimum 0; default 300) |
 | [`AzerothVoices.Events.Chance.CreatureDefeated`](#azerothvoiceseventschancecreaturedefeated) | Percentage (`0` - `100`) | `4` | Initial chance for an automatic creature-kill event. (Percentage; default 8... |
 | [`AzerothVoices.Events.Chance.PlayerDefeated`](#azerothvoiceseventschanceplayerdefeated) | Percentage (`0` - `100`) | `25` | Initial chance for an automatic PvP-kill event. (Percentage; default 40) |
@@ -3625,6 +3735,20 @@ human within SayDistance; Party actors require a real human in the same party su
 - **Default Value**: `2`
 - **Description**: Maximum other responders to one event. (Actors, minimum 1; default 2)
 - **Operator Guidance & Impact**: Refer to the technical description above to calibrate this value for your server environment.
+
+### <a id="azerothvoiceseventsallownpcsay"></a>`AzerothVoices.Events.AllowNpcSay`
+
+- **Data Type**: Boolean (`0` or `1`)
+- **Default Value**: `1`
+- **Description**: Allows nearby NPCs (and un-grouped bots) within NPC distance to react to player events (kills, level-ups, deaths, quests, loot) aloud in `/say`.
+- **Operator Guidance & Impact**: Keep enabled (`1`) so the world feels alive when milestones occur near vendors, trainers, innkeepers, or quest givers.
+
+### <a id="azerothvoiceseventsmaximumsaynpcresponders"></a>`AzerothVoices.Events.MaximumSayNpcResponders`
+
+- **Data Type**: Integer
+- **Default Value**: `1`
+- **Description**: Dedicated responder quota for nearby NPC `/say` reactions to player events. Decoupled from `MaximumResponders` so party bots in `/party` cannot starve or block nearby NPCs from speaking.
+- **Operator Guidance & Impact**: Usually kept at `1` to prevent multiple NPCs talking simultaneously over a single kill or level-up.
 
 ### <a id="azerothvoiceseventscooldownseconds"></a>`AzerothVoices.Events.CooldownSeconds`
 
