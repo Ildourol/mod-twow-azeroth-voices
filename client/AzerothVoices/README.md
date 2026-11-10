@@ -16,8 +16,10 @@ It lets players manage persistent personality traits, tones, background stories,
 - **Edit Personality Traits:** View and edit each bot's three persistent personality traits.
 - **Generated Tone:** Displays the dynamic tone generated server-side by the LLM provider based on the bot's traits and class/race lore.
 - **Background Story:** View the bot's generated backstory and request background regeneration on demand.
+- **Safe Sequenced Generation ("Generate All"):** Sequentially generates traits, backstory, and tone with timer pacing and cancellation protection against bot selection switching.
+- **Server Multilingual Indicator:** Header badge displaying active server languages (English + secondary preset) and tooltip breakdown of chat scope percentages; click to refresh.
 - **Bulk Forget:** Check one or multiple bots to selectively erase shared memories and conversation history without altering their persistent personality or server-wide sentiment.
-- **Single Movable Window:** Clean, draggable, lightweight UI designed specifically for the Vanilla 1.12 / Turtle WoW interface.
+- **Single Movable Window:** Clean, draggable, lightweight UI designed specifically for the Vanilla 1.12 / Turtle WoW interface with dedicated Up/Down navigation buttons.
 - **Automatic Migration:** Seamlessly migrates window position and selected-bot state from legacy `ChatterDB` to `AzerothVoicesDB`.
 
 ---
@@ -87,11 +89,14 @@ For backward compatibility, the legacy slash commands `/chatter` and `/llmc` are
 
 ### Interface Walkthrough
 
+- **Server Language Header Badge (Top Right):** Displays the active server languages. Hover to view a tooltip of scope percentages; click to refresh status from the server (`.avaddon status`).
 - **Search & Roster (Left):** Search known bots with the search box. Click any name to load that bot's profile.
 - **Checkboxes & Forget (Left):** Check individual bots (or click **Check all**) and click **Forget selected** to erase shared memories and conversation history. A confirmation dialog shows the target count and names before proceeding.
 - **Edit Traits (Right):** Edit Trait 1, Trait 2, and Trait 3. Pressing Tab cycles through the three traits. Click **Save Traits** to save changes; saving prompts for confirmation and instructs the server to regenerate the bot's tone and backstory.
 - **Regenerate Story (Right):** Click **Regenerate Story** to regenerate only the background story while preserving existing traits and tone.
+- **Generate All (Right):** Sequentially runs trait generation, backstory creation, and tone synthesis with built-in safety pauses.
 - **Refresh (Top Right):** Requests a fresh roster from the server.
+- **Up / Down Navigation (Bottom Right):** Quick-scroll through the panel content alongside native mouse wheel support.
 
 ---
 

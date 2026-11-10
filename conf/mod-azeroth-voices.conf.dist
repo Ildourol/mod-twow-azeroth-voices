@@ -3239,8 +3239,8 @@ AzerothVoices.Language.Secondary = ""
 #     General/Trade and custom public channels default to English (Channel:0).
 #     Choose once per bot-started conversation; all participants and follow-ups keep it.
 #     Direct player replies match supported input when the scope percentage is > 0.
-#     Default: "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100,Channel:0"
-AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100,Channel:0"
+#     Default: "World:10,Guild:100,Party:100,Raid:0,Whisper:100,Say:20,Yell:10,Channel:0"
+AzerothVoices.Language.ScopeSecondaryChance = "World:10,Guild:100,Party:100,Raid:0,Whisper:100,Say:20,Yell:10,Channel:0"
 
 # Keep game terminology unchanged
 #     1 = preserve English game terms and supplied names; translate surrounding speech.

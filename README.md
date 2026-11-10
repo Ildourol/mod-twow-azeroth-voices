@@ -29,10 +29,12 @@ By directly embedding an asynchronous non-blocking HTTP/HTTPS provider client in
 - [Database Setup & Schema Migrations](#database-setup--schema-migrations)
 - [Configuration & Deployment](#configuration--deployment)
 - [Configuration Presets & Quick-Start](#configuration-presets--quick-start)
+- [Shared Secondary Language & Multilingual Support](#shared-secondary-language--multilingual-support)
 - [In-Game Administration Commands](#in-game-administration-commands)
 - [Client Companion AddOn](#client-companion-addon)
 - [Troubleshooting & Diagnostics](#troubleshooting--diagnostics)
 - [Contributing & Code Standards](#contributing--code-standards)
+- [License](#license)
 
 ---
 
@@ -351,6 +353,44 @@ AzerothVoices.WorldChat.Barrens.ProfanityChance = 20
 
 ---
 
+## Shared Secondary Language & Multilingual Support
+
+Every conversational PlayerBot understands English and optionally one shared secondary language preset: `GR` (Greeklish), `DE` (German), `FR` (French), `ES` (Spanish), `IT` (Italian), `PT` (Portuguese), `PL` (Polish), `RU` (Russian), `TR` (Turkish), or `NL` (Dutch). Custom language prompts and per-bot assignments are not required. `GR` accepts Greek script and Greeklish, replying in Latin-character Greeklish, while other presets use standard native orthography.
+
+Enable `AzerothVoices.Language.Enable = 1` and configure `AzerothVoices.Language.Secondary` (e.g. `"DE"`, `"FR"`, `"GR"`). When disabled (`0`), no language prompts, classifications, or repair requests are executed.
+
+```ini
+AzerothVoices.Language.Enable = 0
+AzerothVoices.Language.Secondary = ""
+AzerothVoices.Language.ScopeSecondaryChance = "World:10,Guild:100,Party:100,Raid:0,Whisper:100,Say:20,Yell:10,Channel:0"
+AzerothVoices.Language.PreserveGameTerms = 1
+AzerothVoices.Language.Repair.Enable = 0
+```
+
+### Scope Chance & Language Gating
+
+`AzerothVoices.Language.ScopeSecondaryChance` governs bot-started conversations across scopes:
+- **`World:10`** — 10% chance for bot-initiated chatter in the world channel. Set `World:0` to keep World chat strictly English.
+- **`Guild:100`** — 100% chance for bot guild chatter.
+- **`Party:100`** — 100% chance for party chatter.
+- **`Raid:0`** — 0% chance for raid chat, preserving English communication in raids.
+- **`Whisper:100`** — 100% chance for bot whispers.
+- **`Say:20`** — 20% chance for local say banter.
+- **`Yell:10`** — 10% chance for local yells.
+- **`Channel:0`** — General, Trade, and custom public channels remain in English.
+
+Conversations retain their chosen language across all bot participants and follow-up exchanges. Direct player replies match supported player input whenever the scope percentage is > 0.
+
+### Additional Controls
+
+- **`PreserveGameTerms` (`1`)**: Preserves English item names, spell names, quest titles, slash commands, and functional links while translating conversational dialogue.
+- **`Repair.Enable` (`0`)**: When enabled (`1`), allows at most one secondary repair request if the model returns malformed output.
+- **Built-In Conversational Directives**: Prompts automatically enforce natural idiomatic phrasing, match character gender, and ensure conversation history and memories provide context rather than overriding the chosen reply language.
+
+Inspect language configuration in-game via `.av language status` or through the interactive header badge in the companion AddOn. For full details, see the [Comprehensive Configuration & Tuning Guide](docs/CONFIGURATION_GUIDE.md#24-shared-secondary-language).
+
+---
+
 ## In-Game Administration Commands
 
 Game Masters (Security Level 2+) can inspect, tune, and test dialogue in-game:
@@ -358,6 +398,7 @@ Game Masters (Security Level 2+) can inspect, tune, and test dialogue in-game:
 | Command | Syntax | Description |
 | :--- | :--- | :--- |
 | **Status** | `.av status` | Displays queue depth, active worker threads, and rate limits. |
+| **Language Status** | `.av language [status]` | Displays active secondary language preset and per-scope percentages. |
 | **Connection Test** | `.av test` | Sends a lightweight test ping to the configured LLM API endpoint. |
 | **Hot Reload** | `.av reload` | Reloads all configuration settings from disk without restarting worldserver. |
 | **Pause / Resume** | `.av pause` / `.av resume` | Temporarily halts or resumes LLM request generation across all scopes. |
@@ -380,8 +421,9 @@ World of Warcraft\Interface\AddOns\AzerothVoices\
 
 ### Features:
 - **Interactive Persona Browser**: View online bots, inspect their personality traits, and read their backstories.
-- **Sequenced Personality Generation**: Triggers server-side generation flow (`Traits -> Backstory -> Tone`) with real-time progress indicators.
-- **Smooth Mouse Wheel Scrolling**: Full native Vanilla 1.12.1 mouse wheel scrolling support on backstories and conversation logs.
+- **Server Multilingual Status**: Real-time header badge displaying active server languages (English + secondary language) and per-scope percentages with click-to-refresh (`.avaddon status`).
+- **Sequenced Personality Generation**: Triggers safe server-side generation flow (`Traits -> Backstory -> Tone`) with timer gating and automatic guard against bot selection changes.
+- **Smooth Mouse Wheel Scrolling**: Full native Vanilla 1.12.1 mouse wheel scrolling support on backstories and conversation logs, with Up/Down buttons for easy navigation.
 - **In-Game Slash Commands**: Open the companion UI anytime using `/azerothvoices` or `/avvoices`.
 
 ---
@@ -419,17 +461,3 @@ Pull requests and issues are warmly welcomed! When contributing:
 ## License
 
 This project is licensed under the open-source **Affero General Public License (AGPLv3)** / **MIT**, matching the underlying custom vMaNGOS ecosystem.
-
-## 24. Shared secondary language
-
-Every conversational bot understands English and one preset: GR (Greeklish), DE, FR, ES, IT, PT, PL, RU, TR or NL. Custom languages/prompts and per-bot assignments are not supported. GR accepts Greek script and Greeklish and replies in Latin Greeklish.
-
-Enable `AzerothVoices.Language.Enable` and choose `AzerothVoices.Language.Secondary`. Disabled mode adds no language prompts or repair calls. The scope percentages control which chat scopes allow the secondary language.
-
-`AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100,Channel:0"` controls bot-started speech. A scope set to 0 stays English. A conversation retains its language across participants. Direct replies match supported player input. Missing scopes use these defaults; invalid lists use the complete defaults.
-
-PreserveGameTerms retains supplied English game terminology and functional references. Language-enabled prompts ask for natural wording and keep prior context from overriding the reply language. Repair.Enable permits at most one additional language repair call. All use the AzerothVoices.Language prefix. Accuracy depends on the configured model.
-
-Use `.av language status` or the addon Server languages section below Sentiment. Up/Down controls expose overflow. Install the shipped addon manually; the server must be compiled with the matching LANGUAGE_INFO payload. No language SQL is needed.
-
-Category 24 contains all nine language options. See the [complete configuration reference](docs/CONFIGURATION_GUIDE.md#24-shared-secondary-language) for presets, defaults and validation. `World.Enable=0` overrides the World percentage; `World.Enable=1` with `World:0` still permits secondary-language replies to players. Repair is an extra API request only after a detected error, with additional token usage; it is not called for every message.

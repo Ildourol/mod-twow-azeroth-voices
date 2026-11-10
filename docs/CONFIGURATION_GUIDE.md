@@ -57,9 +57,9 @@
 21. [SNAPSHOT SYSTEM](#snapshot-system) (24 settings)
 22. [Structured local RAG (optional, no embeddings or extra provider call)](#structured-local-rag-optional-no-embeddings-or-extra-provider-call) (7 settings)
 23. [Azeroth Voices Companion addon and Chatter compatibility](#azeroth-voices-companion-addon-and-chatter-compatibility) (2 settings)
-24. [Shared secondary language](#24-shared-secondary-language) (9 settings)
-24. [Deployment recommendations](#deployment-recommendations)
-25. [Maintenance and updates](#maintenance-and-updates)
+24. [Shared secondary language](#24-shared-secondary-language) (5 settings)
+25. [Deployment recommendations](#deployment-recommendations)
+26. [Maintenance and updates](#maintenance-and-updates)
 
 
 ---
@@ -4352,15 +4352,15 @@ All conversational PlayerBots understand English plus one shared secondary langu
 | Setting (prefix `AzerothVoices.Language.`) | Default | Behavior |
 |---|---|---|
 | `Enable` | `0` | Master switch; disabled bypasses language prompts, classification and repair. |
-| `Secondary` | `"GR"` | One preset shared by all bots; codes are case-insensitive. Invalid enabled selection disables language support with a diagnostic. |
-| `ScopeSecondaryChance` | See example below | Percentage for each scope's bot-started speech (e.g. World:50, Channel:0). Set `World:0` to keep World chat strictly English. |
+| `Secondary` | `""` | One preset shared by all bots; codes are case-insensitive. Invalid enabled selection disables language support with a diagnostic. |
+| `ScopeSecondaryChance` | See example below | Percentage for each scope's bot-started speech (e.g. World:10, Channel:0). Set `World:0` to keep World chat strictly English. |
 | `PreserveGameTerms` | `1` | Preserve supplied English terminology, game names and class/race labels; translate surrounding prose. Names, commands and functional links remain protected in either mode. |
 | `Repair.Enable` | `0` | Permit at most one extra API request after a detectable language/protocol error. Valid replies need no extra call. If the key is omitted, the code fallback is enabled. |
 
 ```ini
 AzerothVoices.Language.Enable = 0
-AzerothVoices.Language.Secondary = "GR"
-AzerothVoices.Language.ScopeSecondaryChance = "World:50,Guild:100,Party:100,Raid:100,Whisper:100,Say:100,Yell:100,Channel:0"
+AzerothVoices.Language.Secondary = ""
+AzerothVoices.Language.ScopeSecondaryChance = "World:10,Guild:100,Party:100,Raid:0,Whisper:100,Say:20,Yell:10,Channel:0"
 AzerothVoices.Language.PreserveGameTerms = 1
 AzerothVoices.Language.Repair.Enable = 0
 ```
