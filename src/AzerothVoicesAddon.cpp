@@ -225,7 +225,7 @@ namespace AzerothVoices
             }
 
             std::string const verb = Lower(tokens[0]);
-            if (verb == "status")
+            if (verb == "status" || verb == "thread" || verb == "threads")
             {
                 if (tokens.size() != 1)
                 {
@@ -347,6 +347,24 @@ namespace AzerothVoices
         std::string LogicalError(std::string const& channel, std::string const& message)
         {
             return "ERROR " + channel + " " + Encode(message);
+        }
+
+        std::string LogicalThreadInfo(std::string const& scope, bool enabled, uint32_t energyPct,
+                                     std::string const& move, uint32_t exchangeCount,
+                                     std::string const& status, std::string const& topic,
+                                     std::string const& openPoint, std::string const& callbacks)
+        {
+            std::ostringstream line;
+            line << "THREAD_INFO " << (scope.empty() ? "-" : scope)
+                 << ' ' << (enabled ? 1 : 0)
+                 << ' ' << energyPct
+                 << ' ' << (move.empty() ? "-" : move)
+                 << ' ' << exchangeCount
+                 << ' ' << Encode(status)
+                 << ' ' << Encode(topic)
+                 << ' ' << Encode(openPoint)
+                 << ' ' << Encode(callbacks);
+            return line.str();
         }
 
         std::string Response(std::string const& payload)

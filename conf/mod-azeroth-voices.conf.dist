@@ -3341,3 +3341,201 @@ AzerothVoices.Language.PreserveGameTerms = 1
 #     1 = allow one extra repair request; 0 = clarify immediately after a detected error.
 #     An extra repair request can use additional tokens when language support is enabled.
 AzerothVoices.Language.Repair.Enable = 0
+
+###################################################################################################
+# 24. CONVERSATIONAL CONTINUITY: THREADS, MULTI-ADDRESSED INTENT & CROSS-CHANNEL GOSSIP
+#
+# Introduces persistent conversation state machines (energy decay, topic drift, open points, callbacks),
+# fast-path lexical multi-addressed player intent detection with one-shot multi-bot JSON replies,
+# and cross-channel gossip relays (overhearing World/Barrens chat drama).
+#
+# Granular per-scope toggles allow enabling/disabling each feature across Party, Say, Guild, and World.
+###################################################################################################
+
+# ==========================================================
+# 24A. STATEFUL CONVERSATION THREADS (ENERGY, DRIFT & CALLBACKS)
+# ==========================================================
+# Master switch for stateful conversation threads
+# Default: 1 (enabled)
+AzerothVoices.Threads.Enable = 1
+
+# Independent per-scope thread toggles
+# Default: Party: 1, Say: 1, Guild: 1, World: 0 (World is high-traffic, default OFF)
+AzerothVoices.Threads.Party.Enable = 1
+AzerothVoices.Threads.Say.Enable = 1
+AzerothVoices.Threads.Guild.Enable = 1
+AzerothVoices.Threads.World.Enable = 0
+
+# Energy decay percentage per conversation exchange (default: 70%)
+AzerothVoices.Threads.DecayRate = 70
+
+# Energy thresholds for conversational moves (0-100)
+# High Energy (>60): 70% continue topic, 20% drift, 5% callback, 5% new topic
+# Mid Energy (30-60): 35% continue, 35% drift, 15% callback, 15% new topic
+# Low Energy (<30): 10% continue, 25% drift, 25% callback, 40% new topic
+AzerothVoices.Threads.HighEnergyThreshold = 60
+AzerothVoices.Threads.LowEnergyThreshold = 30
+
+# Maximum prior topics remembered per group/channel for callbacks (default: 5)
+AzerothVoices.Threads.TopicHistorySize = 5
+
+# Idle thread expiration in seconds before resetting to fresh (default: 1800s / 30m)
+AzerothVoices.Threads.IdleTtlSeconds = 1800
+
+# ==========================================================
+# 24B. MULTI-ADDRESSED INTENT DETECTION & MULTI-BOT REPLIES
+# ==========================================================
+# Master switch for multi-addressed intent detection
+AzerothVoices.MultiAddressed.Enable = 1
+
+# Independent per-scope multi-addressed reply toggles
+AzerothVoices.MultiAddressed.Party.Enable = 1
+AzerothVoices.MultiAddressed.Say.Enable = 1
+AzerothVoices.MultiAddressed.Guild.Enable = 1
+AzerothVoices.MultiAddressed.World.Enable = 0
+
+# Chance (0-100%) that a multi-addressed message triggers a multi-bot response
+AzerothVoices.MultiAddressed.Party.Chance = 80
+AzerothVoices.MultiAddressed.Say.Chance = 60
+AzerothVoices.MultiAddressed.Guild.Chance = 70
+AzerothVoices.MultiAddressed.World.Chance = 20
+
+# Maximum bots participating in a multi-bot reply (clamped 2-5)
+AzerothVoices.MultiAddressed.Party.MaxBots = 3
+AzerothVoices.MultiAddressed.Say.MaxBots = 2
+AzerothVoices.MultiAddressed.Guild.MaxBots = 3
+AzerothVoices.MultiAddressed.World.MaxBots = 2
+
+# Delay between sequential bot deliveries in seconds (default: 3 to 6s)
+AzerothVoices.MultiAddressed.StaggerMinSeconds = 3
+AzerothVoices.MultiAddressed.StaggerMaxSeconds = 6
+
+# ==========================================================
+# 24C. CROSS-CHANNEL GOSSIP RELAYS
+# ==========================================================
+# Master switch for overhearing World / Barrens drama
+AzerothVoices.GossipRelay.Enable = 1
+
+# Independent per-scope gossip relay toggles
+AzerothVoices.GossipRelay.Party.Enable = 1
+AzerothVoices.GossipRelay.Say.Enable = 1
+AzerothVoices.GossipRelay.Guild.Enable = 1
+
+# Chance (0-100%) that notable World chat triggers a private quip
+AzerothVoices.GossipRelay.Party.Chance = 20
+AzerothVoices.GossipRelay.Say.Chance = 10
+AzerothVoices.GossipRelay.Guild.Chance = 15
+
+# Cooldown between gossip relays in seconds per scope (default: 600s / 10m)
+AzerothVoices.GossipRelay.CooldownSeconds = 600
+
+###################################################################################################
+# 25. EMOTES AND CONVERSATION FACING
+#
+# Server-controlled NPC and PlayerBot physical animation, listener reactions, roleplay actions,
+# and immersion-facing during live dialogue delivery.
+#
+# All keys default to 0 (disabled), preserving baseline Vanilla chat behavior byte-for-byte.
+# Non-intrusive: zero core/bot engine edits, zero DB migrations, zero client addon installation required.
+###################################################################################################
+
+# AzerothVoices.Emotes.BotTalk
+#     Description: Enables automatic talk emote (EMOTE_ONESHOT_TALK) for PlayerBots on eligible
+#                  chat sends (Bot Say, Bot Yell, Bot Party) when an eligible audience can see the bot.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.Emotes.BotTalk = 0
+
+# AzerothVoices.Emotes.NpcTalk
+#     Description: Enables automatic talk emote (EMOTE_ONESHOT_TALK) for NPCs on eligible chat sends
+#                  (MonsterSay: Ordinary, Proximity, and Random) when visible to real players.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.Emotes.NpcTalk = 0
+
+# AzerothVoices.Emotes.General
+#     Description: Master switch for semantic model-selected speaker gestures (laugh, applaud, bow,
+#                  cheer, question, exclamation) returned via the [[AV_EFFECTS]] protocol trailer.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.Emotes.General = 0
+
+# AzerothVoices.Emotes.ListenerReactions
+#     Description: Enables deferred physical gestures for an independently validated conversation
+#                  partner/listener (laugh, applaud, cheer). Requires AzerothVoices.Emotes.General = 1.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.Emotes.ListenerReactions = 0
+
+# AzerothVoices.Emotes.RoleplayText
+#     Description: Enables third-person roleplay action text (e.g. "tries to look offended and fails.")
+#                  dispatched via native bot TextEmote on Bot Say when accepted by the model.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.Emotes.RoleplayText = 0
+
+# AzerothVoices.Emotes.NpcFaceTarget
+#     Description: Enables temporary conversation-facing for speaking NPCs toward their directed
+#                  dialogue partner (human, bot, or other NPC). Requires AzerothVoices.Emotes.NpcTalk = 1.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.Emotes.NpcFaceTarget = 0
+
+###################################################################################################
+# 25B. INTERACTIVE INCOMING EMOTES & SOCIAL SPREAD (100% ZERO-TOKEN IN-PROCESS ENGINE)
+#
+# Enables reactive perception when players emote at bots or NPCs in the world.
+# Uses 0 LLM tokens: runs entirely via in-process deterministic animation packets.
+#
+# All settings default to 0 (disabled).
+###################################################################################################
+
+# AzerothVoices.Emotes.Interactive.Enable
+#     Description: Master toggle for the 0-token interactive emote perception engine.
+#                  When enabled, bots perceive player slash emotes (/wave, /bow, /cheer, /dance, etc.)
+#                  and execute delayed physical mirror animations back at the player.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.Emotes.Interactive.Enable = 0
+
+# AzerothVoices.Emotes.Interactive.BotMirrorChance
+#     Description: Percent chance (0-100) that a targeted PlayerBot mirrors an eligible emote back.
+#     Accepted:    0-100
+#     Default:     80
+AzerothVoices.Emotes.Interactive.BotMirrorChance = 80
+
+# AzerothVoices.Emotes.Interactive.BotMirrorCooldown
+#     Description: Minimum seconds between mirror animations for the same bot.
+#     Accepted:    1-3600
+#     Default:     15
+AzerothVoices.Emotes.Interactive.BotMirrorCooldown = 15
+
+# AzerothVoices.Emotes.Interactive.MoodSpreadChance
+#     Description: Percent chance (0-100) that contagious emotes (/dance, /cheer, /laugh, /applaud,
+#                  /rofl, /victory) spread to nearby party bots, triggering staggered celebration.
+#                  Uses 0 LLM tokens; pure visual animation cascade.
+#     Accepted:    0-100
+#     Default:     50
+AzerothVoices.Emotes.Interactive.MoodSpreadChance = 50
+
+# AzerothVoices.Emotes.Interactive.NpcMirrorEnable
+#     Description: Enables friendly and neutral town NPCs (guards, innkeepers, vendors) to physically
+#                  mirror player emotes back after a realistic 800-2500ms delay with temporary facing.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.Emotes.Interactive.NpcMirrorEnable = 0
+
+# AzerothVoices.Emotes.Interactive.NpcMirrorCooldown
+#     Description: Minimum seconds between NPC mirror animations for the same creature.
+#     Accepted:    1-3600
+#     Default:     15
+AzerothVoices.Emotes.Interactive.NpcMirrorCooldown = 15
+
+# AzerothVoices.Emotes.Interactive.PvPSpectatorEnable
+#     Description: Enables spectator bots near duels or PvP combat to execute visual emotes
+#                  (cheer, applaud, laugh, roar, threaten), bypassing faction language barriers.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.Emotes.Interactive.PvPSpectatorEnable = 0
+
+

@@ -59,8 +59,11 @@
 22. [Structured local RAG (optional, no embeddings or extra provider call)](#structured-local-rag-optional-no-embeddings-or-extra-provider-call) (7 settings)
 23. [Azeroth Voices Companion addon and Chatter compatibility](#azeroth-voices-companion-addon-and-chatter-compatibility) (2 settings)
 24. [Shared secondary language](#24-shared-secondary-language) (5 settings)
-25. [Deployment recommendations](#deployment-recommendations)
-26. [Maintenance and updates](#maintenance-and-updates)
+24B. [Stateful conversation threads, multi-addressed intent & gossip relay](#24b-stateful-conversation-threads-multi-addressed-intent--gossip-relay) (20 settings)
+25. [Emotes and conversation facing](#25-emotes-and-conversation-facing) (6 settings)
+25B. [Interactive 0-Token Emotes & Social Spread](#25b-interactive-0-token-emotes--social-spread) (7 settings)
+26. [Deployment recommendations](#deployment-recommendations)
+27. [Maintenance and updates](#maintenance-and-updates)
 
 
 ---
@@ -4505,10 +4508,202 @@ Repair detects issues such as required metadata being absent/conflicting, empty 
 
 Use `.av language status` for effective settings. In the addon, open Full Overview and read Server languages below Sentiment; Up/Down controls reveal overflow. Waiting means no valid server capability payload has arrived. Install the addon manually and use a server binary containing the matching LANGUAGE_INFO protocol. Source/config edits alone do not update a running binary.
 
-## Deployment recommendations
+---
+
+## 24B. Stateful conversation threads, multi-addressed intent & gossip relay
+
+Azeroth Voices features persistent conversation state tracking, multi-addressed group inquiry detection, and cross-channel gossip relays across **Party (`/p`)**, **Say/Proximity (`/s`)**, **Guild (`/g`)**, and optional **World** channels.
+
+### A. Stateful Conversation Threads (`AzerothVoices.Threads.*`)
+- **Energy Decay Model**: Topics start at 0.90 energy and decay by a configurable rate (`AzerothVoices.Threads.DecayRate = 70`%) on each exchange.
+- **Probabilistic Topic Drift**:
+  - *High Energy (>60)*: 70% continue topic, 20% drift naturally, 5% callback, 5% new topic.
+  - *Mid Energy (30-60)*: 35% continue topic, 35% drift, 15% callback, 15% new topic.
+  - *Low Energy (<30)*: 10% continue topic, 25% drift, 25% callback, 40% wrap up or start fresh.
+- **Open Points & Callbacks**: Questions ending in `?` are latched as open points. Up to 5 prior topics are remembered in a ring buffer for natural callbacks during dungeon runs or questing.
+- **Combat & Wipe Resilience**: When combat breaks out or a wipe occurs, threads pause. Upon combat completion or resurrects, threads resume gracefully.
+
+### B. Multi-Addressed Intent Detection (`AzerothVoices.MultiAddressed.*`)
+- **0-Token Lexical Intent Detection**: Employs an in-process lexical matcher evaluating whole-word bot names, `@Name`, plural tokens (`everyone`, `all`, `party`, `team`, `guild`, `guys`, `anyone`), and collective question phrases (`what should we`, `who wants`, `ready check`, `strat`). Runs at 0 LLM token cost.
+- **Architecture B Multi-Bot Replies**: When a group question is detected, 2 to 3 distinct companion bots chime in with varied viewpoints. Uses single-request prompt formatting to eliminate redundant token overhead. Deliveries are naturally staggered by 3 to 6 seconds.
+
+### C. Cross-Channel Gossip Relay (`AzerothVoices.GossipRelay.*`)
+- **Overhearing World / Barrens Drama**: Notable conversations in Barrens or World chat are recorded into a 20-item in-memory ring buffer.
+- **Private Channel Quips**: Companion bots in Party, Say, or Guild occasionally quip about overheard realm drama (e.g. Mankrik's wife, loot salt, guild drama), bringing authentic MMO social gossip to private chats.
+
+### D. Scope Configuration & Token Economy
+Every feature provides independent per-scope toggles. Because public World chat is high-traffic, stateful threads and multi-bot replies in World chat are configured **default OFF** (`AzerothVoices.Threads.World.Enable = 0`, `AzerothVoices.MultiAddressed.World.Enable = 0`) to safeguard token budgets on busy realms.
+
+### E. Client Addon Observability & Telemetry
+In the bundled `AzerothVoices` client companion AddOn, conversation thread state is displayed live in the Full Overview pane directly below Language and Sentiment:
+- **Energy StatusBar**: Tri-color dynamic bar (Emerald green >60%, Amber gold 30–60%, Red-orange <30%) showing thread energy decay.
+- **Next Move Tendency**: Reflects the state machine's probabilistic determination (`Continue Topic`, `Topic Drift`, `Callback to Prior`, `Wrap-Up / New Topic`).
+- **Active Topic & Open Point**: Shows the active subject and any pending unresolved question.
+- **Historical Callbacks**: Displays the 5 most recent prior discussion topics preserved for authentic contextual callbacks.
+- **Wire Delivery**: Handled via `THREAD_INFO` frame on `.avaddon status` or `.avaddon thread`.
+
+```ini
+###################################################################################################
+# 24. STATEFUL CONVERSATION THREADS, MULTI-ADDRESSED INTENT DETECTION & GOSSIP RELAY
+###################################################################################################
+
+# 24A. STATEFUL CONVERSATION THREADS
+AzerothVoices.Threads.Enable = 1
+AzerothVoices.Threads.Party.Enable = 1
+AzerothVoices.Threads.Say.Enable = 1
+AzerothVoices.Threads.Guild.Enable = 1
+AzerothVoices.Threads.World.Enable = 0
+AzerothVoices.Threads.DecayRate = 70
+AzerothVoices.Threads.HighEnergyThreshold = 60
+AzerothVoices.Threads.LowEnergyThreshold = 30
+AzerothVoices.Threads.TopicHistorySize = 5
+AzerothVoices.Threads.IdleTtlSeconds = 1800
+
+# 24B. MULTI-ADDRESSED INTENT DETECTION & MULTI-BOT REPLIES
+AzerothVoices.MultiAddressed.Enable = 1
+AzerothVoices.MultiAddressed.Party.Enable = 1
+AzerothVoices.MultiAddressed.Say.Enable = 1
+AzerothVoices.MultiAddressed.Guild.Enable = 1
+AzerothVoices.MultiAddressed.World.Enable = 0
+AzerothVoices.MultiAddressed.Party.Chance = 80
+AzerothVoices.MultiAddressed.Say.Chance = 60
+AzerothVoices.MultiAddressed.Guild.Chance = 70
+AzerothVoices.MultiAddressed.World.Chance = 20
+AzerothVoices.MultiAddressed.Party.MaxBots = 3
+AzerothVoices.MultiAddressed.Say.MaxBots = 2
+AzerothVoices.MultiAddressed.Guild.MaxBots = 3
+AzerothVoices.MultiAddressed.World.MaxBots = 2
+AzerothVoices.MultiAddressed.StaggerMinSeconds = 3
+AzerothVoices.MultiAddressed.StaggerMaxSeconds = 6
+
+# 24C. CROSS-CHANNEL GOSSIP RELAYS
+AzerothVoices.GossipRelay.Enable = 1
+AzerothVoices.GossipRelay.Party.Enable = 1
+AzerothVoices.GossipRelay.Say.Enable = 1
+AzerothVoices.GossipRelay.Guild.Enable = 1
+AzerothVoices.GossipRelay.Party.Chance = 20
+AzerothVoices.GossipRelay.Say.Chance = 10
+AzerothVoices.GossipRelay.Guild.Chance = 15
+AzerothVoices.GossipRelay.CooldownSeconds = 600
+```
+
+---
+
+## 25. Emotes and conversation facing
+
+Azeroth Voices supports physical emote gestures (such as nod, shrug, laugh), delayed listener reactions, third-person roleplay `/emote` text, and temporary NPC facing turns during spatial dialogue.
+
+In strict adherence to **The Unediting Doctrine**, all visual features are implemented exclusively in module space and default to `0` (disabled) out of the box.
+
+### Settings and shipped defaults
+
+| Setting (prefix `AzerothVoices.Emotes.`) | Default | Behavior |
+|---|---|---|
+| `BotTalk` | `0` | Enables speaker emote gestures for PlayerBots during whispers, party, raid, say, and yell. |
+| `NpcTalk` | `0` | Enables speaker emote gestures for NPCs during say and proximity chatter. |
+| `General` | `0` | Enables speaker emote gestures in public channels (World, General, Trade, LocalDefense). |
+| `ListenerReactions` | `0` | Enables delayed listener reactions (750ms after speech) for nearby conversation partners. |
+| `RoleplayText` | `0` | Enables third-person text emotes (`CHAT_MSG_EMOTE`, e.g. *"Bob nods thoughtfully."*). |
+| `NpcFaceTarget` | `0` | Enables temporary NPC facing turns towards the speaker or conversational partner during dialogue. |
+
+```ini
+AzerothVoices.Emotes.BotTalk = 0
+AzerothVoices.Emotes.NpcTalk = 0
+AzerothVoices.Emotes.General = 0
+AzerothVoices.Emotes.ListenerReactions = 0
+AzerothVoices.Emotes.RoleplayText = 0
+AzerothVoices.Emotes.NpcFaceTarget = 0
+```
+
+### Route vs. Visual Effect Matrix
+
+| Route / Conversation Scope | Speaker Gesture | Listener Reaction | Roleplay Text (`/emote`) | NPC Facing |
+| :--- | :---: | :---: | :---: | :---: |
+| **Bot Whisper** | `BotTalk` | — | `RoleplayText` | — |
+| **Bot Say / Yell** | `BotTalk` | `ListenerReactions` | `RoleplayText` | — |
+| **Bot Party / Raid** | `BotTalk` | `ListenerReactions` | `RoleplayText` | — |
+| **NPC Say (Proximity / Random)** | `NpcTalk` | `ListenerReactions` | `RoleplayText` | `NpcFaceTarget` |
+| **General / Public Channels** | `General` | — | — | — |
+
+### Wire Format & Safe Extraction
+
+The model is instructed to append an optional single-line trailing JSON payload:
+```text
+Greetings, traveler! What brings you to these parts?
+[[AV_EFFECTS]] {"speaker":"nod","listener":"smile","roleplay":"adjusts his pack thoughtfully.","face":true}
+```
+The engine parses and strips this payload via pure SAX (`ExtractAndStripEffects`) prior to dialogue sanitization and broadcast. Raw JSON is completely purged and never leaks into in-game chat or speech bubbles.
+
+### Timing, Cooldowns & Safe Idle Invariants
+
+- **750ms Listener Reaction Delay**: Listener gestures are enqueued with a 750ms delay so listeners react naturally after dialogue delivery.
+- **1500ms NPC Facing Lease**: NPCs safely turn to face their conversational partner, holding that heading for 1500ms before smoothly restoring their original spawn orientation.
+- **Safe Idle Requirements**: Facing turns and gestures execute only when units are out of combat, not casting spells, not moving, and under `IDLE_MOTION_TYPE`. Any aggro, movement, or damage immediately breaks the facing lease.
+- **Per-Actor Cooldowns**: Speaker gestures 8s, listener reactions 10s, roleplay text emotes 5s, facing turns 2s.
+- **Native Range**: Respects native client visibility grids; out-of-range clients are never sent unnecessary packets.
+
+### In-Game Reload & Rollback
+
+Reload settings on the fly without server restart:
+```text
+.av reload
+```
+To instantly revert all visual effects to pristine Vanilla behavior, set all 6 switches to `0` and reload.
+
+---
+
+## 25B. Interactive 0-Token Emotes & Social Spread
+
+Azeroth Voices provides an entirely in-process, deterministic interactive emote perception and social spread engine. Players can interact with PlayerBots and town NPCs using slash emotes (`/wave`, `/bow`, `/dance`, `/salute`, `/cheer`, `/applaud`, etc.), and nearby units react physically without spending **a single LLM token** (`0` tokens).
+
+### Shipped Defaults & Settings
+
+| Setting (prefix `AzerothVoices.Emotes.Interactive.`) | Type / Range | Default | Behavior |
+| :--- | :--- | :---: | :--- |
+| `Enable` | Boolean (`0` or `1`) | `0` | Master toggle for the 0-token interactive emote perception engine. |
+| `BotMirrorChance` | Integer (`0-100`) | `80` | Percent chance that a targeted PlayerBot mirrors an eligible emote back. |
+| `BotMirrorCooldown` | Integer (`1-3600`) | `15` | Minimum seconds between mirror animations for the same PlayerBot. |
+| `MoodSpreadChance` | Integer (`0-100`) | `50` | Percent chance that contagious emotes (`/dance`, `/cheer`, `/laugh`, `/applaud`, `/rofl`, `/victory`) cascade to nearby party bots. |
+| `NpcMirrorEnable` | Boolean (`0` or `1`) | `0` | Enables friendly/neutral town NPCs to physically mirror player emotes back after a realistic delay with temporary facing. |
+| `NpcMirrorCooldown` | Integer (`1-3600`) | `15` | Minimum seconds between NPC mirror animations for the same creature. |
+| `PvPSpectatorEnable` | Boolean (`0` or `1`) | `0` | Enables spectator bots near duels or PvP combat to execute visual reactions (cheer, applaud, flex, roar, threaten). |
+
+```ini
+AzerothVoices.Emotes.Interactive.Enable = 0
+AzerothVoices.Emotes.Interactive.BotMirrorChance = 80
+AzerothVoices.Emotes.Interactive.BotMirrorCooldown = 15
+AzerothVoices.Emotes.Interactive.MoodSpreadChance = 50
+AzerothVoices.Emotes.Interactive.NpcMirrorEnable = 0
+AzerothVoices.Emotes.Interactive.NpcMirrorCooldown = 15
+AzerothVoices.Emotes.Interactive.PvPSpectatorEnable = 0
+```
+
+### Core Features & Architecture
+
+1. **Deterministic Mirror Emotes (60+ Vanilla Pairings)**:
+   - When a player targets a PlayerBot or friendly NPC and executes an emote, the engine maps the incoming `textEmoteId` to an appropriate response (e.g. `/wave` -> `/wave`, `/bow` -> `/bow`, `/salute` -> `/salute`, `/flirt` -> `/blush`, `/threaten` -> `/cower`).
+   - Responses are enqueued with human-like delays (800ms - 2500ms) rather than instantaneous robotic triggers.
+
+2. **Social Contagious Mood Spread**:
+   - High-energy celebratory emotes (`/dance`, `/cheer`, `/laugh`, `/applaud`, `/rofl`, `/victory`) cascade across party bots within 30 yards.
+   - Triggers staggered visual reactions (500ms - 2000ms delay per bot) creating vibrant party dynamics without API calls.
+
+3. **Town NPC Mirroring with Safe Facing Leases**:
+   - Friendly and neutral town creatures (vendors, innkeepers, guards) temporarily turn to face the player using a safe 1500ms `FacingLease`, perform the mirror emote, and then restore their orientation.
+   - Scripted, quest-giver, and hostile creatures are protected to prevent disrupting game progression.
+
+4. **PvP & Duel Spectator Reactions**:
+   - Spectator bots stationed within 30 yards of duels or PvP encounters celebrate starts and victories (`cheer`, `applaud`, `flex`, `roar`, `threaten`), bypassing faction language barriers.
+
+5. **Safe Idle & Combat Guard**:
+   - All interactive emotes check `!actor->IsInCombat()`, `!actor->IsNonMeleeSpellCasted(false)`, and idle state. In combat or motion, emotes are gracefully bypassed.
+
+---
+
+## 26. Deployment recommendations
 
 Start with the defaults in `conf/mod-azeroth-voices.conf.dist`. Adjust provider credentials and request limits for your environment, then tune the relevant proximity, group, guild, and random chatter settings directly in your live configuration. Keep a copy of local overrides before updating the module.
 
-## Maintenance and updates
+## 27. Maintenance and updates
 
-The canonical default values are the assignments in [`conf/mod-azeroth-voices.conf.dist`](../conf/mod-azeroth-voices.conf.dist), not the examples in this guide. When upgrading, compare your live configuration with that template, preserve local overrides, and check new/retired keys. This reference includes the category 24 language settings reviewed on 6 November 2026; runtime validation and fallback behavior depend on the installed module revision.
+The canonical default values are the assignments in [`conf/mod-azeroth-voices.conf.dist`](../conf/mod-azeroth-voices.conf.dist), not the examples in this guide. When upgrading, compare your live configuration with that template, preserve local overrides, and check new/retired keys. This reference includes the category 24 language and category 25 emote settings reviewed on 11 November 2026; runtime validation and fallback behavior depend on the installed module revision.

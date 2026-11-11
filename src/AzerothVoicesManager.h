@@ -3,12 +3,16 @@
 #include "AzerothVoicesAddon.h"
 #include "AzerothVoicesBotSeam.h"
 #include "AzerothVoicesConfig.h"
+#include "AzerothVoicesEmotes.h"
 #include "AzerothVoicesInstanceLore.h"
 #include "AzerothVoicesMemory.h"
 #include "AzerothVoicesPacing.h"
 #include "AzerothVoicesPartyGate.h"
 #include "AzerothVoicesBarrens.h"
+#include "AzerothVoicesGossipRelay.h"
+#include "AzerothVoicesIntent.h"
 #include "AzerothVoicesSocial.h"
+#include "AzerothVoicesThreads.h"
 #include "AzerothVoicesTypes.h"
 
 #include <array>
@@ -169,6 +173,16 @@ namespace AzerothVoices
         bool HasActiveBarrensScene(std::string const& channelName) const;
         bool HasActiveGeneralConversation(std::string const& channelName) const;
         void NotePlayerWorldChat(std::string const& channelName);
+
+        ThreadManager& Threads() { return m_threads; }
+        ThreadManager const& Threads() const { return m_threads; }
+        GossipRelayEngine& Gossip() { return m_gossip; }
+        GossipRelayEngine const& Gossip() const { return m_gossip; }
+        void RecordBarrensSceneComplete(std::string const& topic, std::string const& speaker,
+                                        std::string const& snippet, uint32_t zoneId, uint32_t mapId);
+
+        void HandlePlayerTextEmote(Player* player, uint32_t textEmote, uint32_t emoteNum, ObjectGuid guid);
+        void HandleDuelSpectator(Player* player1, Player* player2, uint8_t moment, Player* winner = nullptr);
 
     private:
         Manager();
@@ -757,5 +771,97 @@ namespace AzerothVoices
         std::atomic<uint64_t> m_thinkingFallbacks{ 0 };
         std::array<uint64_t, static_cast<size_t>(PreflightReason::Count)> m_preflightRejections{};
         std::atomic<bool> m_started;
+
+        // Section 25: Emotes and Conversation Facing
+        struct FacingLease
+        {
+            uint64_t creatureGuid = 0;
+            uint32_t mapId = 0;
+            uint32_t instanceId = 0;
+            float originalAngle = 0.0f;
+            float appliedAngle = 0.0f;
+            float posX = 0.0f;
+            float posY = 0.0f;
+            float posZ = 0.0f;
+            uint32_t generation = 0;
+            std::chrono::steady_clock::time_point deadline;
+        };
+
+        struct ActorEmoteCooldowns
+        {
+            std::chrono::steady_clock::time_point talkUntil;
+            std::chrono::steady_clock::time_point speakerSemanticUntil;
+            std::chrono::steady_clock::time_point listenerUntil;
+            std::chrono::steady_clock::time_point roleplayUntil;
+            std::chrono::steady_clock::time_point lastSpoke;
+            uint64_t speechSequence = 0;
+        };
+
+        enum class VisualJobKind : uint8_t
+        {
+            SpeakerSemanticAfterTalk,
+            ListenerReaction
+        };
+
+        struct DeferredVisualJob
+        {
+            uint32_t epoch = 0;
+            uint64_t requestId = 0;
+            VisualJobKind kind = VisualJobKind::SpeakerSemanticAfterTalk;
+            uint64_t targetUnitGuid = 0;
+            bool targetIsBot = true;
+            uint64_t actorGuid = 0;
+            uint32_t mapId = 0;
+            uint32_t instanceId = 0;
+            ChatScope scope = ChatScope::Say;
+            uint32_t subgroup = 0;
+            EmoteGesture gesture = EmoteGesture::None;
+            uint64_t speechSequence = 0;
+            std::chrono::steady_clock::time_point due;
+            std::chrono::steady_clock::time_point deadline;
+        };
+
+        std::unordered_map<uint64_t, FacingLease> m_facingLeases;
+        std::unordered_map<uint64_t, ActorEmoteCooldowns> m_actorEmoteCooldowns;
+        std::deque<DeferredVisualJob> m_deferredVisualJobs;
+        std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_claimedPresentations;
+
+        // Section 25B: Interactive 0-Token Emote Perception & Mood Spread
+        struct DeferredInteractiveEmote
+        {
+            uint64_t actorGuid = 0;
+            uint64_t targetGuid = 0;
+            uint32_t textEmoteId = 0;
+            uint32_t mapId = 0;
+            uint32_t instanceId = 0;
+            bool faceTarget = true;
+            bool isCreature = false;
+            std::chrono::steady_clock::time_point dueAt;
+        };
+
+        std::deque<DeferredInteractiveEmote> m_deferredInteractiveEmotes;
+        std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_interactiveEmoteCooldowns;
+
+        void UpdateInteractiveEmotes();
+        void ClearInteractiveEmotes();
+
+        EffectsOffer DetermineEffectsOffer(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
+                                           ChatScope scope, std::string const& trigger,
+                                           bool isBoss, bool isProximity, bool hasValidatedBotParticipant) const;
+        void NoteActorSpoke(uint64_t actorGuid, std::chrono::steady_clock::time_point now);
+        bool ClaimLogicalPresentation(uint64_t requestId, std::chrono::steady_clock::time_point now);
+        bool CheckAudienceCanSeeActor(Unit const* actor, ChatScope scope, uint32_t subgroup) const;
+        bool IsUnitSafelyIdleForEmote(Unit const* unit) const;
+        bool IsNpcSafelyIdleForFacing(Creature const* creature) const;
+        void ExecuteDeliveredEffects(ScheduledLine const& line, Unit* actorUnit, Unit* directedTargetUnit,
+                                     uint32_t subgroup, bool isProximityScene, bool isRandomNpc);
+        void UpdateEmotesAndFacing();
+        void PruneEmotesAndFacing();
+
+        // Section 24: Stateful Threads & Gossip Relay
+        ThreadManager m_threads;
+        GossipRelayEngine m_gossip;
+        std::chrono::steady_clock::time_point m_lastThreadPrune{};
+        void UpdateThreadsAndGossip();
     };
 }

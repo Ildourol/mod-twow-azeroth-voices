@@ -1,4 +1,5 @@
 #include "AzerothVoicesProvider.h"
+#include "AzerothVoicesEmotes.h"
 #include "AzerothVoicesHttpPolicy.h"
 #include "AzerothVoicesLanguage.h"
 
@@ -726,11 +727,39 @@ namespace AzerothVoices
                     previous, prepared.languageClassify, config.languagePreserveGameTerms);
 
             }
+
+            if (prepared.effectsOffer.Any())
+            {
+                bool allowOffer = true;
+                if (!config.apiJsonTemplate.empty())
+                {
+                    if (config.apiJsonTemplate.find("<pre prompt>") == std::string::npos &&
+                        config.apiJsonTemplate.find("<system_prompt>") == std::string::npos)
+                    {
+                        allowOffer = false;
+                    }
+                }
+                if (allowOffer)
+                {
+                    std::string const effectsInstruction = BuildEffectsInstruction(prepared.effectsOffer);
+                    if (!effectsInstruction.empty())
+                    {
+                        if (!prepared.systemPrompt.empty())
+                            prepared.systemPrompt += "\n\n";
+                        prepared.systemPrompt += effectsInstruction;
+                    }
+                }
+            }
+
+            uint32_t const headroom = CalculateTokenHeadroom(prepared.effectsOffer);
+
             Json body;
             if (!config.apiJsonTemplate.empty())
             {
                 body = Json::parse(config.apiJsonTemplate);
                 ApplyPlaceholders(body, prepared);
+                if (headroom > 0 && prepared.maxTokensOverride)
+                    prepared.maxTokensOverride = std::min<uint32_t>(prepared.maxTokensOverride + headroom, 2048);
                 ApplyTokenOverride(body, config, prepared);
                 ThinkingApplication const thinking =
                     ApplyThinking(body, config, prepared, false, true);
@@ -744,18 +773,21 @@ namespace AzerothVoices
             {
                 uint32_t const baseTokens = prepared.maxTokensOverride
                     ? prepared.maxTokensOverride : config.maxTokens;
+                uint32_t const budgetedTokens = (headroom > 0)
+                    ? std::min<uint32_t>(baseTokens + headroom, 2048)
+                    : baseTokens;
                 body["model"] = config.model;
                 body["instructions"] = prepared.systemPrompt;
                 body["input"] = prepared.context.empty() ? prepared.userPrompt : prepared.context + "\n\n" + prepared.userPrompt;
                 ThinkingApplication const thinking =
                     ApplyThinking(body, config, prepared, true, false);
-                uint32_t finalTokens = baseTokens;
+                uint32_t finalTokens = budgetedTokens;
                 if (thinking.applied)
                 {
                     if (prepared.kind == RequestKind::PersonalityGeneration && config.personalityMaxTokens > 0)
-                        finalTokens = baseTokens;
+                        finalTokens = budgetedTokens;
                     else
-                        finalTokens = Reasoning::ReservedOutputTokens(baseTokens,
+                        finalTokens = Reasoning::ReservedOutputTokens(budgetedTokens,
                             config.thinkingTokenReserve, true);
                 }
                 body["max_output_tokens"] = finalTokens;
@@ -764,6 +796,9 @@ namespace AzerothVoices
             {
                 uint32_t const baseTokens = prepared.maxTokensOverride
                     ? prepared.maxTokensOverride : config.maxTokens;
+                uint32_t const budgetedTokens = (headroom > 0)
+                    ? std::min<uint32_t>(baseTokens + headroom, 2048)
+                    : baseTokens;
                 body["model"] = config.model;
                 body["messages"] = Json::array();
                 body["messages"].push_back({ { "role", "system" }, { "content", prepared.systemPrompt } });
@@ -772,13 +807,13 @@ namespace AzerothVoices
                 body["messages"].push_back({ { "role", "user" }, { "content", prepared.userPrompt } });
                 ThinkingApplication const thinking =
                     ApplyThinking(body, config, prepared, false, false);
-                uint32_t finalTokens = baseTokens;
+                uint32_t finalTokens = budgetedTokens;
                 if (thinking.applied)
                 {
                     if (prepared.kind == RequestKind::PersonalityGeneration && config.personalityMaxTokens > 0)
-                        finalTokens = baseTokens;
+                        finalTokens = budgetedTokens;
                     else
-                        finalTokens = Reasoning::ReservedOutputTokens(baseTokens,
+                        finalTokens = Reasoning::ReservedOutputTokens(budgetedTokens,
                             config.thinkingTokenReserve, true);
                 }
                 body[TokenLimitField(config)] = finalTokens;
@@ -801,27 +836,38 @@ namespace AzerothVoices
     }
 
     std::string Provider::ParseResponse(Config const& config, ChatRequest const& request,
-                                        std::string const& raw, std::string& error)
+                                        std::string const& raw, std::string& error,
+                                        ParsedEffects* outEffects)
     {
+        std::string content;
         if (Lower(config.parserMode) == "legacyregex")
-            return SanitizeReply(LegacyParse(config, request, raw, error));
-
-        try
+            content = LegacyParse(config, request, raw, error);
+        else
         {
-            Json root = Json::parse(raw);
-            std::string content = ExtractContent(root);
-            if (content.empty())
+            try
             {
-                error = DescribeEmptyText(root);
+                Json root = Json::parse(raw);
+                content = ExtractContent(root);
+                if (content.empty())
+                {
+                    error = DescribeEmptyText(root);
+                    return "";
+                }
+            }
+            catch (std::exception const& exception)
+            {
+                error = std::string("response JSON error: ") + exception.what();
                 return "";
             }
-            return SanitizeReply(content);
         }
-        catch (std::exception const& exception)
-        {
-            error = std::string("response JSON error: ") + exception.what();
-            return "";
-        }
+
+        ParsedEffects parsed;
+        bool const parserActive = config.emotesGeneral || config.emotesListenerReactions || config.emotesRoleplayText;
+        ExtractAndStripEffects(content, parsed, request.effectsOffer, parserActive);
+        if (outEffects)
+            *outEffects = parsed;
+
+        return SanitizeReply(content);
     }
 
     ChatCompletion Provider::Execute(Config const& config, ChatRequest const& request)
@@ -967,7 +1013,8 @@ namespace AzerothVoices
                 return finish();
             }
 
-            completion.responseText = ParseResponse(config, request, responseBody, completion.error);
+            completion.responseText = ParseResponse(config, request, responseBody, completion.error, &completion.effects);
+            completion.request.parsedEffects = completion.effects;
             completion.success = !completion.responseText.empty();
             return finish();
         }

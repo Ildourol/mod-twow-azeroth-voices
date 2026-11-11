@@ -1175,6 +1175,58 @@ namespace AzerothVoices
             c.barrensTopicWeights = DefaultBarrensTopicWeights();
         }
 
+        // 24. Stateful Conversation Threads, Multi-Addressed Intent & Cross-Channel Gossip
+        c.threadsEnable = sConfig.GetBoolDefault("AzerothVoices.Threads.Enable", true);
+        c.threadsPartyEnable = sConfig.GetBoolDefault("AzerothVoices.Threads.Party.Enable", true);
+        c.threadsSayEnable = sConfig.GetBoolDefault("AzerothVoices.Threads.Say.Enable", true);
+        c.threadsGuildEnable = sConfig.GetBoolDefault("AzerothVoices.Threads.Guild.Enable", true);
+        c.threadsWorldEnable = sConfig.GetBoolDefault("AzerothVoices.Threads.World.Enable", false);
+        c.threadsDecayRate = Percent("AzerothVoices.Threads.DecayRate", 70);
+        c.threadsHighEnergyThreshold = Percent("AzerothVoices.Threads.HighEnergyThreshold", 60);
+        c.threadsLowEnergyThreshold = Percent("AzerothVoices.Threads.LowEnergyThreshold", 30);
+        c.threadsTopicHistorySize = Bounded("AzerothVoices.Threads.TopicHistorySize", 5, 1, 20);
+        c.threadsIdleTtlSeconds = Positive("AzerothVoices.Threads.IdleTtlSeconds", 1800, 60);
+
+        c.multiAddressedEnable = sConfig.GetBoolDefault("AzerothVoices.MultiAddressed.Enable", true);
+        c.multiAddressedPartyEnable = sConfig.GetBoolDefault("AzerothVoices.MultiAddressed.Party.Enable", true);
+        c.multiAddressedSayEnable = sConfig.GetBoolDefault("AzerothVoices.MultiAddressed.Say.Enable", true);
+        c.multiAddressedGuildEnable = sConfig.GetBoolDefault("AzerothVoices.MultiAddressed.Guild.Enable", true);
+        c.multiAddressedWorldEnable = sConfig.GetBoolDefault("AzerothVoices.MultiAddressed.World.Enable", false);
+        c.multiAddressedPartyChance = Percent("AzerothVoices.MultiAddressed.Party.Chance", 80);
+        c.multiAddressedSayChance = Percent("AzerothVoices.MultiAddressed.Say.Chance", 60);
+        c.multiAddressedGuildChance = Percent("AzerothVoices.MultiAddressed.Guild.Chance", 70);
+        c.multiAddressedWorldChance = Percent("AzerothVoices.MultiAddressed.World.Chance", 20);
+        c.multiAddressedPartyMaxBots = Bounded("AzerothVoices.MultiAddressed.Party.MaxBots", 3, 2, 5);
+        c.multiAddressedSayMaxBots = Bounded("AzerothVoices.MultiAddressed.Say.MaxBots", 2, 2, 4);
+        c.multiAddressedGuildMaxBots = Bounded("AzerothVoices.MultiAddressed.Guild.MaxBots", 3, 2, 5);
+        c.multiAddressedWorldMaxBots = Bounded("AzerothVoices.MultiAddressed.World.MaxBots", 2, 2, 4);
+        c.multiAddressedStaggerMinSeconds = Bounded("AzerothVoices.MultiAddressed.StaggerMinSeconds", 3, 1, 30);
+        c.multiAddressedStaggerMaxSeconds = Bounded("AzerothVoices.MultiAddressed.StaggerMaxSeconds", 6, c.multiAddressedStaggerMinSeconds, 60);
+
+        c.gossipRelayEnable = sConfig.GetBoolDefault("AzerothVoices.GossipRelay.Enable", true);
+        c.gossipRelayPartyEnable = sConfig.GetBoolDefault("AzerothVoices.GossipRelay.Party.Enable", true);
+        c.gossipRelaySayEnable = sConfig.GetBoolDefault("AzerothVoices.GossipRelay.Say.Enable", true);
+        c.gossipRelayGuildEnable = sConfig.GetBoolDefault("AzerothVoices.GossipRelay.Guild.Enable", true);
+        c.gossipRelayPartyChance = Percent("AzerothVoices.GossipRelay.Party.Chance", 20);
+        c.gossipRelaySayChance = Percent("AzerothVoices.GossipRelay.Say.Chance", 10);
+        c.gossipRelayGuildChance = Percent("AzerothVoices.GossipRelay.Guild.Chance", 15);
+        c.gossipRelayCooldownSeconds = Positive("AzerothVoices.GossipRelay.CooldownSeconds", 600, 30);
+
+        c.emotesBotTalk = sConfig.GetBoolDefault("AzerothVoices.Emotes.BotTalk", false);
+        c.emotesNpcTalk = sConfig.GetBoolDefault("AzerothVoices.Emotes.NpcTalk", false);
+        c.emotesGeneral = sConfig.GetBoolDefault("AzerothVoices.Emotes.General", false);
+        c.emotesListenerReactions = sConfig.GetBoolDefault("AzerothVoices.Emotes.ListenerReactions", false);
+        c.emotesRoleplayText = sConfig.GetBoolDefault("AzerothVoices.Emotes.RoleplayText", false);
+        c.emotesNpcFaceTarget = sConfig.GetBoolDefault("AzerothVoices.Emotes.NpcFaceTarget", false);
+
+        c.emotesInteractiveEnable = sConfig.GetBoolDefault("AzerothVoices.Emotes.Interactive.Enable", false);
+        c.emotesInteractiveBotMirrorChance = Percent("AzerothVoices.Emotes.Interactive.BotMirrorChance", 80);
+        c.emotesInteractiveBotMirrorCooldown = Positive("AzerothVoices.Emotes.Interactive.BotMirrorCooldown", 15, 1);
+        c.emotesInteractiveMoodSpreadChance = Percent("AzerothVoices.Emotes.Interactive.MoodSpreadChance", 50);
+        c.emotesInteractiveNpcMirror = sConfig.GetBoolDefault("AzerothVoices.Emotes.Interactive.NpcMirrorEnable", false);
+        c.emotesInteractiveNpcMirrorCooldown = Positive("AzerothVoices.Emotes.Interactive.NpcMirrorCooldown", 15, 1);
+        c.emotesInteractivePvPSpectator = sConfig.GetBoolDefault("AzerothVoices.Emotes.Interactive.PvPSpectatorEnable", false);
+
         return c;
     }
 

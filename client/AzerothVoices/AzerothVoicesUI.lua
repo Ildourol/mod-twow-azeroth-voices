@@ -681,6 +681,123 @@ function AzerothVoices:BuildEditor(panel)
     lLangSource:SetText(AzerothVoices.serverLanguageSummary or "Waiting for server language settings...")
     panel.languageSourceText = lLangSource
 
+    -- Stateful Conversation Threads (Energy, Drift & Callbacks)
+    local lThread = createLabel(content, "Conversation Threads (Energy, Drift & Callbacks)", 0, -580)
+    panel.threadLabel = lThread
+
+    local threadRefreshBtn = button(content, "Refresh", 60, function()
+        AzerothVoices:RequestThreadStatus()
+    end, 18)
+    threadRefreshBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -578)
+    panel.threadRefreshBtn = threadRefreshBtn
+
+    local threadBarHolder = CreateFrame("Frame", nil, content)
+    threadBarHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -604)
+    threadBarHolder:SetWidth(contentWidth)
+    threadBarHolder:SetHeight(18)
+    threadBarHolder:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 8,
+        edgeSize = 10,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 }
+    })
+    threadBarHolder:SetBackdropColor(0, 0, 0, 0.85)
+    threadBarHolder:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+
+    local threadEnergyBar = CreateFrame("StatusBar", nil, threadBarHolder)
+    threadEnergyBar:SetPoint("TOPLEFT", threadBarHolder, "TOPLEFT", 3, -3)
+    threadEnergyBar:SetPoint("BOTTOMRIGHT", threadBarHolder, "BOTTOMRIGHT", -3, 3)
+    threadEnergyBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    if threadEnergyBar:GetStatusBarTexture() and threadEnergyBar:GetStatusBarTexture().SetHorizTile then
+        threadEnergyBar:GetStatusBarTexture():SetHorizTile(false)
+    end
+    threadEnergyBar:SetMinMaxValues(0, 100)
+    threadEnergyBar:SetValue(90)
+    threadEnergyBar:SetStatusBarColor(0.2, 0.85, 0.5)
+
+    local threadBarText = threadEnergyBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    threadBarText:SetPoint("CENTER", threadEnergyBar, "CENTER", 0, 0)
+    threadBarText:SetText("Energy: 90% | Continue Topic | Active")
+    threadEnergyBar.text = threadBarText
+    panel.threadEnergyBar = threadEnergyBar
+    panel.threadBarHolder = threadBarHolder
+
+    threadBarHolder:EnableMouse(true)
+    threadBarHolder:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:ClearLines()
+        local s = AzerothVoices.threadState or {}
+        local energy = s.energy or 0
+        local move = s.move or "ContinueTopic"
+        local status = s.status or "Active"
+        local scope = s.scope or "Party"
+        local exchanges = s.exchanges or 0
+
+        GameTooltip:AddLine("Conversation Thread State (Section 24)", 1, 0.82, 0)
+        GameTooltip:AddDoubleLine("Scope / Channel:", scope, 1, 1, 1, 0.2, 0.85, 0.5)
+        GameTooltip:AddDoubleLine("Current State:", status, 1, 1, 1, 0.9, 0.82, 0.2)
+        GameTooltip:AddDoubleLine("Thread Energy:", energy .. "%", 1, 1, 1, 0.3, 0.85, 0.4)
+        GameTooltip:AddDoubleLine("Total Exchanges:", "" .. exchanges, 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddDoubleLine("Next Move Tendency:", move, 1, 1, 1, 0.4, 0.7, 1.0)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Energy & Probabilistic Move Model:", 0.8, 0.8, 0.8)
+        GameTooltip:AddDoubleLine("  High Energy (>60%):", "70% Continue, 20% Drift, 5% Callback, 5% New", 0.4, 0.85, 0.3, 0.4, 0.85, 0.3)
+        GameTooltip:AddDoubleLine("  Mid Energy (30-60%):", "35% Continue, 35% Drift, 15% Callback, 15% New", 0.9, 0.82, 0.2, 0.9, 0.82, 0.2)
+        GameTooltip:AddDoubleLine("  Low Energy (<30%):", "10% Continue, 25% Drift, 25% Callback, 40% Wrap/New", 0.85, 0.3, 0.3, 0.85, 0.3, 0.3)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Decays 30% per exchange. Pauses automatically during combat and resumes afterward.", 0.6, 0.6, 0.6, 1)
+        GameTooltip:Show()
+    end)
+    threadBarHolder:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    threadBarHolder:EnableMouseWheel(true)
+    threadBarHolder:SetScript("OnMouseWheel", onEditorMouseWheel)
+
+    local threadScaleLow = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    threadScaleLow:SetPoint("TOPLEFT", threadBarHolder, "BOTTOMLEFT", 2, -2)
+    threadScaleLow:SetText("0% (Exhausted / Wrap-Up)")
+    threadScaleLow:SetTextColor(0.85, 0.3, 0.3)
+    panel.threadScaleLow = threadScaleLow
+
+    local threadScaleMid = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    threadScaleMid:SetPoint("TOP", threadBarHolder, "BOTTOM", 0, -2)
+    threadScaleMid:SetText("30-60% (Drifting)")
+    threadScaleMid:SetTextColor(0.9, 0.82, 0.2)
+    panel.threadScaleMid = threadScaleMid
+
+    local threadScaleHigh = content:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    threadScaleHigh:SetPoint("TOPRIGHT", threadBarHolder, "BOTTOMRIGHT", -2, -2)
+    threadScaleHigh:SetText("100% (High / Fresh)")
+    threadScaleHigh:SetTextColor(0.3, 0.85, 0.4)
+    panel.threadScaleHigh = threadScaleHigh
+
+    local threadTopicText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    threadTopicText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -638)
+    threadTopicText:SetWidth(contentWidth)
+    threadTopicText:SetHeight(28)
+    threadTopicText:SetJustifyH("LEFT")
+    threadTopicText:SetText("|cffffd100Active Topic:|r None (Idle banter)")
+    panel.threadTopicText = threadTopicText
+
+    local threadOpenPointText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    threadOpenPointText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -668)
+    threadOpenPointText:SetWidth(contentWidth)
+    threadOpenPointText:SetHeight(28)
+    threadOpenPointText:SetJustifyH("LEFT")
+    threadOpenPointText:SetText("|cffffd100Open Question / Point:|r None")
+    panel.threadOpenPointText = threadOpenPointText
+
+    local threadCallbacksText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    threadCallbacksText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -698)
+    threadCallbacksText:SetWidth(contentWidth)
+    threadCallbacksText:SetHeight(38)
+    threadCallbacksText:SetJustifyH("LEFT")
+    threadCallbacksText:SetText("|cffffd100Recent Discussion History (Callbacks):|r None")
+    panel.threadCallbacksText = threadCallbacksText
+
     -- Status label at bottom
     local status = createLabel(panel, "", 16, 8)
     status:ClearAllPoints()
@@ -708,6 +825,9 @@ function AzerothVoices:BuildEditor(panel)
             forgetBtn:Show()
             all:Show(); clear:Show()
             lLanguage:Hide(); lLangSource:Hide()
+            lThread:Hide(); threadRefreshBtn:Hide(); threadBarHolder:Hide()
+            threadScaleLow:Hide(); threadScaleMid:Hide(); threadScaleHigh:Hide()
+            threadTopicText:Hide(); threadOpenPointText:Hide(); threadCallbacksText:Hide()
             content:SetHeight(230)
         elseif mode == "stories" then
             l1:Hide(); t1.holder:Hide()
@@ -725,6 +845,9 @@ function AzerothVoices:BuildEditor(panel)
             forgetBtn:Hide()
             all:Hide(); clear:Hide()
             lLanguage:Hide(); lLangSource:Hide()
+            lThread:Hide(); threadRefreshBtn:Hide(); threadBarHolder:Hide()
+            threadScaleLow:Hide(); threadScaleMid:Hide(); threadScaleHigh:Hide()
+            threadTopicText:Hide(); threadOpenPointText:Hide(); threadCallbacksText:Hide()
             content:SetHeight(380)
         else
             -- "full" mode
@@ -742,7 +865,10 @@ function AzerothVoices:BuildEditor(panel)
             forgetBtn:Show()
             all:Show(); clear:Show()
             lLanguage:Show(); lLangSource:Show()
-            content:SetHeight(590)
+            lThread:Show(); threadRefreshBtn:Show(); threadBarHolder:Show()
+            threadScaleLow:Show(); threadScaleMid:Show(); threadScaleHigh:Show()
+            threadTopicText:Show(); threadOpenPointText:Show(); threadCallbacksText:Show()
+            content:SetHeight(750)
         end
         updateEditorScroll()
         AzerothVoices:UpdateSaveButton()
@@ -750,6 +876,7 @@ function AzerothVoices:BuildEditor(panel)
 
     panel.applyMode = applyMode
     applyMode("full")
+    AzerothVoices:UpdateThreadUI()
 
     -- List render function
     local updating = false

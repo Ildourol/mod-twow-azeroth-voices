@@ -82,6 +82,10 @@ namespace AzerothVoices
         std::string LogicalToneRegen(uint64_t guid, std::string const& name);
         std::string LogicalForgotten(uint64_t guid, std::string const& name);
         std::string LogicalError(std::string const& channel, std::string const& message);
+        std::string LogicalThreadInfo(std::string const& scope, bool enabled, uint32_t energyPct,
+                                     std::string const& move, uint32_t exchangeCount,
+                                     std::string const& status, std::string const& topic,
+                                     std::string const& openPoint, std::string const& callbacks);
 
         // Legacy Chatter response builders (wrapped with "CHATTER_ADDON ")
         std::string Response(std::string const& payload);

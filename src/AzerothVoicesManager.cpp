@@ -1,4 +1,5 @@
 #include "AzerothVoicesManager.h"
+#include "AzerothVoicesEmotes.h"
 #include "AzerothVoicesLanguage.h"
 
 #include "AzerothVoicesAddon.h"
@@ -29,6 +30,7 @@
 #include "Item.h"
 #include "Log.h"
 #include "Map.h"
+#include "MapManager.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "Player.h"
@@ -1390,6 +1392,27 @@ namespace AzerothVoices
         m_telemetryGeneratedMessages = 0;
         m_preflightRejections.fill(0);
         m_inFlight = 0;
+
+        // Retire active facing leases with guarded restore
+        for (auto const& pair : m_facingLeases)
+        {
+            FacingLease const& lease = pair.second;
+            Map* map = sMapMgr.FindMap(lease.mapId, lease.instanceId);
+            if (map)
+            {
+                Creature* c = map->GetCreature(ObjectGuid(lease.creatureGuid));
+                if (c && c->IsInWorld() && c->IsAlive() && !c->IsInCombat() &&
+                    IsNpcSafelyIdleForFacing(c))
+                {
+                    c->SetFacingTo(lease.originalAngle);
+                }
+            }
+        }
+        m_facingLeases.clear();
+        m_deferredVisualJobs.clear();
+        m_claimedPresentations.clear();
+        m_actorEmoteCooldowns.clear();
+        ClearInteractiveEmotes();
     }
 
     void Manager::PruneActorCooldowns()
@@ -1416,6 +1439,8 @@ namespace AzerothVoices
         DrainCompletions();
         ReportTelemetry();
         DeliverScheduled();
+        UpdateEmotesAndFacing();
+        UpdateInteractiveEmotes();
         FlushDatabaseWrites();
         FlushSentimentWrites();
         FlushMemoryWrites();
@@ -1426,6 +1451,8 @@ namespace AzerothVoices
         PruneBossPresences();
         PruneGroupAndGuildState();
         PruneActorCooldowns();
+        PruneEmotesAndFacing();
+        UpdateThreadsAndGossip();
         UpdateBarrensScenes();
         PruneBarrensNovelty();
         ProcessPendingGuildGreetings();
@@ -2336,6 +2363,30 @@ namespace AzerothVoices
                 request.groupSubgroup = speaker.groupSubgroup;
             }
         }
+
+        bool hasValidatedBot = false;
+        if (scene && scene->conversation)
+        {
+            for (uint64_t g : scene->speakers)
+            {
+                if (g != actor.guid)
+                {
+                    Player* p = ObjectAccessor::FindPlayer(ObjectGuid(g));
+                    if (p && Script_IsAIControlled(p))
+                    {
+                        hasValidatedBot = true;
+                        break;
+                    }
+                }
+            }
+        }
+        else if (speaker.isBot && speaker.guid && speaker.guid != actor.guid)
+        {
+            hasValidatedBot = true;
+        }
+
+        request.effectsOffer = DetermineEffectsOffer(actor, speaker, scope, trigger,
+            boss != nullptr, scene != nullptr, hasValidatedBot);
 
         if (scope == ChatScope::Guild || scope == ChatScope::Officer)
         {
@@ -3374,6 +3425,118 @@ namespace AzerothVoices
         }
         if (candidates.empty())
             return;
+
+        // Section 24: Intent & Multi-Addressed Analysis
+        std::vector<IntentCandidate> intentCandidates;
+        intentCandidates.reserve(candidates.size());
+        for (auto const& c : candidates)
+        {
+            IntentCandidate ic;
+            ic.guid = c.actor.guid;
+            ic.name = c.actor.name;
+            ic.className = c.actor.className;
+            intentCandidates.push_back(std::move(ic));
+        }
+
+        bool const isGroupScope = (scope == ChatScope::Party || scope == ChatScope::Raid ||
+                                   scope == ChatScope::Guild || scope == ChatScope::Officer);
+        MultiAddressedDecision const intentDecision = AnalyzeMessageIntent(message, intentCandidates, isGroupScope);
+
+        // If explicitly addressed to a specific bot (e.g. "@Theron" or "Theron, ..."), prioritize that bot
+        if (intentDecision.explicitAddressedGuid != 0)
+        {
+            auto explicitIt = std::find_if(candidates.begin(), candidates.end(),
+                [g = intentDecision.explicitAddressedGuid](Candidate const& c) { return c.actor.guid == g; });
+            if (explicitIt != candidates.end())
+            {
+                Candidate matched = *explicitIt;
+                candidates.erase(explicitIt);
+                matched.score += 150;
+                candidates.insert(candidates.begin(), matched);
+            }
+        }
+
+        bool scopeMultiAddressed = false;
+        if (m_config->multiAddressedEnable && intentDecision.isMultiAddressed)
+        {
+            if ((scope == ChatScope::Party || scope == ChatScope::Raid) && m_config->multiAddressedPartyEnable)
+                scopeMultiAddressed = true;
+            else if (scope == ChatScope::Say && m_config->multiAddressedSayEnable)
+                scopeMultiAddressed = true;
+            else if ((scope == ChatScope::Guild || scope == ChatScope::Officer) && m_config->multiAddressedGuildEnable)
+                scopeMultiAddressed = true;
+            else if (scope == ChatScope::World && m_config->multiAddressedWorldEnable)
+                scopeMultiAddressed = true;
+        }
+
+        // Section 24: Stateful Conversation Thread Management
+        std::string threadKey;
+        bool threadScopeEnabled = false;
+        if (m_config->threadsEnable)
+        {
+            if ((scope == ChatScope::Party || scope == ChatScope::Raid) && m_config->threadsPartyEnable && speaker->GetGroup())
+            {
+                threadKey = "party:" + std::to_string(speaker->GetGroup()->GetId());
+                threadScopeEnabled = true;
+            }
+            else if (scope == ChatScope::Say && m_config->threadsSayEnable)
+            {
+                threadKey = "say:" + std::to_string(speaker->GetObjectGuid().GetRawValue());
+                threadScopeEnabled = true;
+            }
+            else if ((scope == ChatScope::Guild || scope == ChatScope::Officer) && m_config->threadsGuildEnable && speaker->GetGuildId())
+            {
+                threadKey = "guild:" + std::to_string(speaker->GetGuildId());
+                threadScopeEnabled = true;
+            }
+            else if (scope == ChatScope::World && m_config->threadsWorldEnable)
+            {
+                threadKey = "world:0";
+                threadScopeEnabled = true;
+            }
+        }
+
+        std::string customContext;
+        if (threadScopeEnabled && !threadKey.empty())
+        {
+            m_threads.GetOrCreateThread(threadKey, message);
+            ThreadMove const threadMove = m_threads.DecideThreadMove(threadKey,
+                m_config->threadsHighEnergyThreshold,
+                m_config->threadsLowEnergyThreshold,
+                RandomUInt(1, 100));
+            customContext = m_threads.BuildThreadPromptGuidance(threadKey, threadMove);
+        }
+
+        uint32_t maxBotsForScope = m_config->multiAddressedPartyMaxBots;
+        if (scope == ChatScope::Say)
+            maxBotsForScope = m_config->multiAddressedSayMaxBots;
+        else if (scope == ChatScope::Guild || scope == ChatScope::Officer)
+            maxBotsForScope = m_config->multiAddressedGuildMaxBots;
+        else if (scope == ChatScope::World)
+            maxBotsForScope = m_config->multiAddressedWorldMaxBots;
+
+        uint32_t const targetMultiResponders = scopeMultiAddressed
+            ? std::min<uint32_t>(maxBotsForScope, static_cast<uint32_t>(candidates.size()))
+            : 0;
+
+        if (scopeMultiAddressed && targetMultiResponders > 1)
+        {
+            std::vector<IntentCandidate> responders;
+            for (size_t i = 0; i < targetMultiResponders; ++i)
+            {
+                IntentCandidate ic;
+                ic.guid = candidates[i].actor.guid;
+                ic.name = candidates[i].actor.name;
+                ic.className = candidates[i].actor.className;
+                responders.push_back(std::move(ic));
+            }
+            std::string multiGuidance = BuildMultiBotSystemPromptGuidance(responders);
+            if (!customContext.empty())
+                customContext += "\n" + multiGuidance;
+            else
+                customContext = multiGuidance;
+        }
+
         RecordSurroundingChat(scope, channelName, candidates.front().actor, speakerSnapshot, message);
 
         bool accepted = false;
@@ -3381,10 +3544,14 @@ namespace AzerothVoices
         uint32_t acceptedResponders = 0;
         size_t candidateIndex = 0;
         uint32_t const maximum = scope == ChatScope::Whisper
-            ? 1 : m_config->maxResponders.maximum;
+            ? 1
+            : (scopeMultiAddressed && targetMultiResponders > 1
+                ? targetMultiResponders
+                : m_config->maxResponders.maximum);
+
         while (candidateIndex < candidates.size() && acceptedResponders < maximum)
         {
-            if (scope != ChatScope::Whisper && m_config->maxResponders.falloffEnabled &&
+            if (scope != ChatScope::Whisper && !scopeMultiAddressed && m_config->maxResponders.falloffEnabled &&
                 acceptedResponders > 0)
             {
                 uint64_t const reduction =
@@ -3401,14 +3568,15 @@ namespace AzerothVoices
             while (candidateIndex < candidates.size())
             {
                 Candidate const& candidate = candidates[candidateIndex++];
-                bool const direct = scope == ChatScope::Whisper || candidate.score >= 80;
+                bool const direct = scope == ChatScope::Whisper || candidate.score >= 80 ||
+                    (intentDecision.explicitAddressedGuid != 0 && candidate.actor.guid == intentDecision.explicitAddressedGuid);
                 RequestPriority const priority = direct ? RequestPriority::Direct :
                     ((scope == ChatScope::Party || scope == ChatScope::Raid ||
                       scope == ChatScope::Guild || scope == ChatScope::Officer)
                         ? RequestPriority::Group : RequestPriority::Nearby);
                 std::string trigger = direct ? "direct-chat" : "overheard-chat";
                 if (!QueueDialogue(candidate.actor, speakerSnapshot, scope, channelName,
-                    trigger, message, priority, false, allowAiFollowup))
+                    trigger, message, priority, false, allowAiFollowup, 0, nullptr, nullptr, false, nullptr, nullptr, customContext))
                     continue;
 
                 accepted = true;
@@ -3847,7 +4015,7 @@ namespace AzerothVoices
             std::string seed = !m_config->npcRandomPlayerInquiries.empty()
                 ? Pick(m_config->npcRandomPlayerInquiries)
                 : "Ask what brings them here.";
-            topic = "Address the nearby adventurer " + anchor->GetName() + " (" +
+            topic = std::string("Address the nearby adventurer ") + anchor->GetName() + " (" +
                 RaceName(anchor->GetRace()) + " " + ClassName(anchor->GetClass()) +
                 ", Level " + std::to_string(anchor->GetLevel()) + "): " + seed;
         }
@@ -5156,6 +5324,8 @@ namespace AzerothVoices
                     completion.request.sentimentDeltaLimit = 0;
                     completion.request.languageDecision = 0;
                     completion.request.languageAccepted = false;
+                    completion.request.parsedEffects = ParsedEffects{};
+                    completion.effects = ParsedEffects{};
                     sLog.outError("[AzerothVoices][LANGUAGE] Invalid response metadata; clarification used.");
                 }
                 if (completion.request.languageDecision == 'U' && completion.responseText.empty()) {
@@ -5519,6 +5689,41 @@ namespace AzerothVoices
                 m_proximityPacing.OnLineDelivered(proxKey, it->second.exchangeId, now);
             }
         }
+
+        // Section 24: Record delivered exchange in active conversation thread and decay energy
+        if (m_config && m_config->threadsEnable)
+        {
+            std::string threadKey;
+            if ((line.request.scope == ChatScope::Party || line.request.scope == ChatScope::Raid) && line.request.speaker.guid)
+            {
+                Player* p = ObjectAccessor::FindPlayer(ObjectGuid(line.request.speaker.guid));
+                if (p && p->GetGroup())
+                    threadKey = "party:" + std::to_string(p->GetGroup()->GetId());
+            }
+            else if (line.request.scope == ChatScope::Say && line.request.speaker.guid)
+            {
+                threadKey = "say:" + std::to_string(line.request.speaker.guid);
+            }
+            else if ((line.request.scope == ChatScope::Guild || line.request.scope == ChatScope::Officer) && line.request.speaker.guid)
+            {
+                Player* p = ObjectAccessor::FindPlayer(ObjectGuid(line.request.speaker.guid));
+                if (p && p->GetGuildId())
+                    threadKey = "guild:" + std::to_string(p->GetGuildId());
+            }
+            else if (line.request.scope == ChatScope::World)
+            {
+                threadKey = "world:0";
+            }
+
+            if (!threadKey.empty())
+            {
+                std::string openPoint;
+                if (line.text.find('?') != std::string::npos)
+                    openPoint = line.text;
+                m_threads.RecordExchange(threadKey, line.request.actor.name, line.text, openPoint);
+                m_threads.DecayEnergy(threadKey, m_config->threadsDecayRate / 100.0f);
+            }
+        }
     }
 
     void Manager::DeliverScheduled()
@@ -5724,6 +5929,879 @@ namespace AzerothVoices
         }
     }
 
+    EffectsOffer Manager::DetermineEffectsOffer(ActorSnapshot const& actor, SpeakerSnapshot const& speaker,
+                                                ChatScope scope, std::string const& trigger,
+                                                bool isBoss, bool isProximity, bool hasValidatedBotParticipant) const
+    {
+        EffectsOffer offer;
+        if (!m_config)
+            return offer;
+
+        if (actor.kind == ActorKind::PlayerBot)
+        {
+            if (scope == ChatScope::Say)
+            {
+                if (m_config->emotesGeneral)
+                    offer.offerSpeaker = true;
+                if (m_config->emotesGeneral && m_config->emotesListenerReactions &&
+                    speaker.isBot && speaker.guid && speaker.guid != actor.guid)
+                {
+                    offer.offerListener = true;
+                }
+                if (m_config->emotesRoleplayText)
+                    offer.offerRoleplay = true;
+            }
+            else if (scope == ChatScope::Yell || scope == ChatScope::Party)
+            {
+                if (m_config->emotesGeneral)
+                    offer.offerSpeaker = true;
+            }
+        }
+        else if (actor.kind == ActorKind::Creature)
+        {
+            if (scope == ChatScope::Say && !isBoss)
+            {
+                if (m_config->emotesGeneral)
+                    offer.offerSpeaker = true;
+                if (m_config->emotesGeneral && m_config->emotesListenerReactions)
+                {
+                    if (isProximity || trigger == "npc-random")
+                    {
+                        if (hasValidatedBotParticipant)
+                            offer.offerListener = true;
+                    }
+                    else if (speaker.isBot && speaker.guid)
+                    {
+                        offer.offerListener = true;
+                    }
+                }
+            }
+        }
+        return offer;
+    }
+
+    void Manager::NoteActorSpoke(uint64_t actorGuid, std::chrono::steady_clock::time_point now)
+    {
+        if (!actorGuid)
+            return;
+        auto& cd = m_actorEmoteCooldowns[actorGuid];
+        cd.lastSpoke = now;
+        ++cd.speechSequence;
+    }
+
+    bool Manager::ClaimLogicalPresentation(uint64_t requestId, std::chrono::steady_clock::time_point now)
+    {
+        if (requestId == 0)
+            return true;
+        auto it = m_claimedPresentations.find(requestId);
+        if (it != m_claimedPresentations.end())
+            return false;
+        m_claimedPresentations[requestId] = now;
+        return true;
+    }
+
+    bool Manager::CheckAudienceCanSeeActor(Unit const* actor, ChatScope scope, uint32_t subgroup) const
+    {
+        if (!actor || !actor->IsInWorld() || !m_config)
+            return false;
+
+        if (scope == ChatScope::Party)
+        {
+            Player const* bot = actor->ToPlayer();
+            if (!bot)
+                return false;
+            Group const* group = bot->GetGroup();
+            if (!group)
+                return false;
+
+            for (Group::MemberSlot const& slot : group->GetMemberSlots())
+            {
+                if (subgroup != 0 && slot.group != static_cast<uint8>(subgroup))
+                    continue;
+                Player* member = ObjectAccessor::FindPlayer(slot.guid);
+                if (!member || !member->IsInWorld() || !member->IsAlive() || !IsOnlineRealPlayer(member))
+                    continue;
+                if (member->GetMapId() != bot->GetMapId() || CurrentInstanceId(member) != CurrentInstanceId(bot))
+                    continue;
+                if (bot->IsWithinDist(member, m_config->sayDistance, false) && bot->IsVisibleForOrDetect(member, member, true))
+                    return true;
+            }
+            return false;
+        }
+
+        float const distance = (scope == ChatScope::Yell) ? m_config->yellDistance : m_config->sayDistance;
+        HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
+        for (auto const& entry : sObjectAccessor.GetPlayers())
+        {
+            Player* p = entry.second;
+            if (!p || !p->IsInWorld() || !p->IsAlive() || !IsOnlineRealPlayer(p))
+                continue;
+            if (p->GetMapId() != actor->GetMapId() || CurrentInstanceId(p) != CurrentInstanceId(actor))
+                continue;
+            if (actor->IsWithinDist(p, distance, false) && actor->IsVisibleForOrDetect(p, p, true))
+                return true;
+        }
+        return false;
+    }
+
+    bool Manager::IsUnitSafelyIdleForEmote(Unit const* unit) const
+    {
+        if (!unit || !unit->IsInWorld() || !unit->IsAlive())
+            return false;
+        if (unit->IsInCombat())
+            return false;
+        if (unit->IsNonMeleeSpellCasted(false))
+            return false;
+        if (unit->GetTransport())
+            return false;
+        if (unit->IsCharmed())
+            return false;
+        if (unit->HasUnitState(UNIT_STAT_MOVING | UNIT_STAT_STUNNED | UNIT_STAT_CONFUSED | UNIT_STAT_FLEEING))
+            return false;
+        if (!unit->IsStopped())
+            return false;
+        if (unit->movespline && !unit->movespline->Finalized())
+            return false;
+        if (Player const* p = unit->ToPlayer())
+        {
+            if (p->IsTaxiFlying())
+                return false;
+        }
+        return true;
+    }
+
+    bool Manager::IsNpcSafelyIdleForFacing(Creature const* creature) const
+    {
+        if (!creature || !IsUnitSafelyIdleForEmote(creature))
+            return false;
+        if (!creature->GetMotionMaster() || creature->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
+            return false;
+        return true;
+    }
+
+    void Manager::ExecuteDeliveredEffects(ScheduledLine const& line, Unit* actorUnit, Unit* directedTargetUnit,
+                                         uint32_t subgroup, bool isProximityScene, bool isRandomNpc)
+    {
+        if (!m_config || !actorUnit)
+            return;
+
+        auto const now = Clock::now();
+        uint64_t const actorGuid = actorUnit->GetObjectGuid().GetRawValue();
+        NoteActorSpoke(actorGuid, now);
+
+        if (!ClaimLogicalPresentation(line.request.id, now))
+            return;
+
+        ChatRequest const& request = line.request;
+        bool const isBot = (request.actor.kind == ActorKind::PlayerBot);
+        Player* bot = isBot ? actorUnit->ToPlayer() : nullptr;
+        Creature* creature = !isBot ? actorUnit->ToCreature() : nullptr;
+
+        bool const audienceVisible = CheckAudienceCanSeeActor(actorUnit, request.scope, subgroup);
+        bool const actorSafe = IsUnitSafelyIdleForEmote(actorUnit);
+
+        bool talkPlayed = false;
+
+        // 1. Automatic Talk
+        bool const talkConfigured = isBot ? m_config->emotesBotTalk : m_config->emotesNpcTalk;
+        bool const routeEligibleForTalk = isBot
+            ? (request.scope == ChatScope::Say || request.scope == ChatScope::Yell || request.scope == ChatScope::Party)
+            : (request.scope == ChatScope::Say && !request.bossLine);
+
+        if (talkConfigured && routeEligibleForTalk && actorSafe && audienceVisible)
+        {
+            auto& cd = m_actorEmoteCooldowns[actorGuid];
+            if (now >= cd.talkUntil)
+            {
+                actorUnit->HandleEmoteCommand(static_cast<uint32>(EmoteGesture::Talk));
+                cd.talkUntil = now + std::chrono::seconds(2);
+                talkPlayed = true;
+            }
+        }
+
+        // 2. Semantic Speaker Gesture
+        bool const semanticConfigured = m_config->emotesGeneral;
+        bool const routeEligibleForSemantic = isBot
+            ? (request.scope == ChatScope::Say || request.scope == ChatScope::Yell || request.scope == ChatScope::Party)
+            : (request.scope == ChatScope::Say && !request.bossLine);
+
+        if (semanticConfigured && routeEligibleForSemantic &&
+            request.parsedEffects.hasSpeaker && request.parsedEffects.speaker != EmoteGesture::None &&
+            actorSafe && audienceVisible)
+        {
+            auto& cd = m_actorEmoteCooldowns[actorGuid];
+            if (now >= cd.speakerSemanticUntil)
+            {
+                if (talkPlayed)
+                {
+                    if (m_deferredVisualJobs.size() < 128)
+                    {
+                        DeferredVisualJob job;
+                        job.epoch = m_epoch;
+                        job.requestId = request.id;
+                        job.kind = VisualJobKind::SpeakerSemanticAfterTalk;
+                        job.targetUnitGuid = actorGuid;
+                        job.targetIsBot = isBot;
+                        job.actorGuid = actorGuid;
+                        job.mapId = actorUnit->GetMapId();
+                        job.instanceId = CurrentInstanceId(actorUnit);
+                        job.scope = request.scope;
+                        job.subgroup = subgroup;
+                        job.gesture = request.parsedEffects.speaker;
+                        job.speechSequence = cd.speechSequence;
+                        job.due = now + std::chrono::milliseconds(750);
+                        job.deadline = job.due + std::chrono::milliseconds(750);
+                        m_deferredVisualJobs.push_back(job);
+                    }
+                }
+                else
+                {
+                    actorUnit->HandleEmoteCommand(static_cast<uint32>(request.parsedEffects.speaker));
+                    cd.speakerSemanticUntil = now + std::chrono::seconds(5);
+                }
+            }
+        }
+
+        // 3. Roleplay Text (Bot Say only)
+        if (isBot && bot && request.scope == ChatScope::Say && m_config->emotesRoleplayText &&
+            request.parsedEffects.hasRoleplay && !request.parsedEffects.roleplay.empty())
+        {
+            if (bot->GetSession() && !bot->GetSession()->IsFingerprintBanned())
+            {
+                float const emoteRange = sWorld.getConfig(CONFIG_FLOAT_LISTEN_RANGE_TEXTEMOTE);
+                bool const allowTwoSide = sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_CHAT);
+                bool hasRecipient = false;
+
+                HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
+                for (auto const& entry : sObjectAccessor.GetPlayers())
+                {
+                    Player* p = entry.second;
+                    if (!p || !p->IsInWorld() || !p->IsAlive() || !IsOnlineRealPlayer(p))
+                        continue;
+                    if (p->GetMapId() != bot->GetMapId() || CurrentInstanceId(p) != CurrentInstanceId(bot))
+                        continue;
+                    if (!allowTwoSide && p->GetTeam() != bot->GetTeam())
+                        continue;
+                    if (bot->IsWithinDist(p, emoteRange, false) && bot->IsVisibleForOrDetect(p, p, true))
+                    {
+                        hasRecipient = true;
+                        break;
+                    }
+                }
+
+                if (hasRecipient)
+                {
+                    auto& cd = m_actorEmoteCooldowns[actorGuid];
+                    if (now >= cd.roleplayUntil)
+                    {
+                        bot->TextEmote(request.parsedEffects.roleplay);
+                        cd.roleplayUntil = now + std::chrono::seconds(10);
+                    }
+                }
+            }
+        }
+
+        // 4. Conversation Facing (Speaking NPC on directed MonsterSay)
+        if (!isBot && creature && request.scope == ChatScope::Say && !request.bossLine &&
+            m_config->emotesNpcTalk && m_config->emotesNpcFaceTarget)
+        {
+            bool allowFacing = true;
+            if (isRandomNpc)
+                allowFacing = false;
+            if (isProximityScene && request.sceneLineIndex == 0)
+                allowFacing = false;
+
+            if (allowFacing && directedTargetUnit && directedTargetUnit != creature &&
+                directedTargetUnit->IsInWorld() && directedTargetUnit->IsAlive() &&
+                directedTargetUnit->GetMapId() == creature->GetMapId() &&
+                CurrentInstanceId(directedTargetUnit) == CurrentInstanceId(creature) &&
+                creature->IsWithinDist(directedTargetUnit, m_config->sayDistance, false) &&
+                creature->IsWithinLOSInMap(directedTargetUnit) &&
+                creature->IsVisibleForOrDetect(directedTargetUnit, directedTargetUnit, true) &&
+                IsNpcSafelyIdleForFacing(creature))
+            {
+                float const targetAngle = creature->GetAngle(directedTargetUnit);
+                float const currentAngle = creature->GetOrientation();
+
+                if (!AnglesWithinTolerance(currentAngle, targetAngle, 0.05f))
+                {
+                    uint64_t const guid = creature->GetObjectGuid().GetRawValue();
+                    auto it = m_facingLeases.find(guid);
+                    if (it != m_facingLeases.end() || m_facingLeases.size() < 64)
+                    {
+                        float originalAngle = currentAngle;
+                        uint32_t gen = 1;
+                        if (it != m_facingLeases.end())
+                        {
+                            originalAngle = it->second.originalAngle;
+                            gen = it->second.generation + 1;
+                        }
+                        creature->SetFacingTo(targetAngle);
+
+                        FacingLease lease;
+                        lease.creatureGuid = guid;
+                        lease.mapId = creature->GetMapId();
+                        lease.instanceId = CurrentInstanceId(creature);
+                        lease.originalAngle = originalAngle;
+                        lease.appliedAngle = targetAngle;
+                        lease.posX = creature->GetPositionX();
+                        lease.posY = creature->GetPositionY();
+                        lease.posZ = creature->GetPositionZ();
+                        lease.generation = gen;
+                        lease.deadline = now + std::chrono::milliseconds(1500);
+                        m_facingLeases[guid] = lease;
+                    }
+                }
+            }
+        }
+
+        // 5. Listener Reactions
+        if (m_config->emotesGeneral && m_config->emotesListenerReactions &&
+            request.parsedEffects.hasListener && request.parsedEffects.listener != EmoteGesture::None)
+        {
+            Player* listenerBot = nullptr;
+            if (isBot && request.scope == ChatScope::Say)
+            {
+                if (request.speaker.isBot && request.speaker.guid && request.speaker.guid != actorGuid)
+                {
+                    Player* p = ObjectAccessor::FindPlayer(ObjectGuid(request.speaker.guid));
+                    if (p && !IsOnlineRealPlayer(p) && Script_IsAIControlled(p))
+                        listenerBot = p;
+                }
+            }
+            else if (!isBot && request.scope == ChatScope::Say && !request.bossLine)
+            {
+                if (isProximityScene)
+                {
+                    if (request.speaker.isBot && request.speaker.guid)
+                    {
+                        Player* p = ObjectAccessor::FindPlayer(ObjectGuid(request.speaker.guid));
+                        if (p && Script_IsAIControlled(p))
+                            listenerBot = p;
+                    }
+                }
+                else if (!isRandomNpc && request.speaker.isBot && request.speaker.guid)
+                {
+                    Player* p = ObjectAccessor::FindPlayer(ObjectGuid(request.speaker.guid));
+                    if (p && Script_IsAIControlled(p))
+                        listenerBot = p;
+                }
+            }
+
+            if (listenerBot && listenerBot->IsInWorld() && listenerBot->IsAlive() &&
+                listenerBot->GetMapId() == actorUnit->GetMapId() &&
+                CurrentInstanceId(listenerBot) == CurrentInstanceId(actorUnit) &&
+                actorUnit->IsWithinDist(listenerBot, m_config->sayDistance, false) &&
+                actorUnit->IsWithinLOSInMap(listenerBot) && listenerBot->IsWithinLOSInMap(actorUnit) &&
+                actorUnit->IsVisibleForOrDetect(listenerBot, listenerBot, true) &&
+                listenerBot->IsVisibleForOrDetect(actorUnit, actorUnit, true) &&
+                HasNearbyRealPlayer(listenerBot, m_config->sayDistance) &&
+                IsUnitSafelyIdleForEmote(listenerBot))
+            {
+                uint64_t const listenerGuid = listenerBot->GetObjectGuid().GetRawValue();
+                auto& cd = m_actorEmoteCooldowns[listenerGuid];
+                if (now >= cd.listenerUntil && m_deferredVisualJobs.size() < 128)
+                {
+                    DeferredVisualJob job;
+                    job.epoch = m_epoch;
+                    job.requestId = request.id;
+                    job.kind = VisualJobKind::ListenerReaction;
+                    job.targetUnitGuid = listenerGuid;
+                    job.targetIsBot = true;
+                    job.actorGuid = actorGuid;
+                    job.mapId = listenerBot->GetMapId();
+                    job.instanceId = CurrentInstanceId(listenerBot);
+                    job.scope = request.scope;
+                    job.subgroup = subgroup;
+                    job.gesture = request.parsedEffects.listener;
+                    job.speechSequence = cd.speechSequence;
+                    job.due = now + std::chrono::milliseconds(750);
+                    job.deadline = job.due + std::chrono::milliseconds(750);
+                    m_deferredVisualJobs.push_back(job);
+                }
+            }
+        }
+    }
+
+    void Manager::UpdateEmotesAndFacing()
+    {
+        auto const now = Clock::now();
+
+        // 1. Expire and safely restore facing leases
+        for (auto it = m_facingLeases.begin(); it != m_facingLeases.end(); )
+        {
+            FacingLease const& lease = it->second;
+            if (now >= lease.deadline)
+            {
+                Creature* c = nullptr;
+                Map* map = sMapMgr.FindMap(lease.mapId, lease.instanceId);
+                if (map)
+                    c = map->GetCreature(ObjectGuid(lease.creatureGuid));
+
+                if (c && c->IsInWorld() && c->IsAlive() && !c->IsInCombat() &&
+                    IsNpcSafelyIdleForFacing(c))
+                {
+                    float const dx = c->GetPositionX() - lease.posX;
+                    float const dy = c->GetPositionY() - lease.posY;
+                    float const dz = c->GetPositionZ() - lease.posZ;
+                    bool const posMatches = (dx * dx + dy * dy + dz * dz) <= 0.04f;
+
+                    bool const oriMatches = AnglesWithinTolerance(c->GetOrientation(), lease.appliedAngle, 0.1f);
+
+                    if (posMatches && oriMatches)
+                    {
+                        c->SetFacingTo(lease.originalAngle);
+                    }
+                }
+                it = m_facingLeases.erase(it);
+            }
+            else
+                ++it;
+        }
+
+        // 2. Process due deferred visual jobs (up to 32 per tick)
+        size_t jobsProcessed = 0;
+        std::deque<DeferredVisualJob> remainingJobs;
+
+        while (!m_deferredVisualJobs.empty() && jobsProcessed < 32)
+        {
+            DeferredVisualJob job = m_deferredVisualJobs.front();
+            m_deferredVisualJobs.pop_front();
+            ++jobsProcessed;
+
+            if (job.epoch != m_epoch || now > job.deadline)
+                continue;
+
+            if (now < job.due)
+            {
+                remainingJobs.push_back(job);
+                continue;
+            }
+
+            if (job.kind == VisualJobKind::SpeakerSemanticAfterTalk)
+            {
+                Unit* actor = nullptr;
+                if (job.targetIsBot)
+                    actor = ObjectAccessor::FindPlayer(ObjectGuid(job.targetUnitGuid));
+                else
+                {
+                    Map* map = sMapMgr.FindMap(job.mapId, job.instanceId);
+                    if (map)
+                        actor = map->GetCreature(ObjectGuid(job.targetUnitGuid));
+                }
+
+                if (actor && actor->IsInWorld() && actor->IsAlive() &&
+                    actor->GetMapId() == job.mapId && CurrentInstanceId(actor) == job.instanceId &&
+                    IsUnitSafelyIdleForEmote(actor) &&
+                    CheckAudienceCanSeeActor(actor, job.scope, job.subgroup))
+                {
+                    auto& cd = m_actorEmoteCooldowns[job.targetUnitGuid];
+                    if (cd.speechSequence == job.speechSequence && now >= cd.speakerSemanticUntil)
+                    {
+                        actor->HandleEmoteCommand(static_cast<uint32>(job.gesture));
+                        cd.speakerSemanticUntil = now + std::chrono::seconds(5);
+                    }
+                }
+            }
+            else if (job.kind == VisualJobKind::ListenerReaction)
+            {
+                Player* listener = ObjectAccessor::FindPlayer(ObjectGuid(job.targetUnitGuid));
+                if (listener && listener->IsInWorld() && listener->IsAlive() &&
+                    Script_IsAIControlled(listener) &&
+                    listener->GetMapId() == job.mapId && CurrentInstanceId(listener) == job.instanceId &&
+                    IsUnitSafelyIdleForEmote(listener) &&
+                    HasNearbyRealPlayer(listener, m_config->sayDistance))
+                {
+                    auto& cd = m_actorEmoteCooldowns[job.targetUnitGuid];
+                    if (cd.speechSequence == job.speechSequence && now >= cd.listenerUntil)
+                    {
+                        listener->HandleEmoteCommand(static_cast<uint32>(job.gesture));
+                        cd.listenerUntil = now + std::chrono::seconds(8);
+                    }
+                }
+            }
+        }
+
+        while (!m_deferredVisualJobs.empty())
+        {
+            remainingJobs.push_back(m_deferredVisualJobs.front());
+            m_deferredVisualJobs.pop_front();
+        }
+        m_deferredVisualJobs = std::move(remainingJobs);
+    }
+
+    void Manager::PruneEmotesAndFacing()
+    {
+        auto const now = Clock::now();
+        for (auto it = m_claimedPresentations.begin(); it != m_claimedPresentations.end(); )
+        {
+            if (now - it->second > std::chrono::seconds(120))
+                it = m_claimedPresentations.erase(it);
+            else
+                ++it;
+        }
+
+        if (m_actorEmoteCooldowns.size() > 1024)
+        {
+            for (auto it = m_actorEmoteCooldowns.begin(); it != m_actorEmoteCooldowns.end(); )
+            {
+                if (it->second.talkUntil < now && it->second.speakerSemanticUntil < now &&
+                    it->second.listenerUntil < now && it->second.roleplayUntil < now)
+                {
+                    it = m_actorEmoteCooldowns.erase(it);
+                }
+                else
+                    ++it;
+            }
+        }
+    }
+
+    void Manager::UpdateThreadsAndGossip()
+    {
+        if (!m_config)
+            return;
+
+        auto const now = Clock::now();
+        if (m_lastThreadPrune.time_since_epoch().count() == 0 ||
+            now - m_lastThreadPrune >= std::chrono::seconds(30))
+        {
+            m_lastThreadPrune = now;
+            m_threads.PruneIdleThreads(now, m_config->threadsIdleTtlSeconds);
+            auto const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
+                now.time_since_epoch()).count());
+            m_gossip.Prune(nowSec, 3600);
+        }
+    }
+
+    void Manager::RecordBarrensSceneComplete(std::string const& topic, std::string const& speaker,
+                                            std::string const& snippet, uint32_t zoneId, uint32_t mapId)
+    {
+        if (!m_config || !m_config->gossipRelayEnable)
+            return;
+
+        auto const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
+            Clock::now().time_since_epoch()).count());
+
+        GossipItem item;
+        item.channel = "world";
+        item.topic = topic;
+        item.speaker = speaker;
+        item.snippet = snippet;
+        item.zoneId = zoneId;
+        item.mapId = mapId;
+        item.faction = 2; // neutral/any
+        item.timestamp = nowSec;
+
+        m_gossip.RecordGossip(std::move(item));
+    }
+
+    void Manager::HandlePlayerTextEmote(Player* player, uint32_t textEmote, uint32_t /*emoteNum*/, ObjectGuid guid)
+    {
+        if (!m_started || m_stopping || !m_config || !m_config->emotesInteractiveEnable)
+            return;
+
+        if (!player || !player->IsInWorld() || Script_IsAIControlled(player))
+            return;
+
+        if (IsIgnoredSocialEmote(textEmote))
+            return;
+
+        auto const now = Clock::now();
+        uint64_t const playerGuid = player->GetObjectGuid().GetRawValue();
+
+        // Target resolution: packet guid first, fallback to player's active target
+        ObjectGuid targetGuid = guid;
+        if (targetGuid.IsEmpty())
+            targetGuid = player->GetSelectionGuid();
+
+        // 1. Direct Target PlayerBot Mirroring
+        if (!targetGuid.IsEmpty() && targetGuid.IsPlayer())
+        {
+            Player* targetBot = ObjectAccessor::FindPlayer(targetGuid);
+            if (targetBot && targetBot->IsInWorld() && Script_IsAIControlled(targetBot) &&
+                targetBot->IsAlive() && !targetBot->IsInCombat() &&
+                targetBot->GetMap() == player->GetMap() &&
+                player->IsWithinDistInMap(targetBot, 30.0f))
+            {
+                uint32_t mirrorEmote = 0;
+                if (HasMirrorEmote(textEmote, mirrorEmote))
+                {
+                    uint64_t const botGuid = targetBot->GetObjectGuid().GetRawValue();
+                    auto itCd = m_interactiveEmoteCooldowns.find(botGuid);
+                    if (itCd == m_interactiveEmoteCooldowns.end() || now >= itCd->second)
+                    {
+                        if (urand(1, 100) <= m_config->emotesInteractiveBotMirrorChance)
+                        {
+                            m_interactiveEmoteCooldowns[botGuid] = now + std::chrono::seconds(m_config->emotesInteractiveBotMirrorCooldown);
+
+                            DeferredInteractiveEmote job;
+                            job.actorGuid = botGuid;
+                            job.targetGuid = playerGuid;
+                            job.textEmoteId = mirrorEmote;
+                            job.mapId = targetBot->GetMapId();
+                            job.instanceId = targetBot->GetInstanceId();
+                            job.faceTarget = true;
+                            job.isCreature = false;
+                            job.dueAt = now + std::chrono::milliseconds(urand(800, 2500));
+                            m_deferredInteractiveEmotes.push_back(job);
+                        }
+                    }
+                }
+            }
+        }
+        // 2. Direct Target Town NPC Mirroring
+        else if (!targetGuid.IsEmpty() && targetGuid.IsCreature() && m_config->emotesInteractiveNpcMirror)
+        {
+            Creature* npc = player->GetMap()->GetCreature(targetGuid);
+            if (npc && npc->IsAlive() && !npc->IsInCombat() &&
+                !npc->IsHostileTo(player) && npc->GetCreatureInfo()->rank < 3)
+            {
+                uint32_t const entry = npc->GetEntry();
+                // Exclude creatures with core scripted ReceiveEmote handlers
+                if (entry != 620 && entry != 25305 && entry != 33211 && entry != 33224 && entry != 6626 && entry != 7233 && entry != 3401)
+                {
+                    uint32_t mirrorEmote = 0;
+                    if (HasMirrorEmote(textEmote, mirrorEmote))
+                    {
+                        uint64_t const npcGuid = npc->GetObjectGuid().GetRawValue();
+                        auto itCd = m_interactiveEmoteCooldowns.find(npcGuid);
+                        if (itCd == m_interactiveEmoteCooldowns.end() || now >= itCd->second)
+                        {
+                            m_interactiveEmoteCooldowns[npcGuid] = now + std::chrono::seconds(m_config->emotesInteractiveNpcMirrorCooldown);
+
+                            DeferredInteractiveEmote job;
+                            job.actorGuid = npcGuid;
+                            job.targetGuid = playerGuid;
+                            job.textEmoteId = mirrorEmote;
+                            job.mapId = npc->GetMapId();
+                            job.instanceId = npc->GetInstanceId();
+                            job.faceTarget = true;
+                            job.isCreature = true;
+                            job.dueAt = now + std::chrono::milliseconds(urand(800, 2500));
+                            m_deferredInteractiveEmotes.push_back(job);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Contagious Mood Spread (0 Tokens)
+        if (IsContagiousEmote(textEmote))
+        {
+            Group* group = player->GetGroup();
+            if (group)
+            {
+                for (GroupReference* itr = group->GetFirstMember(); itr; itr = itr->next())
+                {
+                    Player* member = itr->getSource();
+                    if (member && member != player && member->IsInWorld() && Script_IsAIControlled(member) &&
+                        member->IsAlive() && !member->IsInCombat() && member->GetMap() == player->GetMap() &&
+                        player->IsWithinDistInMap(member, 30.0f))
+                    {
+                        uint64_t const memberGuid = member->GetObjectGuid().GetRawValue();
+                        if (!targetGuid.IsEmpty() && targetGuid.GetRawValue() == memberGuid)
+                            continue; // Already processed as direct target
+
+                        auto itCd = m_interactiveEmoteCooldowns.find(memberGuid);
+                        if (itCd == m_interactiveEmoteCooldowns.end() || now >= itCd->second)
+                        {
+                            if (urand(1, 100) <= m_config->emotesInteractiveMoodSpreadChance)
+                            {
+                                m_interactiveEmoteCooldowns[memberGuid] = now + std::chrono::seconds(m_config->emotesInteractiveBotMirrorCooldown);
+
+                                DeferredInteractiveEmote job;
+                                job.actorGuid = memberGuid;
+                                job.targetGuid = playerGuid;
+                                job.textEmoteId = textEmote; // Contagious: join in the same emote
+                                job.mapId = member->GetMapId();
+                                job.instanceId = member->GetInstanceId();
+                                job.faceTarget = false; // Join the dance/cheer naturally
+                                job.isCreature = false;
+                                job.dueAt = now + std::chrono::milliseconds(urand(500, 2000));
+                                m_deferredInteractiveEmotes.push_back(job);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void Manager::HandleDuelSpectator(Player* player1, Player* player2, uint8_t moment, Player* winner)
+    {
+        if (!m_started || m_stopping || !m_config || !m_config->emotesInteractiveEnable || !m_config->emotesInteractivePvPSpectator)
+            return;
+
+        if (!player1 || !player2 || !player1->IsInWorld() || !player2->IsInWorld())
+            return;
+
+        auto const now = Clock::now();
+        Player* anchor = winner ? winner : player1;
+        Map* map = anchor->GetMap();
+        if (!map)
+            return;
+
+        std::vector<Player*> spectators;
+        for (Map::PlayerList::const_iterator itr = map->GetPlayers().begin(); itr != map->GetPlayers().end(); ++itr)
+        {
+            Player* bot = itr->getSource();
+            if (bot && bot != player1 && bot != player2 && bot->IsInWorld() && Script_IsAIControlled(bot) &&
+                bot->IsAlive() && !bot->IsInCombat() && anchor->IsWithinDistInMap(bot, 25.0f))
+            {
+                spectators.push_back(bot);
+                if (spectators.size() >= 4)
+                    break;
+            }
+        }
+
+        if (spectators.empty())
+            return;
+
+        for (Player* bot : spectators)
+        {
+            uint64_t const botGuid = bot->GetObjectGuid().GetRawValue();
+            auto itCd = m_interactiveEmoteCooldowns.find(botGuid);
+            if (itCd != m_interactiveEmoteCooldowns.end() && now < itCd->second)
+                continue;
+
+            bool const sideWon = (winner && bot->GetTeam() == winner->GetTeam());
+            std::vector<uint32_t> const pool = GetSpectatorDuelEmotes(moment, sideWon);
+            if (pool.empty())
+                continue;
+
+            uint32_t const chosenEmote = pool[urand(0, pool.size() - 1)];
+            m_interactiveEmoteCooldowns[botGuid] = now + std::chrono::seconds(10);
+
+            DeferredInteractiveEmote job;
+            job.actorGuid = botGuid;
+            job.targetGuid = anchor->GetObjectGuid().GetRawValue();
+            job.textEmoteId = chosenEmote;
+            job.mapId = bot->GetMapId();
+            job.instanceId = bot->GetInstanceId();
+            job.faceTarget = true;
+            job.isCreature = false;
+            job.dueAt = now + std::chrono::milliseconds(urand(500, 2200));
+            m_deferredInteractiveEmotes.push_back(job);
+        }
+    }
+
+    void Manager::UpdateInteractiveEmotes()
+    {
+        if (m_deferredInteractiveEmotes.empty())
+            return;
+
+        auto const now = Clock::now();
+        std::deque<DeferredInteractiveEmote> remaining;
+
+        while (!m_deferredInteractiveEmotes.empty())
+        {
+            DeferredInteractiveEmote job = m_deferredInteractiveEmotes.front();
+            m_deferredInteractiveEmotes.pop_front();
+
+            if (now < job.dueAt)
+            {
+                remaining.push_back(job);
+                continue;
+            }
+
+            Map* map = sMapMgr.FindMap(job.mapId, job.instanceId);
+            if (!map)
+                continue;
+
+            Unit* actor = nullptr;
+            Unit* target = nullptr;
+
+            if (job.isCreature)
+                actor = map->GetCreature(ObjectGuid(job.actorGuid));
+            else
+                actor = map->GetPlayer(ObjectGuid(job.actorGuid));
+
+            if (!actor || !actor->IsInWorld() || !actor->IsAlive() || actor->IsInCombat())
+                continue;
+
+            if (job.targetGuid)
+                target = map->GetUnit(ObjectGuid(job.targetGuid));
+
+            // Facing turn
+            if (job.faceTarget && target && actor->IsWithinDistInMap(target, 40.0f))
+            {
+                if (job.isCreature)
+                {
+                    Creature* creature = static_cast<Creature*>(actor);
+                    if (IsNpcSafelyIdleForFacing(creature))
+                    {
+                        float targetAngle = creature->GetAngle(target);
+                        if (!AnglesWithinTolerance(creature->GetOrientation(), targetAngle))
+                        {
+                            FacingLease lease;
+                            lease.creatureGuid = job.actorGuid;
+                            lease.mapId = job.mapId;
+                            lease.instanceId = job.instanceId;
+                            lease.originalAngle = creature->GetOrientation();
+                            lease.appliedAngle = targetAngle;
+                            lease.posX = creature->GetPositionX();
+                            lease.posY = creature->GetPositionY();
+                            lease.posZ = creature->GetPositionZ();
+                            lease.generation = 1;
+                            lease.deadline = now + std::chrono::milliseconds(1500);
+
+                            creature->SetFacingTo(targetAngle);
+                            m_facingLeases[job.actorGuid] = lease;
+                        }
+                    }
+                }
+                else
+                {
+                    Player* bot = static_cast<Player*>(actor);
+                    if (IsUnitSafelyIdleForEmote(bot))
+                        bot->SetFacingToObject(target);
+                }
+            }
+
+            // Play physical animation
+            EmotesTextEntry const* em = sEmotesTextStore.LookupEntry(job.textEmoteId);
+            if (em && em->textid)
+            {
+                actor->HandleEmote(em->textid);
+            }
+
+            // Broadcast text emote packet
+            char const* targetName = target ? target->GetName() : nullptr;
+            uint32_t const namlen = (targetName ? strlen(targetName) : 0) + 1;
+
+            WorldPacket data(SMSG_TEXT_EMOTE, 20 + namlen);
+            data << ObjectGuid(actor->GetObjectGuid());
+            data << uint32_t(job.textEmoteId);
+            data << uint32_t(0); // emoteNum
+            data << uint32_t(namlen);
+            if (namlen > 1)
+                data.append(targetName, namlen);
+            else
+                data << uint8_t(0x00);
+            actor->SendMessageToSet(&data, true);
+        }
+
+        m_deferredInteractiveEmotes = std::move(remaining);
+
+        // Prune stale interactive cooldowns
+        if (m_interactiveEmoteCooldowns.size() > 512)
+        {
+            for (auto it = m_interactiveEmoteCooldowns.begin(); it != m_interactiveEmoteCooldowns.end(); )
+            {
+                if (now >= it->second)
+                    it = m_interactiveEmoteCooldowns.erase(it);
+                else
+                    ++it;
+            }
+        }
+    }
+
+    void Manager::ClearInteractiveEmotes()
+    {
+        m_deferredInteractiveEmotes.clear();
+        m_interactiveEmoteCooldowns.clear();
+    }
+
     bool Manager::Deliver(ScheduledLine const& line)
     {
         ChatRequest const& request = line.request;
@@ -5818,9 +6896,14 @@ namespace AzerothVoices
             {
                 case ChatScope::Say:
                     bot->Say(text, LANG_UNIVERSAL);
+                    {
+                        Player* receiver = request.speaker.guid ? ObjectAccessor::FindPlayer(ObjectGuid(request.speaker.guid)) : nullptr;
+                        ExecuteDeliveredEffects(line, bot, receiver && receiver->IsInWorld() ? receiver : nullptr, 0, false, false);
+                    }
                     return true;
                 case ChatScope::Yell:
                     bot->Yell(text, LANG_UNIVERSAL);
+                    ExecuteDeliveredEffects(line, bot, nullptr, 0, false, false);
                     return true;
                 case ChatScope::Whisper:
                 {
@@ -5828,6 +6911,7 @@ namespace AzerothVoices
                     if (!IsOnlineRealPlayer(receiver))
                         return false;
                     BotWhisperPlayer(bot, receiver, text);
+                    NoteActorSpoke(request.actor.guid, Clock::now());
                     return true;
                 }
                 case ChatScope::Party:
@@ -5849,6 +6933,15 @@ namespace AzerothVoices
                     int subgroup = request.scope == ChatScope::Party
                         ? group->GetMemberGroup(bot->GetObjectGuid()) : -1;
                     group->BroadcastPacket(&packet, false, subgroup);
+                    if (request.scope == ChatScope::Party)
+                    {
+                        uint32_t const actualSubgroup = (subgroup >= 0) ? static_cast<uint32_t>(subgroup) : 0;
+                        ExecuteDeliveredEffects(line, bot, nullptr, actualSubgroup, false, false);
+                    }
+                    else
+                    {
+                        NoteActorSpoke(request.actor.guid, Clock::now());
+                    }
                     return true;
                 }
                 case ChatScope::Guild:
@@ -5868,6 +6961,7 @@ namespace AzerothVoices
                     }
                     else
                         guild->BroadcastToGuild(bot->GetSession(), text, LANG_UNIVERSAL);
+                    NoteActorSpoke(request.actor.guid, Clock::now());
                     return true;
                 }
                 case ChatScope::Channel:
@@ -5882,6 +6976,7 @@ namespace AzerothVoices
                     if (!channel)
                         return false;
                     channel->AsyncSay(bot->GetObjectGuid(), text.c_str(), LANG_UNIVERSAL, true);
+                    NoteActorSpoke(request.actor.guid, Clock::now());
                     return true;
                 }
             }
@@ -5918,6 +7013,7 @@ namespace AzerothVoices
                 !creature->IsVisibleForOrDetect(anchor, anchor, true))
                 return false;
             creature->MonsterYell(text, LANG_UNIVERSAL, anchor);
+            NoteActorSpoke(request.actor.guid, Clock::now());
             return true;
         }
 
@@ -5934,6 +7030,12 @@ namespace AzerothVoices
                 !EvaluateProximityCreature(creature, *m_config).eligible)
                 return false;
             creature->MonsterSay(text, LANG_UNIVERSAL, anchor);
+            Unit* directedTarget = nullptr;
+            if (request.proximityScene && request.speaker.guid)
+            {
+                directedTarget = ObjectAccessor::GetUnit(*anchor, ObjectGuid(request.speaker.guid));
+            }
+            ExecuteDeliveredEffects(line, creature, directedTarget, 0, request.proximityScene, request.trigger == "npc-random");
             return true;
         }
 
@@ -5945,6 +7047,7 @@ namespace AzerothVoices
         Player* receiver = ObjectAccessor::FindPlayer(ObjectGuid(request.speaker.guid));
         creature->MonsterSay(text, LANG_UNIVERSAL,
             receiver && receiver->IsInWorld() ? receiver : nullptr);
+        ExecuteDeliveredEffects(line, creature, receiver && receiver->IsInWorld() ? receiver : nullptr, 0, false, false);
         return true;
     }
 
@@ -7239,6 +8342,65 @@ namespace AzerothVoices
             }
             logicalPayloads.push_back(payload);
         }
+        {
+            std::string threadScope = "None";
+            std::string topic = "-";
+            uint32_t energyPct = 0;
+            std::string moveName = "None";
+            uint32_t exchangeCount = 0;
+            std::string openPoint = "-";
+            std::string historyStr = "-";
+            std::string statusStr = "Inactive";
+
+            std::string threadKey;
+            if (Group* group = player->GetGroup())
+            {
+                threadKey = "party:" + std::to_string(group->GetId());
+                threadScope = "Party";
+            }
+            else
+            {
+                threadKey = "say:" + std::to_string(playerGuid);
+                threadScope = "Say";
+            }
+
+            if (ConversationThread const* thread = m_threads.FindThread(threadKey))
+            {
+                if (!thread->topic.empty())
+                    topic = thread->topic;
+                energyPct = static_cast<uint32_t>(std::max(0.0f, std::min(1.0f, thread->energy)) * 100.0f);
+                ThreadMove move = const_cast<ThreadManager&>(m_threads).DecideThreadMove(threadKey,
+                    m_config->threadsEnergyHighThreshold, m_config->threadsEnergyLowThreshold, 50);
+                moveName = ThreadMoveName(move);
+                exchangeCount = thread->exchangeCount;
+                if (!thread->openPoint.empty())
+                    openPoint = thread->openPoint;
+
+                if (!thread->topicHistory.empty())
+                {
+                    std::string hist;
+                    for (size_t i = 0; i < thread->topicHistory.size(); ++i)
+                    {
+                        if (i > 0) hist += ", ";
+                        hist += thread->topicHistory[i];
+                    }
+                    historyStr = hist;
+                }
+
+                if (thread->isInterrupted)
+                    statusStr = "Paused (" + thread->interruptReason + ")";
+                else
+                    statusStr = "Active";
+            }
+            else if (m_config->threadsEnable)
+            {
+                statusStr = "Idle";
+            }
+
+            logicalPayloads.push_back(Addon::LogicalThreadInfo(
+                threadScope, m_config->threadsEnable, energyPct, moveName,
+                exchangeCount, statusStr, topic, openPoint, historyStr));
+        }
         switch (command.kind)
         {
             case Addon::CommandKind::Status:
@@ -8385,8 +9547,21 @@ namespace AzerothVoices
         size_t const deadMembers = (bots.size() - alive) + (anchorAlive ? 0 : 1);
         anyInCombat = anyInCombat || anchor->IsInCombat();
 
+        // Section 24: Stateful Thread combat pause / resume
+        if (m_config && m_config->threadsPartyEnable && state.groupId)
+        {
+            std::string const partyKey = "party:" + std::to_string(state.groupId);
+            if (anyInCombat)
+                m_threads.InterruptThread(partyKey, "combat");
+            else
+                m_threads.ResumeThread(partyKey);
+        }
+
         if (state.wipe.Update(members, deadMembers, anyInCombat))
         {
+            if (m_config && m_config->threadsPartyEnable && state.groupId)
+                m_threads.InterruptThread("party:" + std::to_string(state.groupId), "wipe");
+
             if (GroupTriggerReady(state.groupId, GroupTrigger::Wipe,
                     m_config->groupWipeCooldownSeconds) &&
                 Roll(m_config->groupWipeChance) &&
@@ -8605,12 +9780,34 @@ namespace AzerothVoices
                                                : m_config->groupIdleCooldownSeconds;
                 if (GroupTriggerReady(groupId, GroupTrigger::Idle, cooldown) && Roll(chance))
                 {
-                    std::string cat = SampleCategory(m_config->groupCategoryWeights, "entertainment");
-                    std::string prompt = GetRandomPromptForCategory(cat, "group");
-                    if (prompt.empty())
-                        prompt = "make a short casual remark to the group about what you are doing";
-                    if (QueueGroupChatter(GroupTrigger::Idle, player, prompt, true))
-                        NoteGroupTrigger(groupId, GroupTrigger::Idle, cooldown);
+                    uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(
+                        now.time_since_epoch()).count());
+                    bool gossipRelayed = false;
+                    if (m_config->gossipRelayEnable && m_config->gossipRelayPartyEnable &&
+                        m_gossip.CanRelayToParty(groupId, nowSec, m_config->gossipRelayCooldownSeconds,
+                                                m_config->gossipRelayPartyChance, RandomUInt(1, 100)))
+                    {
+                        if (GossipItem const* item = m_gossip.GetLatestGossip(player->GetZoneId(), player->GetMapId()))
+                        {
+                            std::string gossipPrompt = m_gossip.BuildGossipPrompt(*item, "party");
+                            if (QueueGroupChatter(GroupTrigger::Idle, player, gossipPrompt, true))
+                            {
+                                m_gossip.NoteRelay("party:" + std::to_string(groupId), nowSec);
+                                NoteGroupTrigger(groupId, GroupTrigger::Idle, cooldown);
+                                gossipRelayed = true;
+                            }
+                        }
+                    }
+
+                    if (!gossipRelayed)
+                    {
+                        std::string cat = SampleCategory(m_config->groupCategoryWeights, "entertainment");
+                        std::string prompt = GetRandomPromptForCategory(cat, "group");
+                        if (prompt.empty())
+                            prompt = "make a short casual remark to the group about what you are doing";
+                        if (QueueGroupChatter(GroupTrigger::Idle, player, prompt, true))
+                            NoteGroupTrigger(groupId, GroupTrigger::Idle, cooldown);
+                    }
                 }
             }
             if (raid && now >= state.nextMorale)
@@ -9109,16 +10306,33 @@ namespace AzerothVoices
                 shuffled.size() > 1)
                 speaker = shuffled[1];
 
-            std::string topic = "start a short casual guild conversation";
-            if (Roll(m_config->guildParticipantReferenceChance) && shuffled.size() > 1)
-                topic += ", mentioning another guild member who is online";
             std::string area, zone, mapName;
             uint32_t mapId = 0, areaId = 0, zoneId = 0;
             FillLocation(candidate.member, area, zone, mapName, mapId, areaId, zoneId);
-            if (Roll(m_config->guildZoneNameChance) && !zone.empty())
-                topic += ", referring to " + zone;
-            if (Roll(m_config->guildHistoryContextChance))
-                topic += ", referencing something the guild said recently";
+
+            std::string topic = "start a short casual guild conversation";
+            bool gossipRelayed = false;
+            if (m_config->gossipRelayEnable && m_config->gossipRelayGuildEnable &&
+                m_gossip.CanRelayToGuild(candidate.guildId, nowSec, m_config->gossipRelayCooldownSeconds,
+                                         m_config->gossipRelayGuildChance, RandomUInt(1, 100)))
+            {
+                if (GossipItem const* item = m_gossip.GetLatestGossip(zoneId, mapId))
+                {
+                    topic = m_gossip.BuildGossipPrompt(*item, "guild");
+                    m_gossip.NoteRelay("guild:" + std::to_string(candidate.guildId), nowSec);
+                    gossipRelayed = true;
+                }
+            }
+
+            if (!gossipRelayed)
+            {
+                if (Roll(m_config->guildParticipantReferenceChance) && shuffled.size() > 1)
+                    topic += ", mentioning another guild member who is online";
+                if (Roll(m_config->guildZoneNameChance) && !zone.empty())
+                    topic += ", referring to " + zone;
+                if (Roll(m_config->guildHistoryContextChance))
+                    topic += ", referencing something the guild said recently";
+            }
 
             bool const conversation = shuffled.size() >= 2 &&
                 m_config->guildConversationChance && Roll(m_config->guildConversationChance);
@@ -9661,9 +10875,23 @@ namespace AzerothVoices
         bool const firstIsBoss = ClassifyCreatureBoss(first, *m_config).boss;
         ActorSnapshot actor = SnapshotCreature(first, anchor, disposition,
             "proximity:" + std::string(ProximityRejectionName(ProximityRejection::None)), firstIsBoss);
-        std::string const topic = dungeon
+        std::string topic = dungeon
             ? "this place and what is waiting further inside"
             : "the area around them";
+
+        if (m_config->gossipRelayEnable && m_config->gossipRelaySayEnable)
+        {
+            uint32_t const nowSec = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
+            if (m_gossip.CanRelayToSay(anchor->GetObjectGuid().GetRawValue(), nowSec,
+                    m_config->gossipRelayCooldownSeconds, m_config->gossipRelaySayChance, RandomUInt(1, 100)))
+            {
+                if (GossipItem const* item = m_gossip.GetLatestGossip(scene.zoneId, scene.mapId))
+                {
+                    topic = m_gossip.BuildGossipPrompt(*item, "say");
+                    m_gossip.NoteRelay("say:" + std::to_string(anchor->GetObjectGuid().GetRawValue()), nowSec);
+                }
+            }
+        }
 
         std::string const sceneKey = std::to_string(scene.id);
         ExchangeId const exchangeId{ m_epoch, 3, scene.id };
@@ -11748,6 +12976,8 @@ namespace AzerothVoices
                 sLog.outDebug("[AzerothVoices] Barrens scene %llu completed with %u delivered lines. Cooldown %u seconds.",
                     static_cast<unsigned long long>(scene.sceneId), scene.deliveredCount, cooldown);
             }
+
+            RecordBarrensSceneComplete(scene.currentTopicPremise, request.actor.name, text, 0, 0);
 
             m_barrensScenes.erase(it);
             return;

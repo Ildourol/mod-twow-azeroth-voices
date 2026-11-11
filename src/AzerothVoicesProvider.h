@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AzerothVoicesConfig.h"
+#include "AzerothVoicesEmotes.h"
 #include "AzerothVoicesTypes.h"
 
 #include <string>
@@ -21,6 +22,7 @@ namespace AzerothVoices
     private:
         static std::string BuildBody(Config const& config, ChatRequest const& request, std::string& error);
         static std::string ParseResponse(Config const& config, ChatRequest const& request,
-                                         std::string const& raw, std::string& error);
+                                         std::string const& raw, std::string& error,
+                                         ParsedEffects* outEffects = nullptr);
     };
 }

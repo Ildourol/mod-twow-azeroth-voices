@@ -619,6 +619,60 @@ namespace AzerothVoices
         uint32_t barrensPauseDuringPlayerChatSeconds = 10;
         std::vector<std::pair<std::string, uint32_t>> barrensTopicWeights = DefaultBarrensTopicWeights();
 
+        // 24. Stateful Conversation Threads, Multi-Addressed Intent & Cross-Channel Gossip
+        bool threadsEnable = true;
+        bool threadsPartyEnable = true;
+        bool threadsSayEnable = true;
+        bool threadsGuildEnable = true;
+        bool threadsWorldEnable = false;
+        uint32_t threadsDecayRate = 70;
+        uint32_t threadsHighEnergyThreshold = 60;
+        uint32_t threadsLowEnergyThreshold = 30;
+        uint32_t threadsTopicHistorySize = 5;
+        uint32_t threadsIdleTtlSeconds = 1800;
+
+        bool multiAddressedEnable = true;
+        bool multiAddressedPartyEnable = true;
+        bool multiAddressedSayEnable = true;
+        bool multiAddressedGuildEnable = true;
+        bool multiAddressedWorldEnable = false;
+        uint32_t multiAddressedPartyChance = 80;
+        uint32_t multiAddressedSayChance = 60;
+        uint32_t multiAddressedGuildChance = 70;
+        uint32_t multiAddressedWorldChance = 20;
+        uint32_t multiAddressedPartyMaxBots = 3;
+        uint32_t multiAddressedSayMaxBots = 2;
+        uint32_t multiAddressedGuildMaxBots = 3;
+        uint32_t multiAddressedWorldMaxBots = 2;
+        uint32_t multiAddressedStaggerMinSeconds = 3;
+        uint32_t multiAddressedStaggerMaxSeconds = 6;
+
+        bool gossipRelayEnable = true;
+        bool gossipRelayPartyEnable = true;
+        bool gossipRelaySayEnable = true;
+        bool gossipRelayGuildEnable = true;
+        uint32_t gossipRelayPartyChance = 20;
+        uint32_t gossipRelaySayChance = 10;
+        uint32_t gossipRelayGuildChance = 15;
+        uint32_t gossipRelayCooldownSeconds = 600;
+
+        // 25. Emotes and Conversation Facing
+        bool emotesBotTalk = false;
+        bool emotesNpcTalk = false;
+        bool emotesGeneral = false;
+        bool emotesListenerReactions = false;
+        bool emotesRoleplayText = false;
+        bool emotesNpcFaceTarget = false;
+
+        // 25B. Interactive 0-Token Emotes & Mood Spread
+        bool emotesInteractiveEnable = false;
+        uint32_t emotesInteractiveBotMirrorChance = 80;
+        uint32_t emotesInteractiveBotMirrorCooldown = 15;
+        uint32_t emotesInteractiveMoodSpreadChance = 50;
+        bool emotesInteractiveNpcMirror = false;
+        uint32_t emotesInteractiveNpcMirrorCooldown = 15;
+        bool emotesInteractivePvPSpectator = false;
+
         static Config Load();
         std::string ResolveApiKey() const;
     };

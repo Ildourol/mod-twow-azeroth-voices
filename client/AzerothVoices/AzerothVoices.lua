@@ -29,6 +29,7 @@ AzerothVoices.genAllStep = nil
 AzerothVoices.genAllTimer = 0
 AzerothVoices.serverLanguageSummary = nil
 AzerothVoices.serverLanguageShort = nil
+AzerothVoices.threadState = nil
 
 local SEND_INTERVAL = 0.3
 local SAVE_LOCK_TIMEOUT = 20
@@ -1215,6 +1216,80 @@ function AzerothVoices:UpdateLanguageUI()
     end
 end
 
+function AzerothVoices:UpdateThreadUI()
+    local p = self.frame
+    if not p then return end
+
+    local s = self.threadState
+    if not s or not s.enabled then
+        if p.threadEnergyBar then
+            p.threadEnergyBar:SetValue(0)
+            p.threadEnergyBar:SetStatusBarColor(0.5, 0.5, 0.5)
+            if p.threadEnergyBar.text then
+                p.threadEnergyBar.text:SetText("Threads: Disabled")
+            end
+        end
+        if p.threadTopicText then
+            p.threadTopicText:SetText("|cffffd100Active Topic:|r |cff888888Disabled|r")
+        end
+        if p.threadOpenPointText then
+            p.threadOpenPointText:SetText("|cffffd100Open Question / Point:|r |cff888888None|r")
+        end
+        if p.threadCallbacksText then
+            p.threadCallbacksText:SetText("|cffffd100Recent Discussion History (Callbacks):|r |cff888888None|r")
+        end
+        return
+    end
+
+    local energy = math.max(0, math.min(100, tonumber(s.energy) or 0))
+    if p.threadEnergyBar then
+        p.threadEnergyBar:SetValue(energy)
+        local r, g, b = 0.2, 0.85, 0.5
+        if energy <= 30 then
+            r, g, b = 0.85, 0.35, 0.2
+        elseif energy <= 60 then
+            r, g, b = 0.9, 0.82, 0.2
+        end
+        p.threadEnergyBar:SetStatusBarColor(r, g, b)
+
+        local moveDisplay = s.move or "ContinueTopic"
+        if moveDisplay == "ContinueTopic" then
+            moveDisplay = "Continue Topic"
+        elseif moveDisplay == "DriftTopic" then
+            moveDisplay = "Topic Drift"
+        elseif moveDisplay == "CallbackToPrior" then
+            moveDisplay = "Callback to Prior"
+        elseif moveDisplay == "StartNewTopic" then
+            moveDisplay = "Wrap-Up / New Topic"
+        end
+
+        local scopePrefix = (s.scope and s.scope ~= "-") and (s.scope .. ": ") or ""
+        local statusText = s.status or "Active"
+        if p.threadEnergyBar.text then
+            p.threadEnergyBar.text:SetText(scopePrefix .. "Energy " .. energy .. "% | " .. moveDisplay .. " (" .. (s.exchanges or 0) .. " turns) | " .. statusText)
+        end
+    end
+
+    if p.threadTopicText then
+        local topicStr = (s.topic and s.topic ~= "-" and s.topic ~= "") and s.topic or "None (Idle banter)"
+        p.threadTopicText:SetText("|cffffd100Active Topic:|r " .. topicStr)
+    end
+
+    if p.threadOpenPointText then
+        local openStr = (s.openPoint and s.openPoint ~= "-" and s.openPoint ~= "") and s.openPoint or "None"
+        p.threadOpenPointText:SetText("|cffffd100Open Question / Point:|r " .. openStr)
+    end
+
+    if p.threadCallbacksText then
+        local cbStr = (s.callbacks and s.callbacks ~= "-" and s.callbacks ~= "") and s.callbacks or "None"
+        p.threadCallbacksText:SetText("|cffffd100Recent Discussion History (Callbacks):|r " .. cbStr)
+    end
+end
+
+function AzerothVoices:RequestThreadStatus()
+    self:QueueCommand("status")
+end
+
 function AzerothVoices:HandlePayload(payload)
     local _, _, command, rest = string.find(payload, "^(%S+)%s*(.*)$")
     if not command then
@@ -1272,6 +1347,45 @@ function AzerothVoices:HandlePayload(payload)
             self.serverLanguageShort = "|cffffd100Lang:|r |cff00ff00English + " .. langName .. "|r"
         end
         self:UpdateLanguageUI()
+        return
+    end
+
+    if command == "THREAD_INFO" then
+        local fields = {}
+        for value in string.gfind(rest, "%S+") do table.insert(fields, value) end
+        if table.getn(fields) < 6 then return end
+
+        local scope = fields[1] or "Party"
+        local enabled = (fields[2] == "1")
+        local energy = tonumber(fields[3] or "0") or 0
+        local move = fields[4] or "ContinueTopic"
+        local exchanges = tonumber(fields[5] or "0") or 0
+        local status = fields[6] or "Active"
+        local rawTopic = fields[7] or "-"
+        local rawOpenPoint = fields[8] or "-"
+        local rawCallbacks = fields[9] or "-"
+
+        local topic = (rawTopic ~= "-") and self:Decode(rawTopic) or "None (Idle banter)"
+        local openPoint = (rawOpenPoint ~= "-") and self:Decode(rawOpenPoint) or "None"
+        local callbacks = (rawCallbacks ~= "-") and self:Decode(rawCallbacks) or "None"
+
+        if status ~= "-" then
+            status = self:Decode(status)
+        end
+
+        self.threadState = {
+            scope = scope,
+            enabled = enabled,
+            energy = energy,
+            move = move,
+            exchanges = exchanges,
+            status = status,
+            topic = topic,
+            openPoint = openPoint,
+            callbacks = callbacks
+        }
+
+        self:UpdateThreadUI()
         return
     end
     if command == "ROSTER_BEGIN" then

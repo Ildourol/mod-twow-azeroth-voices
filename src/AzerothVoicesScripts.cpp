@@ -150,6 +150,7 @@ namespace AzerothVoices
                     PLAYERHOOK_ON_LOOT_ITEM,
                     PLAYERHOOK_ON_BEFORE_SEND_CHAT_MESSAGE,
                     PLAYERHOOK_ON_CHAT_CHANNEL,
+                    PLAYERHOOK_ON_TEXT_EMOTE,
                     PLAYERHOOK_ON_CHAT_WHISPER })
             {
             }
@@ -286,11 +287,13 @@ namespace AzerothVoices
             void OnDuelStart(Player* player1, Player* player2) override
             {
                 Manager::Instance().HandleEvent(player1, "duel_started", player2 ? player2->GetName() : "");
+                Manager::Instance().HandleDuelSpectator(player1, player2, 0);
             }
 
             void OnDuelEnd(Player* winner, Player* loser, uint32 /*type*/) override
             {
                 Manager::Instance().HandleEvent(winner, "duel_won", loser ? loser->GetName() : "");
+                Manager::Instance().HandleDuelSpectator(winner, loser, 2, winner);
             }
 
             void OnLogin(Player* player) override
@@ -314,6 +317,13 @@ namespace AzerothVoices
                         eventName = "rare_item";
                 }
                 Manager::Instance().HandleEvent(player, eventName, detail, 0, 0, 0, quality);
+            }
+
+            void OnTextEmote(Player* player, uint32 textEmote, uint32 emoteNum, ObjectGuid guid) override
+            {
+                if (!player)
+                    return;
+                Manager::Instance().HandlePlayerTextEmote(player, textEmote, emoteNum, guid);
             }
         };
 

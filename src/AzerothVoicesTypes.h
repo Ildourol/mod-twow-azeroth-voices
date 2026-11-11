@@ -68,6 +68,39 @@ namespace AzerothVoices
         BarrensTopicGeneration
     };
 
+    enum class EmoteGesture : uint32_t
+    {
+        None = 0,
+        Talk = 1,        // EMOTE_ONESHOT_TALK
+        Bow = 2,         // EMOTE_ONESHOT_BOW
+        Cheer = 4,       // EMOTE_ONESHOT_CHEER
+        Exclamation = 5, // EMOTE_ONESHOT_EXCLAMATION
+        Question = 6,    // EMOTE_ONESHOT_QUESTION
+        Laugh = 11,      // EMOTE_ONESHOT_LAUGH
+        Applaud = 21     // EMOTE_ONESHOT_APPLAUD
+    };
+
+    struct ParsedEffects
+    {
+        bool hasSpeaker = false;
+        EmoteGesture speaker = EmoteGesture::None;
+        bool hasListener = false;
+        EmoteGesture listener = EmoteGesture::None;
+        bool hasRoleplay = false;
+        std::string roleplay;
+
+        bool Any() const { return hasSpeaker || hasListener || hasRoleplay; }
+    };
+
+    struct EffectsOffer
+    {
+        bool offerSpeaker = false;
+        bool offerListener = false;
+        bool offerRoleplay = false;
+
+        bool Any() const { return offerSpeaker || offerListener || offerRoleplay; }
+    };
+
     // Full: generate traits, tone, and background from scratch.
     // ReplaceTraits: three player-supplied traits are fixed and only tone and
     //                background are generated (the stock Chatter addon save).
@@ -304,6 +337,8 @@ namespace AzerothVoices
         bool ambient = false;
         bool allowFollowup = false;
         uint32_t conversationDepth = 1;
+        EffectsOffer effectsOffer;
+        ParsedEffects parsedEffects;
         std::chrono::steady_clock::time_point created;
         std::chrono::steady_clock::time_point expires;
     };
@@ -314,6 +349,7 @@ namespace AzerothVoices
         bool success = false;
         int httpStatus = 0;
         std::string responseText;
+        ParsedEffects effects;
         std::string rawResponse;
         std::string error;
         uint32_t elapsedMilliseconds = 0;
