@@ -319,49 +319,12 @@ function AzerothVoices:BuildEditor(panel)
     local w = {}
     panel.w = w
 
-    local title = createLabel(panel, "Azeroth Voices", 16, -16)
+    local title = createLabel(panel, "Azeroth Voices", 16, -12)
     title:SetFontObject(GameFontNormalLarge)
 
     local hint = createLabel(panel,
-        "Click a bot name to edit traits. Check bots to forget memories.", 16, -38)
+        "Click a bot name to edit traits. Check bots to forget memories.", 16, -28)
     hint:SetFontObject(GameFontHighlightSmall)
-
-    -- Header Server Language Badge / Button (Always visible without scrolling)
-    local langHeaderBtn = CreateFrame("Button", nil, panel)
-    langHeaderBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -36, -16)
-    langHeaderBtn:SetWidth(260)
-    langHeaderBtn:SetHeight(22)
-    langHeaderBtn:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true,
-        tileSize = 8,
-        edgeSize = 8,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 }
-    })
-    langHeaderBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.75)
-
-    local langHeaderLabel = langHeaderBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    langHeaderLabel:SetPoint("RIGHT", langHeaderBtn, "RIGHT", -6, 0)
-    langHeaderLabel:SetText(AzerothVoices.serverLanguageShort or "|cffffd100Lang:|r |cff888888Waiting for server...|r")
-    langHeaderBtn.label = langHeaderLabel
-    panel.langHeaderButton = langHeaderBtn
-
-    langHeaderBtn:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(this, "ANCHOR_BOTTOMRIGHT")
-        GameTooltip:ClearLines()
-        GameTooltip:AddLine("Azeroth Voices Server Languages", 1, 0.82, 0)
-        GameTooltip:AddLine(AzerothVoices.serverLanguageSummary or "Waiting for server language settings...", 1, 1, 1, 1)
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Click to refresh language settings.", 0.6, 0.6, 0.6, 1)
-        GameTooltip:Show()
-    end)
-    langHeaderBtn:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
-    langHeaderBtn:SetScript("OnClick", function()
-        AzerothVoices:RequestStatus()
-    end)
 
     -- Left Column: Roster, Search & Forget (Width 144, Height 530)
     local left = CreateFrame("Frame", nil, panel)
@@ -534,11 +497,6 @@ function AzerothVoices:BuildEditor(panel)
     scroll:SetScript("OnMouseWheel", onEditorMouseWheel)
     content:EnableMouseWheel(true)
     content:SetScript("OnMouseWheel", onEditorMouseWheel)
-    local languageScrollUp = button(panel, "Up", 40, function() applyEditorScroll(scrollOffset - 80) end, 18)
-    languageScrollUp:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -60, 40)
-    local languageScrollDown = button(panel, "Down", 48, function() applyEditorScroll(scrollOffset + 80) end, 18)
-    languageScrollDown:SetPoint("LEFT", languageScrollUp, "RIGHT", 4, 0)
-
 
     local contentWidth = 460
 
@@ -748,6 +706,44 @@ function AzerothVoices:BuildEditor(panel)
     local lLanguage = createLabel(content, "Server languages", 0, -488)
     panel.languageLabel = lLanguage
     w.lLanguage = lLanguage
+
+    local langHeaderBtn = CreateFrame("Button", nil, content)
+    langHeaderBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -486)
+    langHeaderBtn:SetWidth(180)
+    langHeaderBtn:SetHeight(20)
+    langHeaderBtn:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 8,
+        edgeSize = 8,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    langHeaderBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.75)
+
+    local langHeaderLabel = langHeaderBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    langHeaderLabel:SetPoint("RIGHT", langHeaderBtn, "RIGHT", -6, 0)
+    langHeaderLabel:SetText(AzerothVoices.serverLanguageShort or "|cffffd100Lang:|r |cffaaaaaaEnglish Only|r")
+    langHeaderBtn.label = langHeaderLabel
+    panel.langHeaderButton = langHeaderBtn
+    w.langHeaderButton = langHeaderBtn
+
+    langHeaderBtn:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_BOTTOMRIGHT")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("Azeroth Voices Server Languages", 1, 0.82, 0)
+        GameTooltip:AddLine(AzerothVoices.serverLanguageSummary or "Waiting for server language settings...", 1, 1, 1, 1)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Click to refresh language settings.", 0.6, 0.6, 0.6, 1)
+        GameTooltip:Show()
+    end)
+    langHeaderBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    langHeaderBtn:SetScript("OnClick", function()
+        AzerothVoices:RequestStatus()
+    end)
+
     local lLangSource = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     lLangSource:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -508)
     lLangSource:SetWidth(contentWidth)
@@ -1111,6 +1107,7 @@ function AzerothVoices:BuildEditor(panel)
             w.scaleLow:Show(); w.scaleMid:Show(); w.scaleHigh:Show()
 
             w.lLanguage:Hide(); w.lLangSource:Hide()
+            if w.langHeaderButton then w.langHeaderButton:Hide() end
             w.lThread:Hide(); w.threadRefreshBtn:Hide(); w.threadBarHolder:Hide()
             w.threadScaleLow:Hide(); w.threadScaleMid:Hide(); w.threadScaleHigh:Hide()
             w.threadTopicText:Hide(); w.threadOpenPointText:Hide(); w.threadCallbacksText:Hide()
@@ -1141,6 +1138,7 @@ function AzerothVoices:BuildEditor(panel)
             w.scaleLow:Hide(); w.scaleMid:Hide(); w.scaleHigh:Hide()
 
             w.lLanguage:Hide(); w.lLangSource:Hide()
+            if w.langHeaderButton then w.langHeaderButton:Hide() end
             w.lThread:Hide(); w.threadRefreshBtn:Hide(); w.threadBarHolder:Hide()
             w.threadScaleLow:Hide(); w.threadScaleMid:Hide(); w.threadScaleHigh:Hide()
             w.threadTopicText:Hide(); w.threadOpenPointText:Hide(); w.threadCallbacksText:Hide()
@@ -1163,6 +1161,9 @@ function AzerothVoices:BuildEditor(panel)
             w.scaleLow:Hide(); w.scaleMid:Hide(); w.scaleHigh:Hide()
 
             w.lLanguage:ClearAllPoints(); w.lLanguage:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, 0); w.lLanguage:Show()
+            if w.langHeaderButton then
+                w.langHeaderButton:ClearAllPoints(); w.langHeaderButton:SetPoint("TOPRIGHT", w.content, "TOPLEFT", contentWidth, 2); w.langHeaderButton:Show()
+            end
             w.lLangSource:ClearAllPoints(); w.lLangSource:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -20); w.lLangSource:Show()
 
             w.lThread:ClearAllPoints(); w.lThread:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -92); w.lThread:Show()
@@ -1211,6 +1212,9 @@ function AzerothVoices:BuildEditor(panel)
             w.scaleLow:Show(); w.scaleMid:Show(); w.scaleHigh:Show()
 
             w.lLanguage:ClearAllPoints(); w.lLanguage:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -488); w.lLanguage:Show()
+            if w.langHeaderButton then
+                w.langHeaderButton:ClearAllPoints(); w.langHeaderButton:SetPoint("TOPRIGHT", w.content, "TOPLEFT", contentWidth, -486); w.langHeaderButton:Show()
+            end
             w.lLangSource:ClearAllPoints(); w.lLangSource:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -508); w.lLangSource:Show()
 
             w.lThread:ClearAllPoints(); w.lThread:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -580); w.lThread:Show()
