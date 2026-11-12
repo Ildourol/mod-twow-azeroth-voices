@@ -658,11 +658,13 @@ namespace AzerothVoices
 
         // 25. Emotes and Conversation Facing
         bool emotesBotTalk = false;
-        bool emotesNpcTalk = false;
+        bool emotesNpcTalk = true;
+        uint32_t emotesNpcTalkChance = 100;
         bool emotesGeneral = false;
         bool emotesListenerReactions = false;
         bool emotesRoleplayText = false;
-        bool emotesNpcFaceTarget = false;
+        bool emotesNpcFaceTarget = true;
+        uint32_t emotesNpcFaceDurationSeconds = 5;
 
         // 25B. Interactive 0-Token Emotes & Mood Spread
         bool emotesInteractiveEnable = false;

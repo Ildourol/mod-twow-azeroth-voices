@@ -6106,14 +6106,30 @@ namespace AzerothVoices
         bool const talkConfigured = isBot ? m_config->emotesBotTalk : m_config->emotesNpcTalk;
         bool const routeEligibleForTalk = isBot
             ? (request.scope == ChatScope::Say || request.scope == ChatScope::Yell || request.scope == ChatScope::Party)
-            : (request.scope == ChatScope::Say && !request.bossLine);
+            : (request.scope == ChatScope::Say || request.scope == ChatScope::Yell);
 
         if (talkConfigured && routeEligibleForTalk && actorSafe && audienceVisible)
         {
             auto& cd = m_actorEmoteCooldowns[actorGuid];
-            if (now >= cd.talkUntil)
+            bool chancePassed = isBot ? true : (urand(1, 100) <= m_config->emotesNpcTalkChance);
+            if (chancePassed && now >= cd.talkUntil)
             {
-                actorUnit->HandleEmoteCommand(static_cast<uint32>(EmoteGesture::Talk));
+                uint32 emoteToPlay = static_cast<uint32>(EmoteGesture::Talk);
+                if (!isBot)
+                {
+                    std::string const& trimmed = line.text;
+                    if (!trimmed.empty())
+                    {
+                        char lastChar = trimmed.back();
+                        if (lastChar == ' ' && trimmed.size() > 1)
+                            lastChar = trimmed[trimmed.size() - 2];
+                        if (lastChar == '?')
+                            emoteToPlay = static_cast<uint32>(EmoteGesture::Question);
+                        else if (lastChar == '!' && request.scope == ChatScope::Yell)
+                            emoteToPlay = static_cast<uint32>(EmoteGesture::Exclamation);
+                    }
+                }
+                actorUnit->HandleEmoteCommand(emoteToPlay);
                 cd.talkUntil = now + std::chrono::seconds(2);
                 talkPlayed = true;
             }
@@ -6248,7 +6264,7 @@ namespace AzerothVoices
                         lease.posY = creature->GetPositionY();
                         lease.posZ = creature->GetPositionZ();
                         lease.generation = gen;
-                        lease.deadline = now + std::chrono::milliseconds(1500);
+                        lease.deadline = now + std::chrono::milliseconds(std::max(1000u, m_config->emotesNpcFaceDurationSeconds * 1000u));
                         m_facingLeases[guid] = lease;
                     }
                 }
@@ -6743,7 +6759,7 @@ namespace AzerothVoices
                             lease.posY = creature->GetPositionY();
                             lease.posZ = creature->GetPositionZ();
                             lease.generation = 1;
-                            lease.deadline = now + std::chrono::milliseconds(1500);
+                            lease.deadline = now + std::chrono::milliseconds(std::max(1000u, m_config->emotesNpcFaceDurationSeconds * 1000u));
 
                             creature->SetFacingTo(targetAngle);
                             m_facingLeases[job.actorGuid] = lease;
@@ -7014,6 +7030,7 @@ namespace AzerothVoices
                 return false;
             creature->MonsterYell(text, LANG_UNIVERSAL, anchor);
             NoteActorSpoke(request.actor.guid, Clock::now());
+            ExecuteDeliveredEffects(line, creature, anchor, 0, false, false);
             return true;
         }
 
@@ -8370,7 +8387,7 @@ namespace AzerothVoices
                     topic = thread->topic;
                 energyPct = static_cast<uint32_t>(std::max(0.0f, std::min(1.0f, thread->energy)) * 100.0f);
                 ThreadMove move = const_cast<ThreadManager&>(m_threads).DecideThreadMove(threadKey,
-                    m_config->threadsEnergyHighThreshold, m_config->threadsEnergyLowThreshold, 50);
+                    m_config->threadsHighEnergyThreshold, m_config->threadsLowEnergyThreshold, 50);
                 moveName = ThreadMoveName(move);
                 exchangeCount = thread->exchangeCount;
                 if (!thread->openPoint.empty())
@@ -8400,6 +8417,67 @@ namespace AzerothVoices
             logicalPayloads.push_back(Addon::LogicalThreadInfo(
                 threadScope, m_config->threadsEnable, energyPct, moveName,
                 exchangeCount, statusStr, topic, openPoint, historyStr));
+        }
+        {
+            StatusSnapshot const status = GetStatus();
+            logicalPayloads.push_back(Addon::LogicalStatus(status.enabled, status.apiConfigured, status.endpoint, status.model));
+        }
+        {
+            logicalPayloads.push_back(Addon::LogicalFeaturesInfo(
+                m_config->multiAddressedEnable,
+                m_config->gossipRelayEnable,
+                m_config->emotesBotTalk,
+                m_config->emotesNpcTalk,
+                m_config->emotesNpcFaceTarget,
+                m_config->emotesNpcFaceDurationSeconds,
+                m_config->emotesGeneral,
+                m_config->emotesInteractiveEnable,
+                m_config->npcRandomEnabled,
+                m_config->eventChatterEnabled));
+        }
+        {
+            std::string partyStr = std::to_string(m_config->multiAddressedPartyEnable ? 1 : 0) + ":" +
+                                   std::to_string(m_config->multiAddressedPartyChance) + ":" +
+                                   std::to_string(m_config->multiAddressedPartyMaxBots);
+            std::string sayStr = std::to_string(m_config->multiAddressedSayEnable ? 1 : 0) + ":" +
+                                 std::to_string(m_config->multiAddressedSayChance) + ":" +
+                                 std::to_string(m_config->multiAddressedSayMaxBots);
+            std::string guildStr = std::to_string(m_config->multiAddressedGuildEnable ? 1 : 0) + ":" +
+                                   std::to_string(m_config->multiAddressedGuildChance) + ":" +
+                                   std::to_string(m_config->multiAddressedGuildMaxBots);
+            std::string worldStr = std::to_string(m_config->multiAddressedWorldEnable ? 1 : 0) + ":" +
+                                   std::to_string(m_config->multiAddressedWorldChance) + ":" +
+                                   std::to_string(m_config->multiAddressedWorldMaxBots);
+            logicalPayloads.push_back(Addon::LogicalMultiAddressedInfo(
+                m_config->multiAddressedEnable, partyStr, sayStr, guildStr, worldStr,
+                m_config->multiAddressedStaggerMinSeconds, m_config->multiAddressedStaggerMaxSeconds));
+        }
+        {
+            std::string partyStr = std::to_string(m_config->gossipRelayPartyEnable ? 1 : 0) + ":" +
+                                   std::to_string(m_config->gossipRelayPartyChance);
+            std::string sayStr = std::to_string(m_config->gossipRelaySayEnable ? 1 : 0) + ":" +
+                                 std::to_string(m_config->gossipRelaySayChance);
+            std::string guildStr = std::to_string(m_config->gossipRelayGuildEnable ? 1 : 0) + ":" +
+                                   std::to_string(m_config->gossipRelayGuildChance);
+            logicalPayloads.push_back(Addon::LogicalGossipInfo(
+                m_config->gossipRelayEnable, partyStr, sayStr, guildStr, m_config->gossipRelayCooldownSeconds));
+        }
+        {
+            logicalPayloads.push_back(Addon::LogicalEmotesInfo(
+                m_config->emotesBotTalk,
+                m_config->emotesNpcTalk,
+                m_config->emotesNpcFaceTarget,
+                m_config->emotesNpcFaceDurationSeconds,
+                m_config->emotesGeneral,
+                m_config->emotesListenerReactions,
+                m_config->emotesRoleplayText,
+                m_config->emotesInteractiveEnable,
+                m_config->emotesInteractiveBotMirrorChance,
+                m_config->emotesInteractiveBotMirrorCooldown,
+                m_config->emotesInteractiveMoodSpreadChance,
+                m_config->emotesInteractiveNpcMirror,
+                m_config->emotesInteractiveNpcMirrorCooldown,
+                m_config->emotesInteractivePvPSpectator));
         }
         switch (command.kind)
         {

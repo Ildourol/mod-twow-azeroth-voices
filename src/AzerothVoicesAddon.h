@@ -82,10 +82,28 @@ namespace AzerothVoices
         std::string LogicalToneRegen(uint64_t guid, std::string const& name);
         std::string LogicalForgotten(uint64_t guid, std::string const& name);
         std::string LogicalError(std::string const& channel, std::string const& message);
+        std::string LogicalStatus(bool enabled, bool apiConfigured,
+                                  std::string const& endpoint, std::string const& model);
         std::string LogicalThreadInfo(std::string const& scope, bool enabled, uint32_t energyPct,
                                      std::string const& move, uint32_t exchangeCount,
                                      std::string const& status, std::string const& topic,
                                      std::string const& openPoint, std::string const& callbacks);
+        std::string LogicalFeaturesInfo(bool multiAddressed, bool gossipRelay,
+                                        bool emotesBotTalk, bool emotesNpcTalk,
+                                        bool emotesNpcFace, uint32_t faceDuration,
+                                        bool emotesGeneral, bool emotesInteractive,
+                                        bool npcChatter, bool eventChat);
+        std::string LogicalMultiAddressedInfo(bool enabled, std::string const& party,
+                                              std::string const& say, std::string const& guild,
+                                              std::string const& world, uint32_t staggerMin,
+                                              uint32_t staggerMax);
+        std::string LogicalGossipInfo(bool enabled, std::string const& party,
+                                      std::string const& say, std::string const& guild,
+                                      uint32_t cooldown);
+        std::string LogicalEmotesInfo(bool botTalk, bool npcTalk, bool npcFace, uint32_t faceDuration,
+                                      bool general, bool listener, bool roleplay, bool interactive,
+                                      uint32_t botMirrorCh, uint32_t botMirrorCd, uint32_t moodSpreadCh,
+                                      bool npcMirrorEn, uint32_t npcMirrorCd, bool pvpSpectator);
 
         // Legacy Chatter response builders (wrapped with "CHATTER_ADDON ")
         std::string Response(std::string const& payload);

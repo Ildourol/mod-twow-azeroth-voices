@@ -1213,11 +1213,13 @@ namespace AzerothVoices
         c.gossipRelayCooldownSeconds = Positive("AzerothVoices.GossipRelay.CooldownSeconds", 600, 30);
 
         c.emotesBotTalk = sConfig.GetBoolDefault("AzerothVoices.Emotes.BotTalk", false);
-        c.emotesNpcTalk = sConfig.GetBoolDefault("AzerothVoices.Emotes.NpcTalk", false);
+        c.emotesNpcTalk = sConfig.GetBoolDefault("AzerothVoices.Emotes.NpcTalk", true);
+        c.emotesNpcTalkChance = Percent("AzerothVoices.Emotes.NpcTalk.Chance", 100);
         c.emotesGeneral = sConfig.GetBoolDefault("AzerothVoices.Emotes.General", false);
         c.emotesListenerReactions = sConfig.GetBoolDefault("AzerothVoices.Emotes.ListenerReactions", false);
         c.emotesRoleplayText = sConfig.GetBoolDefault("AzerothVoices.Emotes.RoleplayText", false);
-        c.emotesNpcFaceTarget = sConfig.GetBoolDefault("AzerothVoices.Emotes.NpcFaceTarget", false);
+        c.emotesNpcFaceTarget = sConfig.GetBoolDefault("AzerothVoices.Emotes.NpcFaceTarget", true);
+        c.emotesNpcFaceDurationSeconds = Bounded("AzerothVoices.Emotes.NpcFaceDurationSeconds", 5, 1, 60);
 
         c.emotesInteractiveEnable = sConfig.GetBoolDefault("AzerothVoices.Emotes.Interactive.Enable", false);
         c.emotesInteractiveBotMirrorChance = Percent("AzerothVoices.Emotes.Interactive.BotMirrorChance", 80);

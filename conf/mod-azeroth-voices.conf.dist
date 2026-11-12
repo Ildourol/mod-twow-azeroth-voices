@@ -2312,8 +2312,8 @@ AzerothVoices.GeneralChat.Pacing.Enable = 1
 #                  after an ambient conversation finishes before another can trigger.
 #                  Must be HIGHER than TriggerIntervalSeconds (recommended 1:2 ratio,
 #                  e.g. 60 vs 30) so the evaluation clock re-checks promptly once silence ends.
-#     Default:     60
-AzerothVoices.GeneralChat.MinimumGapSeconds = 60
+#     Default:     120
+AzerothVoices.GeneralChat.MinimumGapSeconds = 120
 
 # AzerothVoices.General.Enable
 #     Description: Master toggle for the General/World ambient chatter system.
@@ -2324,8 +2324,8 @@ AzerothVoices.General.Enable = 1
 #     Description: Cadence in seconds between evaluation passes across populated zones.
 #                  Must be LOWER than MinimumGapSeconds (recommended ~half, e.g. 30 vs 60)
 #                  to evaluate zones responsively and prevent double-wait dead air.
-#     Default:     30
-AzerothVoices.General.TriggerIntervalSeconds = 30
+#     Default:     60
+AzerothVoices.General.TriggerIntervalSeconds = 60
 
 # AzerothVoices.General.TriggerChance
 #     Description: Base percent chance per populated zone to start an ambient event. (0-100)
@@ -2382,8 +2382,8 @@ AzerothVoices.General.ThemeWeights = game:40,news:30,generic:30
 # AzerothVoices.General.BotSpeakerCooldownSeconds
 #     Description: Cooldown in seconds before the participating bots can speak in General ambient chatter again.
 #                  Applied to the locked pool of bots only AFTER the entire conversation finishes.
-#     Default:     900
-AzerothVoices.General.BotSpeakerCooldownSeconds = 900
+#     Default:     600
+AzerothVoices.General.BotSpeakerCooldownSeconds = 600
 
 # AzerothVoices.General.PauseDuringPlayerChatSeconds
 #     Description: Seconds to suppress ambient bot conversations after a real human speaks in World chat.
@@ -2415,13 +2415,13 @@ AzerothVoices.WorldChat.Barrens.StartChance = 20
 
 # AzerothVoices.WorldChat.Barrens.CooldownMinSeconds
 #     Description: Minimum channel cooldown sampled when a Barrens conversation closes. (Seconds, 0-86400.)
-#     Default:     480
-AzerothVoices.WorldChat.Barrens.CooldownMinSeconds = 480
+#     Default:     600
+AzerothVoices.WorldChat.Barrens.CooldownMinSeconds = 600
 
 # AzerothVoices.WorldChat.Barrens.CooldownMaxSeconds
 #     Description: Maximum channel cooldown sampled when a Barrens conversation closes. (Seconds, 0-86400.)
-#     Default:     600
-AzerothVoices.WorldChat.Barrens.CooldownMaxSeconds = 600
+#     Default:     1200
+AzerothVoices.WorldChat.Barrens.CooldownMaxSeconds = 1200
 
 # AzerothVoices.WorldChat.Barrens.FailureBackoffSeconds
 #     Description: Minimum delay after a failed pre-delivery scene attempt. (Seconds, 5-3600.)
@@ -3448,10 +3448,17 @@ AzerothVoices.Emotes.BotTalk = 0
 
 # AzerothVoices.Emotes.NpcTalk
 #     Description: Enables automatic talk emote (EMOTE_ONESHOT_TALK) for NPCs on eligible chat sends
-#                  (MonsterSay: Ordinary, Proximity, and Random) when visible to real players.
+#                  (MonsterSay: Ordinary, Proximity, and Random, and MonsterYell) when visible to real players.
 #     Accepted:    0/1
-#     Default:     0
-AzerothVoices.Emotes.NpcTalk = 0
+#     Default:     1
+AzerothVoices.Emotes.NpcTalk = 1
+
+# AzerothVoices.Emotes.NpcTalk.Chance
+#     Description: Percent chance (0-100) that an eligible speaking NPC executes an automatic talk
+#                  emote (EMOTE_ONESHOT_TALK, QUESTION, or EXCLAMATION) during dialogue delivery.
+#     Accepted:    0-100
+#     Default:     100
+AzerothVoices.Emotes.NpcTalk.Chance = 100
 
 # AzerothVoices.Emotes.General
 #     Description: Master switch for semantic model-selected speaker gestures (laugh, applaud, bow,
@@ -3478,8 +3485,15 @@ AzerothVoices.Emotes.RoleplayText = 0
 #     Description: Enables temporary conversation-facing for speaking NPCs toward their directed
 #                  dialogue partner (human, bot, or other NPC). Requires AzerothVoices.Emotes.NpcTalk = 1.
 #     Accepted:    0/1
-#     Default:     0
-AzerothVoices.Emotes.NpcFaceTarget = 0
+#     Default:     1
+AzerothVoices.Emotes.NpcFaceTarget = 1
+
+# AzerothVoices.Emotes.NpcFaceDurationSeconds
+#     Description: Duration in seconds for speaking NPCs to maintain immersion conversation-facing
+#                  toward their dialogue target before smoothly returning to original orientation.
+#     Accepted:    1-60
+#     Default:     5
+AzerothVoices.Emotes.NpcFaceDurationSeconds = 5
 
 ###################################################################################################
 # 25B. INTERACTIVE INCOMING EMOTES & SOCIAL SPREAD (100% ZERO-TOKEN IN-PROCESS ENGINE)

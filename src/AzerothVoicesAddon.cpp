@@ -349,6 +349,14 @@ namespace AzerothVoices
             return "ERROR " + channel + " " + Encode(message);
         }
 
+        std::string LogicalStatus(bool enabled, bool apiConfigured,
+                                  std::string const& endpoint, std::string const& model)
+        {
+            return "STATUS " + std::string(enabled ? "enabled" : "disabled") + " " +
+                   std::string(apiConfigured ? "configured" : "unconfigured") + " " +
+                   Encode(endpoint) + " " + Encode(model);
+        }
+
         std::string LogicalThreadInfo(std::string const& scope, bool enabled, uint32_t energyPct,
                                      std::string const& move, uint32_t exchangeCount,
                                      std::string const& status, std::string const& topic,
@@ -364,6 +372,82 @@ namespace AzerothVoices
                  << ' ' << Encode(topic)
                  << ' ' << Encode(openPoint)
                  << ' ' << Encode(callbacks);
+            return line.str();
+        }
+
+        std::string LogicalFeaturesInfo(bool multiAddressed, bool gossipRelay,
+                                        bool emotesBotTalk, bool emotesNpcTalk,
+                                        bool emotesNpcFace, uint32_t faceDuration,
+                                        bool emotesGeneral, bool emotesInteractive,
+                                        bool npcChatter, bool eventChat)
+        {
+            std::ostringstream line;
+            line << "FEATURES_INFO "
+                 << (multiAddressed ? 1 : 0) << ' '
+                 << (gossipRelay ? 1 : 0) << ' '
+                 << (emotesBotTalk ? 1 : 0) << ' '
+                 << (emotesNpcTalk ? 1 : 0) << ' '
+                 << (emotesNpcFace ? 1 : 0) << ' '
+                 << faceDuration << ' '
+                 << (emotesGeneral ? 1 : 0) << ' '
+                 << (emotesInteractive ? 1 : 0) << ' '
+                 << (npcChatter ? 1 : 0) << ' '
+                 << (eventChat ? 1 : 0);
+            return line.str();
+        }
+
+        std::string LogicalMultiAddressedInfo(bool enabled, std::string const& party,
+                                              std::string const& say, std::string const& guild,
+                                              std::string const& world, uint32_t staggerMin,
+                                              uint32_t staggerMax)
+        {
+            std::ostringstream line;
+            line << "MULTIADDRESSED_INFO "
+                 << (enabled ? 1 : 0) << ' '
+                 << party << ' '
+                 << say << ' '
+                 << guild << ' '
+                 << world << ' '
+                 << staggerMin << ' '
+                 << staggerMax;
+            return line.str();
+        }
+
+        std::string LogicalGossipInfo(bool enabled, std::string const& party,
+                                      std::string const& say, std::string const& guild,
+                                      uint32_t cooldown)
+        {
+            std::ostringstream line;
+            line << "GOSSIP_INFO "
+                 << (enabled ? 1 : 0) << ' '
+                 << party << ' '
+                 << say << ' '
+                 << guild << ' '
+                 << cooldown;
+            return line.str();
+        }
+
+        std::string LogicalEmotesInfo(bool botTalk, bool npcTalk, bool npcFace, uint32_t faceDuration,
+                                      bool general, bool listener, bool roleplay, bool interactive,
+                                      uint32_t botMirrorCh, uint32_t botMirrorCd, uint32_t moodSpreadCh,
+                                      bool npcMirrorEn, uint32_t npcMirrorCd, bool pvpSpectator)
+        {
+            std::ostringstream line;
+            line << "EMOTES_INFO "
+                 << (botTalk ? 1 : 0) << ' '
+                 << (npcTalk ? 1 : 0) << ' '
+                 << (npcFace ? 1 : 0) << ' '
+                 << faceDuration << ' '
+                 << (general ? 1 : 0) << ' '
+                 << (listener ? 1 : 0) << ' '
+                 << (roleplay ? 1 : 0) << ' '
+                 << (interactive ? 1 : 0) << ' '
+                 << botMirrorCh << ' '
+                 << botMirrorCd << ' '
+                 << moodSpreadCh << ' '
+                 << (npcMirrorEn ? 1 : 0) << ' '
+                 << npcMirrorCd << ' '
+                 << (pvpSpectator ? 1 : 0);
             return line.str();
         }
 

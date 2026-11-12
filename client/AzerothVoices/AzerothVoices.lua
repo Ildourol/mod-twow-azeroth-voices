@@ -30,6 +30,10 @@ AzerothVoices.genAllTimer = 0
 AzerothVoices.serverLanguageSummary = nil
 AzerothVoices.serverLanguageShort = nil
 AzerothVoices.threadState = nil
+AzerothVoices.serverFeatures = nil
+AzerothVoices.multiAddressedState = nil
+AzerothVoices.gossipState = nil
+AzerothVoices.emotesState = nil
 
 local SEND_INTERVAL = 0.3
 local SAVE_LOCK_TIMEOUT = 20
@@ -1169,6 +1173,9 @@ function AzerothVoices:HandleStatusPayload(rest)
             endpoint = self:Decode(endpoint or "-"),
             model = self:Decode(model or "-"),
         }
+        if self.minimapButton and GameTooltip and GameTooltip:IsOwned(self.minimapButton) then
+            self:UpdateMinimapTooltip(self.minimapButton)
+        end
     end
 end
 
@@ -1288,6 +1295,72 @@ end
 
 function AzerothVoices:RequestThreadStatus()
     self:QueueCommand("status")
+end
+
+function AzerothVoices:UpdateFeaturesUI()
+    local p = self.frame
+    if not p then return end
+
+    -- Multi-Addressed Intent Detection (Section 24B)
+    local ma = self.multiAddressedState
+    if p.multiAddressedStatusText then
+        if ma and ma.enabled then
+            local party = ma.party or "80%"
+            local say = ma.say or "60%"
+            local guild = ma.guild or "70%"
+            p.multiAddressedStatusText:SetText("|cff00ff00Active|r (Party: " .. party .. " | Say: " .. say .. " | Guild: " .. guild .. ")")
+        else
+            p.multiAddressedStatusText:SetText("|cff888888Disabled|r")
+        end
+    end
+
+    -- Cross-Channel Gossip Relays (Section 24C)
+    local gr = self.gossipState
+    if p.gossipStatusText then
+        if gr and gr.enabled then
+            local party = gr.party or "20%"
+            local say = gr.say or "10%"
+            local guild = gr.guild or "15%"
+            p.gossipStatusText:SetText("|cff00ff00Active|r (Party: " .. party .. " | Say: " .. say .. " | Guild: " .. guild .. ")")
+        else
+            p.gossipStatusText:SetText("|cff888888Disabled|r")
+        end
+    end
+
+    -- Conversational Emotes & Facing (Section 25)
+    local em = self.emotesState
+    if p.emotesStatusText then
+        if em then
+            local botT = em.botTalk and "|cff00ff00On|r" or "|cff888888Off|r"
+            local npcT = em.npcTalk and "|cff00ff00On|r" or "|cff888888Off|r"
+            local face = em.npcFace and ("|cff00ff00" .. (em.faceDuration or 5) .. "s|r") or "|cff888888Off|r"
+            local rp = em.roleplay and "|cff00ff00On|r" or "|cff888888Off|r"
+            p.emotesStatusText:SetText("NPC Talk: " .. npcT .. " | Facing: " .. face .. " | Bot Talk: " .. botT .. " | RP: " .. rp)
+        else
+            p.emotesStatusText:SetText("NPC Talk: |cff00ff00On|r | Facing: |cff00ff005s|r | Bot Talk: |cff888888Off|r | RP: |cff888888Off|r")
+        end
+    end
+
+    -- Interactive 0-Token Emotes & Social Spread (Section 25B)
+    if p.interactiveEmotesStatusText then
+        if em and em.interactive then
+            p.interactiveEmotesStatusText:SetText("|cff00ff00Active|r (Bot Mirror: " .. (em.botMirrorCh or 80) .. "% | Mood Spread: " .. (em.moodSpreadCh or 50) .. "% | NPC Mirror: " .. (em.npcMirrorEn and "On" or "Off") .. ")")
+        else
+            p.interactiveEmotesStatusText:SetText("|cff888888Disabled|r")
+        end
+    end
+
+    -- Solo NPC Banter & World Events (Sections 10 & 11)
+    local feat = self.serverFeatures
+    if p.eventsStatusText then
+        if feat then
+            local npcChat = feat.npcChatter and "|cff00ff00Active|r" or "|cff888888Disabled|r"
+            local evChat = feat.eventChat and "|cff00ff00Active|r" or "|cff888888Disabled|r"
+            p.eventsStatusText:SetText("Solo NPC Banter: " .. npcChat .. " | World Events: " .. evChat)
+        else
+            p.eventsStatusText:SetText("Solo NPC Banter: |cff888888Disabled|r | World Events: |cff00ff00Active|r")
+        end
+    end
 end
 
 function AzerothVoices:HandlePayload(payload)
@@ -1441,6 +1514,102 @@ function AzerothVoices:HandlePayload(payload)
         return
     end
 
+    if command == "FEATURES_INFO" then
+        local fields = {}
+        for value in string.gfind(rest, "%S+") do table.insert(fields, value) end
+        if table.getn(fields) >= 10 then
+            self.serverFeatures = {
+                multiAddressed = (fields[1] == "1"),
+                gossipRelay = (fields[2] == "1"),
+                emotesBotTalk = (fields[3] == "1"),
+                emotesNpcTalk = (fields[4] == "1"),
+                emotesNpcFace = (fields[5] == "1"),
+                emotesFaceDuration = tonumber(fields[6] or "5") or 5,
+                emotesGeneral = (fields[7] == "1"),
+                emotesInteractive = (fields[8] == "1"),
+                npcChatter = (fields[9] == "1"),
+                eventChat = (fields[10] == "1")
+            }
+            self:UpdateFeaturesUI()
+        end
+        return
+    end
+
+    if command == "MULTIADDRESSED_INFO" then
+        local fields = {}
+        for value in string.gfind(rest, "%S+") do table.insert(fields, value) end
+        if table.getn(fields) >= 7 then
+            local function parseScope(s)
+                local _, _, en, ch, maxB = string.find(s or "", "^(%d+):(%d+):(%d+)$")
+                if en and en == "1" then
+                    return (ch or "50") .. "% (max " .. (maxB or "2") .. ")"
+                else
+                    return "Off"
+                end
+            end
+            self.multiAddressedState = {
+                enabled = (fields[1] == "1"),
+                party = parseScope(fields[2]),
+                say = parseScope(fields[3]),
+                guild = parseScope(fields[4]),
+                world = parseScope(fields[5]),
+                staggerMin = tonumber(fields[6] or "3") or 3,
+                staggerMax = tonumber(fields[7] or "6") or 6
+            }
+            self:UpdateFeaturesUI()
+        end
+        return
+    end
+
+    if command == "GOSSIP_INFO" then
+        local fields = {}
+        for value in string.gfind(rest, "%S+") do table.insert(fields, value) end
+        if table.getn(fields) >= 5 then
+            local function parseGossip(s)
+                local _, _, en, ch = string.find(s or "", "^(%d+):(%d+)$")
+                if en and en == "1" then
+                    return (ch or "20") .. "%"
+                else
+                    return "Off"
+                end
+            end
+            self.gossipState = {
+                enabled = (fields[1] == "1"),
+                party = parseGossip(fields[2]),
+                say = parseGossip(fields[3]),
+                guild = parseGossip(fields[4]),
+                cooldown = tonumber(fields[5] or "600") or 600
+            }
+            self:UpdateFeaturesUI()
+        end
+        return
+    end
+
+    if command == "EMOTES_INFO" then
+        local fields = {}
+        for value in string.gfind(rest, "%S+") do table.insert(fields, value) end
+        if table.getn(fields) >= 14 then
+            self.emotesState = {
+                botTalk = (fields[1] == "1"),
+                npcTalk = (fields[2] == "1"),
+                npcFace = (fields[3] == "1"),
+                faceDuration = tonumber(fields[4] or "5") or 5,
+                general = (fields[5] == "1"),
+                listener = (fields[6] == "1"),
+                roleplay = (fields[7] == "1"),
+                interactive = (fields[8] == "1"),
+                botMirrorCh = tonumber(fields[9] or "80") or 80,
+                botMirrorCd = tonumber(fields[10] or "15") or 15,
+                moodSpreadCh = tonumber(fields[11] or "50") or 50,
+                npcMirrorEn = (fields[12] == "1"),
+                npcMirrorCd = tonumber(fields[13] or "15") or 15,
+                pvpSpectator = (fields[14] == "1")
+            }
+            self:UpdateFeaturesUI()
+        end
+        return
+    end
+
     if command == "STATUS" then
         self:HandleStatusPayload(rest)
         return
@@ -1579,8 +1748,6 @@ SlashCmdList["AZEROTHVOICES"] = function(msg)
     end
     if cmd == "minimap" then
         AzerothVoices:ToggleMinimapButton()
-    elseif cmd == "icon" then
-        AzerothVoices:CycleMinimapIcon()
     elseif cmd == "reset" then
         AzerothVoices:ResetMinimapPosition()
     elseif cmd == "help" then
@@ -1588,7 +1755,6 @@ SlashCmdList["AZEROTHVOICES"] = function(msg)
             DEFAULT_CHAT_FRAME:AddMessage("|cffffd100[Azeroth Voices Slash Commands]|r")
             DEFAULT_CHAT_FRAME:AddMessage("  |cff00ff00/azerothvoices|r or |cff00ff00/av|r - Toggle main editor window")
             DEFAULT_CHAT_FRAME:AddMessage("  |cff00ff00/av minimap|r - Toggle minimap quick access button")
-            DEFAULT_CHAT_FRAME:AddMessage("  |cff00ff00/av icon|r - Cycle minimap icon")
             DEFAULT_CHAT_FRAME:AddMessage("  |cff00ff00/av reset|r - Reset window & minimap position")
         end
     else
