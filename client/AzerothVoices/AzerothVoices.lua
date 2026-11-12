@@ -1791,6 +1791,10 @@ AzerothVoices:SetScript("OnEvent", function()
         self:HandleAddonMessage(arg1, arg2, arg3, arg4)
     elseif currentEvent == "CHAT_MSG_SYSTEM" then
         self:HandleSystemMessage(arg1)
+    elseif currentEvent == "PARTY_MEMBERS_CHANGED" or currentEvent == "RAID_ROSTER_UPDATE" then
+        if self.rosterFilter == "party" and self.frame and self.frame:IsShown() then
+            self:UpdateRosterViews()
+        end
     end
 end)
 
@@ -1798,3 +1802,5 @@ AzerothVoices:RegisterEvent("PLAYER_LOGIN")
 AzerothVoices:RegisterEvent("PLAYER_LOGOUT")
 AzerothVoices:RegisterEvent("CHAT_MSG_ADDON")
 AzerothVoices:RegisterEvent("CHAT_MSG_SYSTEM")
+AzerothVoices:RegisterEvent("PARTY_MEMBERS_CHANGED")
+AzerothVoices:RegisterEvent("RAID_ROSTER_UPDATE")

@@ -2346,8 +2346,8 @@ AzerothVoices.General.TriggerIntervalSeconds = 60
 
 # AzerothVoices.General.TriggerChance
 #     Description: Base percent chance per populated zone to start an ambient event. (0-100)
-#     Default:     15
-AzerothVoices.General.TriggerChance = 15
+#     Default:     10
+AzerothVoices.General.TriggerChance = 10
 
 # AzerothVoices.General.CityMultiplier
 #     Description: Multiplier applied to TriggerChance in capital cities (Stormwind, Orgrimmar, etc.).

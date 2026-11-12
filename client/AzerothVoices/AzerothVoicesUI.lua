@@ -336,10 +336,26 @@ function AzerothVoices:BuildEditor(panel)
     local search = createEditBox(left, "AzerothVoicesSearchBox", 0, -18, 144, 24)
     search:SetScript("OnEscapePressed", function() this:ClearFocus() end)
 
+    local filterAll = button(left, "All Bots", 70, function()
+        AzerothVoices.rosterFilter = "all"
+        panel.rosterSlider:SetValue(0)
+        panel.refreshList()
+    end, 20)
+    filterAll:SetPoint("TOPLEFT", left, "TOPLEFT", 0, -44)
+    panel.filterAll = filterAll
+
+    local filterParty = button(left, "Party Only", 70, function()
+        AzerothVoices.rosterFilter = "party"
+        panel.rosterSlider:SetValue(0)
+        panel.refreshList()
+    end, 20)
+    filterParty:SetPoint("LEFT", filterAll, "RIGHT", 4, 0)
+    panel.filterParty = filterParty
+
     local list = CreateFrame("Frame", nil, left)
-    list:SetPoint("TOPLEFT", left, "TOPLEFT", 0, -48)
-    list:SetPoint("TOPRIGHT", left, "TOPRIGHT", 0, -48)
-    list:SetHeight(384)
+    list:SetPoint("TOPLEFT", left, "TOPLEFT", 0, -68)
+    list:SetPoint("TOPRIGHT", left, "TOPRIGHT", 0, -68)
+    list:SetHeight(360)
     list:EnableMouseWheel(true)
 
     local rosterSlider = slider(list)
@@ -1038,9 +1054,20 @@ function AzerothVoices:BuildEditor(panel)
     panel.refreshList = function()
         if updating then return end
         updating = true
+
+        if panel.filterAll and panel.filterParty then
+            if AzerothVoices.rosterFilter == "party" then
+                panel.filterParty:Disable()
+                panel.filterAll:Enable()
+            else
+                panel.filterAll:Disable()
+                panel.filterParty:Enable()
+            end
+        end
+
         local filtered = AzerothVoices:GetFilteredRoster(search:GetText())
         local totalFiltered = table.getn(filtered)
-        local visible = 16
+        local visible = 15
         local maximum = math.max(0, totalFiltered - visible)
         rosterSlider:SetMinMaxValues(0, maximum)
         local offset = math.min(maximum, math.floor(rosterSlider:GetValue() or 0))
@@ -1125,7 +1152,13 @@ function AzerothVoices:BuildEditor(panel)
                     row.text:SetTextColor(1, 0.82, 0)
                 else
                     row:UnlockHighlight()
-                    row.text:SetTextColor(1, 1, 1)
+                    local partyClass = AzerothVoices:GetPartyMemberClass(bot.name)
+                    if partyClass and RAID_CLASS_COLORS and RAID_CLASS_COLORS[partyClass] then
+                        local c = RAID_CLASS_COLORS[partyClass]
+                        row.text:SetTextColor(c.r, c.g, c.b)
+                    else
+                        row.text:SetTextColor(1, 1, 1)
+                    end
                 end
                 row:Show()
             else
@@ -1146,11 +1179,24 @@ function AzerothVoices:BuildEditor(panel)
             checkedCount = checkedCount + 1
         end
 
-        count:SetText(totalFiltered .. "/" .. totalRoster .. " bots | " .. checkedCount .. " checked")
+        local filterLabel = (AzerothVoices.rosterFilter == "party") and "party" or "all"
+        count:SetText(totalFiltered .. "/" .. totalRoster .. " (" .. filterLabel .. ") | " .. checkedCount .. " chk")
         selected:SetText(AzerothVoices:GetSelectedName() or "Select a bot")
 
         if totalFiltered == 0 then
-            empty:SetText(totalRoster == 0 and "No known bots" or "No matches")
+            if AzerothVoices.rosterFilter == "party" then
+                local numP = GetNumPartyMembers() or 0
+                local numR = GetNumRaidMembers() or 0
+                if numP == 0 and numR == 0 then
+                    empty:SetText("Not in party/raid")
+                else
+                    empty:SetText("No party bots")
+                end
+            elseif totalRoster == 0 then
+                empty:SetText("No known bots")
+            else
+                empty:SetText("No matches")
+            end
             empty:Show()
         else
             empty:Hide()

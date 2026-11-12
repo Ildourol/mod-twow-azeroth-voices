@@ -1,15 +1,72 @@
 -- Roster selection and acknowledged, paced memory deletion.
 local AzerothVoices = AzerothVoicesEventFrame
 AzerothVoices.checkedBots = {}
+AzerothVoices.rosterFilter = "all"
+
+function AzerothVoices:IsPartyMember(name)
+    if not name or name == "" then return false end
+    local lowerName = string.lower(name)
+    local numParty = GetNumPartyMembers()
+    if numParty and numParty > 0 then
+        for i = 1, numParty do
+            local pName = UnitName("party" .. i)
+            if pName and string.lower(pName) == lowerName then
+                return true
+            end
+        end
+    end
+    local numRaid = GetNumRaidMembers()
+    if numRaid and numRaid > 0 then
+        for i = 1, numRaid do
+            local rName = UnitName("raid" .. i)
+            if rName and string.lower(rName) == lowerName then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function AzerothVoices:GetPartyMemberClass(name)
+    if not name or name == "" then return nil end
+    local lowerName = string.lower(name)
+    local numParty = GetNumPartyMembers()
+    if numParty and numParty > 0 then
+        for i = 1, numParty do
+            local pName = UnitName("party" .. i)
+            if pName and string.lower(pName) == lowerName then
+                local _, class = UnitClass("party" .. i)
+                return class
+            end
+        end
+    end
+    local numRaid = GetNumRaidMembers()
+    if numRaid and numRaid > 0 then
+        for i = 1, numRaid do
+            local rName = UnitName("raid" .. i)
+            if rName and string.lower(rName) == lowerName then
+                local _, class = UnitClass("raid" .. i)
+                return class
+            end
+        end
+    end
+    return nil
+end
 
 function AzerothVoices:GetFilteredRoster(query)
     local result = {}
     query = string.lower(query or "")
+    local partyOnly = (self.rosterFilter == "party")
     local count = table.getn(self.roster or {})
     for i = 1, count do
         local bot = self.roster[i]
         if bot and bot.name then
-            if string.find(string.lower(bot.name), query, 1, true) then
+            local matchesQuery = (query == "" or string.find(string.lower(bot.name), query, 1, true))
+            local matchesParty = true
+            if partyOnly then
+                matchesParty = self:IsPartyMember(bot.name)
+            end
+            if matchesQuery and matchesParty then
                 table.insert(result, bot)
             end
         end
