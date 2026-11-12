@@ -663,6 +663,7 @@ namespace AzerothVoices
         c.proximitySpeakerAllowEntries = UnsignedSet("AzerothVoices.Proximity.Speaker.AllowEntries", "");
         c.proximitySpeakerDenyEntries = UnsignedSet("AzerothVoices.Proximity.Speaker.DenyEntries", "");
         c.proximitySpeakerNonHumanoidAllowEntries = UnsignedSet("AzerothVoices.Proximity.Speaker.AllowNonHumanoidEntries", "");
+        c.proximityExcludeGuardsAndServices = sConfig.GetBoolDefault("AzerothVoices.Proximity.ExcludeGuardsAndServices", false);
 
         c.npcRandomEnabled = sConfig.GetBoolDefault("AzerothVoices.NPC.Random.Enable", true);
         c.npcRandomMinimumIntervalSeconds = Positive("AzerothVoices.NPC.Random.MinimumIntervalSeconds", 300, 10);
@@ -670,6 +671,7 @@ namespace AzerothVoices
         c.npcRandomChance = Percent("AzerothVoices.NPC.Random.Chance", 25);
         c.npcRandomDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.NPC.Random.Distance", 10.0f));
         c.npcRandomEntityCooldownSeconds = Positive("AzerothVoices.NPC.Random.EntityCooldownSeconds", 900, 0);
+        c.npcRandomExcludeGuardsAndServices = sConfig.GetBoolDefault("AzerothVoices.NPC.Random.ExcludeGuardsAndServices", false);
         c.npcRandomCategoryWeights = ParseCategoryWeights(sConfig.GetStringDefault(
             "AzerothVoices.NPC.Random.CategoryWeights", "player_inquiry:35,rumors:25,dailylife:20,zonelore:10,humor:10"));
         c.npcRandomPlayerInquiries = Split(sConfig.GetStringDefault("AzerothVoices.NPC.Random.PlayerInquiries",
@@ -940,6 +942,8 @@ namespace AzerothVoices
         c.eventSelfCommentChance = Percent("AzerothVoices.Events.SelfCommentChance", 5);
         c.eventMaximumResponders = Positive("AzerothVoices.Events.MaximumResponders", 2, 1);
         c.eventCooldownSeconds = Positive("AzerothVoices.Events.CooldownSeconds", 90);
+        c.eventExcludeGuardsAndServices = sConfig.GetBoolDefault("AzerothVoices.Events.ExcludeGuardsAndServices", false);
+        c.eventNpcCooldownSeconds = Positive("AzerothVoices.Events.NpcCooldownSeconds", 180, 0);
         c.eventChances = {
             { "creature_defeated", Percent("AzerothVoices.Events.Chance.CreatureDefeated", 8) },
             { "player_defeated", Percent("AzerothVoices.Events.Chance.PlayerDefeated", 40) },

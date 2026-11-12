@@ -278,6 +278,7 @@ namespace AzerothVoices
         std::set<uint32_t> proximitySpeakerAllowEntries;
         std::set<uint32_t> proximitySpeakerDenyEntries;
         std::set<uint32_t> proximitySpeakerNonHumanoidAllowEntries;
+        bool proximityExcludeGuardsAndServices = false;
 
         // NPC Solo Random Chatter (Section 14B)
         bool npcRandomEnabled = true;
@@ -286,6 +287,7 @@ namespace AzerothVoices
         uint32_t npcRandomChance = 25;
         float npcRandomDistance = 10.0f;
         uint32_t npcRandomEntityCooldownSeconds = 900;
+        bool npcRandomExcludeGuardsAndServices = false;
         std::vector<CategoryWeight> npcRandomCategoryWeights;
         std::vector<std::string> npcRandomPlayerInquiries;
         std::vector<std::string> npcRandomRumors;
@@ -505,6 +507,8 @@ namespace AzerothVoices
         uint32_t eventSelfCommentChance = 5;
         uint32_t eventMaximumResponders = 2;
         uint32_t eventCooldownSeconds = 90;
+        bool eventExcludeGuardsAndServices = false;
+        uint32_t eventNpcCooldownSeconds = 180;
         std::map<std::string, uint32_t> eventChances;
         std::vector<CategoryWeight> eventCategoryWeights;
 

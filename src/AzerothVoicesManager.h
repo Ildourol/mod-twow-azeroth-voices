@@ -707,6 +707,7 @@ namespace AzerothVoices
         std::unordered_map<uint64_t, uint64_t> m_latestRequestByActor;
         std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_actorCooldowns;
         std::map<std::string, std::chrono::steady_clock::time_point> m_eventCooldowns;
+        std::unordered_map<uint64_t, std::chrono::steady_clock::time_point> m_eventNpcCooldowns;
         std::deque<std::chrono::steady_clock::time_point> m_requestBudget;
 
         std::atomic<bool> m_stopping;

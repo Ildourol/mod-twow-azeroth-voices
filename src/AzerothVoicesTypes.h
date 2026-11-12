@@ -186,6 +186,7 @@ namespace AzerothVoices
         std::string role;
         std::string qualification;
         bool boss = false;
+        bool guardOrService = false;
         bool staticSpawn = false;
         bool instance = false;
         bool inCombat = false;

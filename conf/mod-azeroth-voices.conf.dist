@@ -1254,6 +1254,15 @@ AzerothVoices.Proximity.Speaker.DenyEntries =
 #     Default:     empty
 AzerothVoices.Proximity.Speaker.AllowNonHumanoidEntries = 
 
+# AzerothVoices.Proximity.ExcludeGuardsAndServices
+#     Description: Excludes guards, vendors, quest-givers, innkeepers, armorers, gossips, and
+#                  service NPCs from proximity ambient dialogue. When 0 (disabled), all NPCs
+#                  (including guards and service providers) can speak and hold ambient
+#                  conversations in towns, hubs, and outposts.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.Proximity.ExcludeGuardsAndServices = 0 
+
 # --------------------------------------------
 # 10. BOSS AND MINIBOSS PRE-AGGRO DIALOGUE (DUNGEONS AND RAIDS ONLY)
 # --------------------------------------------
@@ -2259,6 +2268,14 @@ AzerothVoices.NPC.Random.Distance = 10.0
 #     Default:     900
 AzerothVoices.NPC.Random.EntityCooldownSeconds = 900
 
+# AzerothVoices.NPC.Random.ExcludeGuardsAndServices
+#     Description: Excludes guards, vendors, quest-givers, innkeepers, armorers, gossips, and
+#                  service NPCs from standalone solo random chatter near real players. When 0
+#                  (disabled), all NPCs can say random things when a real player is nearby.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.NPC.Random.ExcludeGuardsAndServices = 0
+
 # AzerothVoices.NPC.Random.CategoryWeights
 #     Description: Percentage chance distribution for NPC solo random chatter categories:
 #                    - player_inquiry: Direct question or observation to the nearby player.
@@ -2743,6 +2760,22 @@ AzerothVoices.Events.MaximumSayNpcResponders = 1
 #     Description: Per-subject/per-event repeat cooldown. (Seconds, minimum 0.)
 #     Default:     90
 AzerothVoices.Events.CooldownSeconds = 90
+
+# AzerothVoices.Events.ExcludeGuardsAndServices
+#     Description: Excludes guards, vendors, quest-givers, innkeepers, armorers, gossips, and
+#                  service NPCs from reacting to player events in /say. When 0 (disabled), all
+#                  NPCs can react to nearby player events.
+#     Accepted:    0/1
+#     Default:     0
+AzerothVoices.Events.ExcludeGuardsAndServices = 0
+
+# AzerothVoices.Events.NpcCooldownSeconds
+#     Description: Dedicated repeat cooldown for individual NPCs reacting to player events. Set
+#                  to double the PlayerBot event cooldown (180 seconds vs 90 seconds) to keep
+#                  event chatter paced and prevent repetitive NPC commentary. (Seconds, minimum 0.)
+#     Accepted:    0-86400
+#     Default:     180
+AzerothVoices.Events.NpcCooldownSeconds = 180
 
 # AzerothVoices.Events.CategoryWeights
 #     Description: Percentage chance distribution for reactions to in-game events (kills, deaths, wipes, level-ups):

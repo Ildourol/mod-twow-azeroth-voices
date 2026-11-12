@@ -406,7 +406,8 @@ namespace AzerothVoices
         // Ordered proximity policy for one live creature. Every rejection reason
         // is returned so telemetry can explain which rule won.
         ProximitySpeakerDecision EvaluateProximityCreature(Creature const* creature,
-                                                           Config const& config)
+                                                           Config const& config,
+                                                           bool isNpcRandom = false)
         {
             ProximitySpeakerInput input;
             CreatureInfo const* info = creature ? creature->GetCreatureInfo() : nullptr;
@@ -421,7 +422,10 @@ namespace AzerothVoices
 
             input.denied = config.proximitySpeakerDenyEntries.count(info->entry) != 0;
             input.boss = ClassifyCreatureBoss(creature, config).boss;
-            input.guardOrService = IsGuardOrInteractiveRole(creature);
+            bool const excludeGuards = isNpcRandom
+                ? config.npcRandomExcludeGuardsAndServices
+                : config.proximityExcludeGuardsAndServices;
+            input.guardOrService = excludeGuards && IsGuardOrInteractiveRole(creature);
             input.creatureTypeKnown = true;
             input.humanoid = info->type == CREATURE_TYPE_HUMANOID;
             input.allowListEmpty = config.proximitySpeakerAllowEntries.empty();
@@ -1012,6 +1016,7 @@ namespace AzerothVoices
             result.role = CreatureRoleName(creature);
             result.qualification = std::move(qualification);
             result.boss = boss;
+            result.guardOrService = IsGuardOrInteractiveRole(creature);
             result.staticSpawn = creature->HasStaticDBSpawnData();
             FillLocation(creature, result.area, result.zone, result.map,
                          result.mapId, result.areaId, result.zoneId);
@@ -1329,6 +1334,7 @@ namespace AzerothVoices
         m_scheduled.clear();
         m_actorCooldowns.clear();
         m_eventCooldowns.clear();
+        m_eventNpcCooldowns.clear();
         m_history.clear();
         m_surroundingChat.clear();
         m_snapshotHistory.clear();
@@ -1901,7 +1907,7 @@ namespace AzerothVoices
             {
                 bool const usesProximityEvaluation = proximityTrigger || npcRandomTrigger;
                 ProximitySpeakerDecision const decision = usesProximityEvaluation
-                    ? EvaluateProximityCreature(creature, *m_config)
+                    ? EvaluateProximityCreature(creature, *m_config, npcRandomTrigger)
                     : ProximitySpeakerDecision { true, ProximityRejection::None };
                 NpcEligibilityResult const eligibility = usesProximityEvaluation
                     ? (decision.eligible ? NpcEligibilityResult::Eligible : NpcEligibilityResult::Filtered)
@@ -3785,6 +3791,17 @@ namespace AzerothVoices
         if (!IsScopeEnabled(*m_config, ChatScope::Say) || !m_config->eventAllowNpcSay)
             return;
 
+        if (m_eventNpcCooldowns.size() > 512)
+        {
+            for (auto it = m_eventNpcCooldowns.begin(); it != m_eventNpcCooldowns.end();)
+            {
+                if (it->second <= now)
+                    it = m_eventNpcCooldowns.erase(it);
+                else
+                    ++it;
+            }
+        }
+
         uint32_t sayCount = 0;
         uint32_t const maxSay = m_config->eventMaximumSayNpcResponders > 0 ? m_config->eventMaximumSayNpcResponders : 1;
         std::vector<Candidate> sayCandidates = CollectCandidates(subject, ChatScope::Say, "",
@@ -3795,10 +3812,25 @@ namespace AzerothVoices
                 break;
             if (selectedActors.count(candidate.actor.guid))
                 continue;
+            if (candidate.actor.kind == ActorKind::Creature)
+            {
+                if (m_config->eventExcludeGuardsAndServices && candidate.actor.guardOrService)
+                    continue;
+                auto npcCd = m_eventNpcCooldowns.find(candidate.actor.guid);
+                if (npcCd != m_eventNpcCooldowns.end() && npcCd->second > now)
+                    continue;
+            }
             if (QueueDialogue(candidate.actor, subjectSnapshot, ChatScope::Say, "",
                 "event:" + event, description, RequestPriority::Nearby, false, true))
             {
                 selectedActors.insert(candidate.actor.guid);
+                if (candidate.actor.kind == ActorKind::Creature)
+                {
+                    uint32_t const npcCooldownSec = m_config->eventNpcCooldownSeconds > 0
+                        ? m_config->eventNpcCooldownSeconds
+                        : (m_config->eventCooldownSeconds * 2);
+                    m_eventNpcCooldowns[candidate.actor.guid] = now + std::chrono::seconds(npcCooldownSec);
+                }
                 ++sayCount;
             }
         }
@@ -3984,7 +4016,7 @@ namespace AzerothVoices
                 if (proxCd != m_proximitySpeakerCooldowns.end() && proxCd->second > now)
                     continue;
 
-                if (!EvaluateProximityCreature(creature, *m_config).eligible)
+                if (!EvaluateProximityCreature(creature, *m_config, /*isNpcRandom=*/true).eligible)
                     continue;
 
                 found.push_back(creature);
@@ -7044,7 +7076,7 @@ namespace AzerothVoices
                 !creature->IsWithinDist(anchor, m_config->sayDistance, false) ||
                 !creature->IsWithinLOSInMap(anchor) ||
                 !creature->IsVisibleForOrDetect(anchor, anchor, true) ||
-                !EvaluateProximityCreature(creature, *m_config).eligible)
+                !EvaluateProximityCreature(creature, *m_config, request.trigger == "npc-random").eligible)
                 return false;
             creature->MonsterSay(text, LANG_UNIVERSAL, anchor);
             Unit* directedTarget = nullptr;
