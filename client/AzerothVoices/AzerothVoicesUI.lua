@@ -879,188 +879,6 @@ function AzerothVoices:BuildEditor(panel)
     panel.threadCallbacksText = threadCallbacksText
     w.threadCallbacksText = threadCallbacksText
 
-    -- Multi-Addressed Intent (Section 24B)
-    local lMultiAddressed = createLabel(content, "Multi-Addressed Intent (Section 24B)", 0, -742)
-    panel.multiAddressedLabel = lMultiAddressed
-    w.lMultiAddressed = lMultiAddressed
-    local multiAddressedStatusText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    multiAddressedStatusText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -762)
-    multiAddressedStatusText:SetWidth(contentWidth)
-    multiAddressedStatusText:SetHeight(20)
-    multiAddressedStatusText:SetJustifyH("LEFT")
-    multiAddressedStatusText:SetText("|cff888888Disabled|r")
-    panel.multiAddressedStatusText = multiAddressedStatusText
-    w.multiAddressedStatusText = multiAddressedStatusText
-
-    local multiAddressedHolder = CreateFrame("Frame", nil, content)
-    multiAddressedHolder:SetPoint("TOPLEFT", lMultiAddressed, "TOPLEFT", 0, 0)
-    multiAddressedHolder:SetPoint("BOTTOMRIGHT", multiAddressedStatusText, "BOTTOMRIGHT", 0, 0)
-    multiAddressedHolder:EnableMouse(true)
-    multiAddressedHolder:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-        GameTooltip:ClearLines()
-        GameTooltip:AddLine("Multi-Addressed Intent Detection (Section 24B)", 1, 0.82, 0)
-        GameTooltip:AddLine("Enables bots to detect questions or greetings directed at multiple members or group-wide.", 0.8, 0.8, 0.8, 1)
-        GameTooltip:AddLine("Triggers coordinated multi-bot replies with randomized stagger delays.", 0.8, 0.8, 0.8, 1)
-        GameTooltip:AddLine(" ")
-        local ma = AzerothVoices.multiAddressedState or {}
-        GameTooltip:AddDoubleLine("Status:", ma.enabled and "|cff00ff00Enabled|r" or "|cff888888Disabled|r", 1, 1, 1)
-        GameTooltip:AddDoubleLine("Party Channel:", ma.party or "80%", 1, 1, 1, 0.2, 0.85, 0.5)
-        GameTooltip:AddDoubleLine("Say / Local Channel:", ma.say or "60%", 1, 1, 1, 0.9, 0.82, 0.2)
-        GameTooltip:AddDoubleLine("Guild Channel:", ma.guild or "70%", 1, 1, 1, 0.3, 0.85, 0.4)
-        GameTooltip:AddDoubleLine("Response Stagger Delay:", (ma.staggerMin or 3) .. "s - " .. (ma.staggerMax or 6) .. "s", 1, 1, 1, 0.4, 0.7, 1.0)
-        GameTooltip:Show()
-    end)
-    multiAddressedHolder:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    multiAddressedHolder:EnableMouseWheel(true)
-    multiAddressedHolder:SetScript("OnMouseWheel", onEditorMouseWheel)
-    panel.multiAddressedHolder = multiAddressedHolder
-
-    -- Cross-Channel Gossip Relays (Section 24C)
-    local lGossip = createLabel(content, "Cross-Channel Gossip Relays (Section 24C)", 0, -790)
-    panel.gossipLabel = lGossip
-    w.lGossip = lGossip
-    local gossipStatusText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    gossipStatusText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -810)
-    gossipStatusText:SetWidth(contentWidth)
-    gossipStatusText:SetHeight(20)
-    gossipStatusText:SetJustifyH("LEFT")
-    gossipStatusText:SetText("|cff888888Disabled|r")
-    panel.gossipStatusText = gossipStatusText
-    w.gossipStatusText = gossipStatusText
-
-    local gossipHolder = CreateFrame("Frame", nil, content)
-    gossipHolder:SetPoint("TOPLEFT", lGossip, "TOPLEFT", 0, 0)
-    gossipHolder:SetPoint("BOTTOMRIGHT", gossipStatusText, "BOTTOMRIGHT", 0, 0)
-    gossipHolder:EnableMouse(true)
-    gossipHolder:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-        GameTooltip:ClearLines()
-        GameTooltip:AddLine("Cross-Channel Gossip Relays (Section 24C)", 1, 0.82, 0)
-        GameTooltip:AddLine("Allows bots to overhear town rumors, boss victories, and world events, relaying them naturally.", 0.8, 0.8, 0.8, 1)
-        GameTooltip:AddLine(" ")
-        local gr = AzerothVoices.gossipState or {}
-        GameTooltip:AddDoubleLine("Status:", gr.enabled and "|cff00ff00Enabled|r" or "|cff888888Disabled|r", 1, 1, 1)
-        GameTooltip:AddDoubleLine("Party Channel Relay:", gr.party or "20%", 1, 1, 1, 0.2, 0.85, 0.5)
-        GameTooltip:AddDoubleLine("Say / Local Relay:", gr.say or "10%", 1, 1, 1, 0.9, 0.82, 0.2)
-        GameTooltip:AddDoubleLine("Guild Relay:", gr.guild or "15%", 1, 1, 1, 0.3, 0.85, 0.4)
-        GameTooltip:AddDoubleLine("Memory Cooldown:", (gr.cooldown or 600) .. "s", 1, 1, 1, 0.4, 0.7, 1.0)
-        GameTooltip:Show()
-    end)
-    gossipHolder:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    gossipHolder:EnableMouseWheel(true)
-    gossipHolder:SetScript("OnMouseWheel", onEditorMouseWheel)
-    panel.gossipHolder = gossipHolder
-
-    -- Conversational Emotes & Immersion Facing (Section 25)
-    local lEmotes = createLabel(content, "Conversational Emotes & Immersion Facing (Section 25)", 0, -838)
-    panel.emotesLabel = lEmotes
-    w.lEmotes = lEmotes
-    local emotesStatusText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    emotesStatusText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -858)
-    emotesStatusText:SetWidth(contentWidth)
-    emotesStatusText:SetHeight(20)
-    emotesStatusText:SetJustifyH("LEFT")
-    emotesStatusText:SetText("NPC Talk: |cff00ff00On|r | Facing: |cff00ff005s|r | Bot Talk: |cff888888Off|r | RP: |cff888888Off|r")
-    panel.emotesStatusText = emotesStatusText
-    w.emotesStatusText = emotesStatusText
-
-    local emotesHolder = CreateFrame("Frame", nil, content)
-    emotesHolder:SetPoint("TOPLEFT", lEmotes, "TOPLEFT", 0, 0)
-    emotesHolder:SetPoint("BOTTOMRIGHT", emotesStatusText, "BOTTOMRIGHT", 0, 0)
-    emotesHolder:EnableMouse(true)
-    emotesHolder:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-        GameTooltip:ClearLines()
-        GameTooltip:AddLine("Conversational Emotes & Immersion Facing (Section 25)", 1, 0.82, 0)
-        GameTooltip:AddLine("Plays dynamic speech animations and sustains face-to-face immersion during dialogue.", 0.8, 0.8, 0.8, 1)
-        GameTooltip:AddLine(" ")
-        local em = AzerothVoices.emotesState or {}
-        local npcT = em.npcTalk and "|cff00ff00Enabled|r" or "|cff888888Disabled|r"
-        local botT = em.botTalk and "|cff00ff00Enabled|r" or "|cff888888Disabled|r"
-        local faceD = (em.faceDuration or 5) .. "s"
-        GameTooltip:AddDoubleLine("NPC Speech Talk Emotes:", npcT, 1, 1, 1, 0.2, 0.85, 0.5)
-        GameTooltip:AddDoubleLine("Dynamic Gestures:", "? = Question, ! = Exclamation, . = Talk", 0.9, 0.82, 0.2, 0.9, 0.82, 0.2)
-        GameTooltip:AddDoubleLine("NPC Conversation Facing Hold:", faceD, 1, 1, 1, 0.3, 0.85, 0.4)
-        GameTooltip:AddDoubleLine("Bot Speech Talk Emotes:", botT, 1, 1, 1)
-        GameTooltip:AddDoubleLine("Listener Attention Facing:", em.listener and "|cff00ff00Enabled|r" or "|cff888888Disabled|r", 1, 1, 1)
-        GameTooltip:AddDoubleLine("Roleplay Emotes in Speech:", em.roleplay and "|cff00ff00Enabled|r" or "|cff888888Disabled|r", 1, 1, 1)
-        GameTooltip:Show()
-    end)
-    emotesHolder:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    emotesHolder:EnableMouseWheel(true)
-    emotesHolder:SetScript("OnMouseWheel", onEditorMouseWheel)
-    panel.emotesHolder = emotesHolder
-
-    -- 0-Token Interactive Emotes & Social Spread (Section 25B)
-    local lInteractive = createLabel(content, "0-Token Interactive Emotes & Social Spread (Section 25B)", 0, -886)
-    panel.interactiveEmotesLabel = lInteractive
-    w.lInteractive = lInteractive
-    local interactiveEmotesStatusText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    interactiveEmotesStatusText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -906)
-    interactiveEmotesStatusText:SetWidth(contentWidth)
-    interactiveEmotesStatusText:SetHeight(20)
-    interactiveEmotesStatusText:SetJustifyH("LEFT")
-    interactiveEmotesStatusText:SetText("|cff888888Disabled|r")
-    panel.interactiveEmotesStatusText = interactiveEmotesStatusText
-    w.interactiveEmotesStatusText = interactiveEmotesStatusText
-
-    local interactiveHolder = CreateFrame("Frame", nil, content)
-    interactiveHolder:SetPoint("TOPLEFT", lInteractive, "TOPLEFT", 0, 0)
-    interactiveHolder:SetPoint("BOTTOMRIGHT", interactiveEmotesStatusText, "BOTTOMRIGHT", 0, 0)
-    interactiveHolder:EnableMouse(true)
-    interactiveHolder:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-        GameTooltip:ClearLines()
-        GameTooltip:AddLine("0-Token Interactive Emotes & Social Spread (Section 25B)", 1, 0.82, 0)
-        GameTooltip:AddLine("Instant, token-free social reactions to player emotes (wave, bow, salute, laugh, dance, cheer).", 0.8, 0.8, 0.8, 1)
-        GameTooltip:AddLine(" ")
-        local em = AzerothVoices.emotesState or {}
-        GameTooltip:AddDoubleLine("Status:", em.interactive and "|cff00ff00Enabled|r" or "|cff888888Disabled|r", 1, 1, 1)
-        GameTooltip:AddDoubleLine("Bot Mirror Chance:", (em.botMirrorCh or 80) .. "%", 1, 1, 1, 0.2, 0.85, 0.5)
-        GameTooltip:AddDoubleLine("Mood Spread Contagion:", (em.moodSpreadCh or 50) .. "%", 1, 1, 1, 0.9, 0.82, 0.2)
-        GameTooltip:AddDoubleLine("Nearby NPC Mirroring:", em.npcMirrorEn and "|cff00ff00Enabled|r" or "|cff888888Disabled|r", 1, 1, 1, 0.3, 0.85, 0.4)
-        GameTooltip:AddDoubleLine("PvP Duel / Arena Spectator Cheers:", em.pvpSpectator and "|cff00ff00Enabled|r" or "|cff888888Disabled|r", 1, 1, 1, 0.4, 0.7, 1.0)
-        GameTooltip:Show()
-    end)
-    interactiveHolder:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    interactiveHolder:EnableMouseWheel(true)
-    interactiveHolder:SetScript("OnMouseWheel", onEditorMouseWheel)
-    panel.interactiveHolder = interactiveHolder
-
-    -- Solo NPC Chatter & World Combat Perception (Sections 10 & 11)
-    local lEvents = createLabel(content, "Solo NPC Chatter & World Events (Sections 10 & 11)", 0, -934)
-    panel.eventsLabel = lEvents
-    w.lEvents = lEvents
-    local eventsStatusText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    eventsStatusText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -954)
-    eventsStatusText:SetWidth(contentWidth)
-    eventsStatusText:SetHeight(20)
-    eventsStatusText:SetJustifyH("LEFT")
-    eventsStatusText:SetText("Solo NPC Banter: |cff888888Disabled|r | World Events: |cff00ff00Active|r")
-    panel.eventsStatusText = eventsStatusText
-    w.eventsStatusText = eventsStatusText
-
-    local eventsHolder = CreateFrame("Frame", nil, content)
-    eventsHolder:SetPoint("TOPLEFT", lEvents, "TOPLEFT", 0, 0)
-    eventsHolder:SetPoint("BOTTOMRIGHT", eventsStatusText, "BOTTOMRIGHT", 0, 0)
-    eventsHolder:EnableMouse(true)
-    eventsHolder:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-        GameTooltip:ClearLines()
-        GameTooltip:AddLine("Solo NPC Chatter & World Combat Perception", 1, 0.82, 0)
-        GameTooltip:AddLine("Autonomous ambient life and combat commentary for townspeople, guards, and bots.", 0.8, 0.8, 0.8, 1)
-        GameTooltip:AddLine(" ")
-        local feat = AzerothVoices.serverFeatures or {}
-        GameTooltip:AddDoubleLine("Solo NPC Banter (Sec 10):", feat.npcChatter and "|cff00ff00Enabled|r" or "|cff888888Disabled|r", 1, 1, 1, 0.2, 0.85, 0.5)
-        GameTooltip:AddDoubleLine("World Combat Perception (Sec 11):", feat.eventChat and "|cff00ff00Enabled|r" or "|cff888888Disabled|r", 1, 1, 1, 0.3, 0.85, 0.4)
-        GameTooltip:Show()
-    end)
-    eventsHolder:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    eventsHolder:EnableMouseWheel(true)
-    eventsHolder:SetScript("OnMouseWheel", onEditorMouseWheel)
-    panel.eventsHolder = eventsHolder
-
     -- Status label at bottom
     local status = createLabel(panel, "", 16, 8)
     status:ClearAllPoints()
@@ -1112,12 +930,6 @@ function AzerothVoices:BuildEditor(panel)
             w.threadScaleLow:Hide(); w.threadScaleMid:Hide(); w.threadScaleHigh:Hide()
             w.threadTopicText:Hide(); w.threadOpenPointText:Hide(); w.threadCallbacksText:Hide()
 
-            w.lMultiAddressed:Hide(); w.multiAddressedStatusText:Hide()
-            w.lGossip:Hide(); w.gossipStatusText:Hide()
-            w.lEmotes:Hide(); w.emotesStatusText:Hide()
-            w.lInteractive:Hide(); w.interactiveEmotesStatusText:Hide()
-            w.lEvents:Hide(); w.eventsStatusText:Hide()
-
             w.content:SetHeight(280)
         elseif mode == "stories" then
             w.l1:Hide(); w.t1.holder:Hide()
@@ -1142,12 +954,6 @@ function AzerothVoices:BuildEditor(panel)
             w.lThread:Hide(); w.threadRefreshBtn:Hide(); w.threadBarHolder:Hide()
             w.threadScaleLow:Hide(); w.threadScaleMid:Hide(); w.threadScaleHigh:Hide()
             w.threadTopicText:Hide(); w.threadOpenPointText:Hide(); w.threadCallbacksText:Hide()
-
-            w.lMultiAddressed:Hide(); w.multiAddressedStatusText:Hide()
-            w.lGossip:Hide(); w.gossipStatusText:Hide()
-            w.lEmotes:Hide(); w.emotesStatusText:Hide()
-            w.lInteractive:Hide(); w.interactiveEmotesStatusText:Hide()
-            w.lEvents:Hide(); w.eventsStatusText:Hide()
 
             w.content:SetHeight(320)
         elseif mode == "features" then
@@ -1174,22 +980,7 @@ function AzerothVoices:BuildEditor(panel)
             w.threadOpenPointText:ClearAllPoints(); w.threadOpenPointText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -180); w.threadOpenPointText:Show()
             w.threadCallbacksText:ClearAllPoints(); w.threadCallbacksText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -210); w.threadCallbacksText:Show()
 
-            w.lMultiAddressed:ClearAllPoints(); w.lMultiAddressed:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -254); w.lMultiAddressed:Show()
-            w.multiAddressedStatusText:ClearAllPoints(); w.multiAddressedStatusText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -274); w.multiAddressedStatusText:Show()
-
-            w.lGossip:ClearAllPoints(); w.lGossip:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -302); w.lGossip:Show()
-            w.gossipStatusText:ClearAllPoints(); w.gossipStatusText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -322); w.gossipStatusText:Show()
-
-            w.lEmotes:ClearAllPoints(); w.lEmotes:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -350); w.lEmotes:Show()
-            w.emotesStatusText:ClearAllPoints(); w.emotesStatusText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -370); w.emotesStatusText:Show()
-
-            w.lInteractive:ClearAllPoints(); w.lInteractive:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -398); w.lInteractive:Show()
-            w.interactiveEmotesStatusText:ClearAllPoints(); w.interactiveEmotesStatusText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -418); w.interactiveEmotesStatusText:Show()
-
-            w.lEvents:ClearAllPoints(); w.lEvents:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -446); w.lEvents:Show()
-            w.eventsStatusText:ClearAllPoints(); w.eventsStatusText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -466); w.eventsStatusText:Show()
-
-            w.content:SetHeight(510)
+            w.content:SetHeight(260)
         else
             -- "full" mode (Overview)
             w.l1:ClearAllPoints(); w.l1:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, 0); w.l1:Show(); w.t1.holder:Show()
@@ -1225,22 +1016,7 @@ function AzerothVoices:BuildEditor(panel)
             w.threadOpenPointText:ClearAllPoints(); w.threadOpenPointText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -668); w.threadOpenPointText:Show()
             w.threadCallbacksText:ClearAllPoints(); w.threadCallbacksText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -698); w.threadCallbacksText:Show()
 
-            w.lMultiAddressed:ClearAllPoints(); w.lMultiAddressed:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -742); w.lMultiAddressed:Show()
-            w.multiAddressedStatusText:ClearAllPoints(); w.multiAddressedStatusText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -762); w.multiAddressedStatusText:Show()
-
-            w.lGossip:ClearAllPoints(); w.lGossip:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -790); w.lGossip:Show()
-            w.gossipStatusText:ClearAllPoints(); w.gossipStatusText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -810); w.gossipStatusText:Show()
-
-            w.lEmotes:ClearAllPoints(); w.lEmotes:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -838); w.lEmotes:Show()
-            w.emotesStatusText:ClearAllPoints(); w.emotesStatusText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -858); w.emotesStatusText:Show()
-
-            w.lInteractive:ClearAllPoints(); w.lInteractive:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -886); w.lInteractive:Show()
-            w.interactiveEmotesStatusText:ClearAllPoints(); w.interactiveEmotesStatusText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -906); w.interactiveEmotesStatusText:Show()
-
-            w.lEvents:ClearAllPoints(); w.lEvents:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -934); w.lEvents:Show()
-            w.eventsStatusText:ClearAllPoints(); w.eventsStatusText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -954); w.eventsStatusText:Show()
-
-            w.content:SetHeight(990)
+            w.content:SetHeight(750)
         end
 
         w.scroll:SetVerticalScroll(0)

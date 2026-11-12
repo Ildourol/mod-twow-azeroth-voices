@@ -1298,69 +1298,7 @@ function AzerothVoices:RequestThreadStatus()
 end
 
 function AzerothVoices:UpdateFeaturesUI()
-    local p = self.frame
-    if not p then return end
-
-    -- Multi-Addressed Intent Detection (Section 24B)
-    local ma = self.multiAddressedState
-    if p.multiAddressedStatusText then
-        if ma and ma.enabled then
-            local party = ma.party or "80%"
-            local say = ma.say or "60%"
-            local guild = ma.guild or "70%"
-            p.multiAddressedStatusText:SetText("|cff00ff00Active|r (Party: " .. party .. " | Say: " .. say .. " | Guild: " .. guild .. ")")
-        else
-            p.multiAddressedStatusText:SetText("|cff888888Disabled|r")
-        end
-    end
-
-    -- Cross-Channel Gossip Relays (Section 24C)
-    local gr = self.gossipState
-    if p.gossipStatusText then
-        if gr and gr.enabled then
-            local party = gr.party or "20%"
-            local say = gr.say or "10%"
-            local guild = gr.guild or "15%"
-            p.gossipStatusText:SetText("|cff00ff00Active|r (Party: " .. party .. " | Say: " .. say .. " | Guild: " .. guild .. ")")
-        else
-            p.gossipStatusText:SetText("|cff888888Disabled|r")
-        end
-    end
-
-    -- Conversational Emotes & Facing (Section 25)
-    local em = self.emotesState
-    if p.emotesStatusText then
-        if em then
-            local botT = em.botTalk and "|cff00ff00On|r" or "|cff888888Off|r"
-            local npcT = em.npcTalk and "|cff00ff00On|r" or "|cff888888Off|r"
-            local face = em.npcFace and ("|cff00ff00" .. (em.faceDuration or 5) .. "s|r") or "|cff888888Off|r"
-            local rp = em.roleplay and "|cff00ff00On|r" or "|cff888888Off|r"
-            p.emotesStatusText:SetText("NPC Talk: " .. npcT .. " | Facing: " .. face .. " | Bot Talk: " .. botT .. " | RP: " .. rp)
-        else
-            p.emotesStatusText:SetText("NPC Talk: |cff00ff00On|r | Facing: |cff00ff005s|r | Bot Talk: |cff888888Off|r | RP: |cff888888Off|r")
-        end
-    end
-
-    -- Interactive 0-Token Emotes & Social Spread (Section 25B)
-    if p.interactiveEmotesStatusText then
-        if em and em.interactive then
-            p.interactiveEmotesStatusText:SetText("|cff00ff00Active|r (Bot Mirror: " .. (em.botMirrorCh or 80) .. "% | Mood Spread: " .. (em.moodSpreadCh or 50) .. "% | NPC Mirror: " .. (em.npcMirrorEn and "On" or "Off") .. ")")
-        else
-            p.interactiveEmotesStatusText:SetText("|cff888888Disabled|r")
-        end
-    end
-
-    -- Solo NPC Banter & World Events (Sections 10 & 11)
-    local feat = self.serverFeatures
-    if p.eventsStatusText then
-        if feat then
-            local npcChat = feat.npcChatter and "|cff00ff00Active|r" or "|cff888888Disabled|r"
-            local evChat = feat.eventChat and "|cff00ff00Active|r" or "|cff888888Disabled|r"
-            p.eventsStatusText:SetText("Solo NPC Banter: " .. npcChat .. " | World Events: " .. evChat)
-        else
-            p.eventsStatusText:SetText("Solo NPC Banter: |cff888888Disabled|r | World Events: |cff00ff00Active|r")
-        end
-    end
+    -- Subsections below Conversation Threads have been removed for a clean, lightweight UI
 end
 
 function AzerothVoices:HandlePayload(payload)
