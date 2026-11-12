@@ -4,10 +4,10 @@ AzerothVoices.checkedBots = {}
 AzerothVoices.rosterFilter = "all"
 
 function AzerothVoices:IsPartyMember(name)
-    if not name or name == "" then return false end
+    if not name or name == "" or not UnitName then return false end
     local lowerName = string.lower(name)
-    local numParty = GetNumPartyMembers()
-    if numParty and numParty > 0 then
+    local numParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
+    if numParty > 0 then
         for i = 1, numParty do
             local pName = UnitName("party" .. i)
             if pName and string.lower(pName) == lowerName then
@@ -15,8 +15,8 @@ function AzerothVoices:IsPartyMember(name)
             end
         end
     end
-    local numRaid = GetNumRaidMembers()
-    if numRaid and numRaid > 0 then
+    local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
+    if numRaid > 0 then
         for i = 1, numRaid do
             local rName = UnitName("raid" .. i)
             if rName and string.lower(rName) == lowerName then
@@ -28,10 +28,10 @@ function AzerothVoices:IsPartyMember(name)
 end
 
 function AzerothVoices:GetPartyMemberClass(name)
-    if not name or name == "" then return nil end
+    if not name or name == "" or not UnitName or not UnitClass then return nil end
     local lowerName = string.lower(name)
-    local numParty = GetNumPartyMembers()
-    if numParty and numParty > 0 then
+    local numParty = (GetNumPartyMembers and GetNumPartyMembers()) or 0
+    if numParty > 0 then
         for i = 1, numParty do
             local pName = UnitName("party" .. i)
             if pName and string.lower(pName) == lowerName then
@@ -40,8 +40,8 @@ function AzerothVoices:GetPartyMemberClass(name)
             end
         end
     end
-    local numRaid = GetNumRaidMembers()
-    if numRaid and numRaid > 0 then
+    local numRaid = (GetNumRaidMembers and GetNumRaidMembers()) or 0
+    if numRaid > 0 then
         for i = 1, numRaid do
             local rName = UnitName("raid" .. i)
             if rName and string.lower(rName) == lowerName then

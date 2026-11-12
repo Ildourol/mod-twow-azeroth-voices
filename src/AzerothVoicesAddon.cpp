@@ -451,6 +451,31 @@ namespace AzerothVoices
             return line.str();
         }
 
+        std::string LogicalSentiment(uint64_t guid, int32_t score)
+        {
+            return "SENTIMENT " + std::to_string(guid) + " " + std::to_string(score);
+        }
+
+        std::string LogicalBotStatus(uint64_t guid, std::string const& readiness,
+                                     uint32_t cooldownRemaining, std::string const& mood,
+                                     bool inCombat)
+        {
+            return "BOT_STATUS " + std::to_string(guid) + " " +
+                   Encode(readiness) + " " +
+                   std::to_string(cooldownRemaining) + " " +
+                   Encode(mood) + " " +
+                   (inCombat ? "1" : "0");
+        }
+
+        std::string LogicalMemories(uint64_t guid, std::vector<std::string> const& memories)
+        {
+            std::ostringstream line;
+            line << "MEMORIES " << guid << ' ' << memories.size();
+            for (std::string const& mem : memories)
+                line << ' ' << Encode(mem);
+            return line.str();
+        }
+
         std::string Response(std::string const& payload)
         {
             return std::string(SystemPrefix) + payload;

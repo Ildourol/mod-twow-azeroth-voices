@@ -104,6 +104,11 @@ namespace AzerothVoices
                                       bool general, bool listener, bool roleplay, bool interactive,
                                       uint32_t botMirrorCh, uint32_t botMirrorCd, uint32_t moodSpreadCh,
                                       bool npcMirrorEn, uint32_t npcMirrorCd, bool pvpSpectator);
+        std::string LogicalSentiment(uint64_t guid, int32_t score);
+        std::string LogicalBotStatus(uint64_t guid, std::string const& readiness,
+                                     uint32_t cooldownRemaining, std::string const& mood,
+                                     bool inCombat);
+        std::string LogicalMemories(uint64_t guid, std::vector<std::string> const& memories);
 
         // Legacy Chatter response builders (wrapped with "CHATTER_ADDON ")
         std::string Response(std::string const& payload);

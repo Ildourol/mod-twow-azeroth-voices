@@ -622,6 +622,18 @@ namespace AzerothVoices
         return (nowSeconds >= it->second) && ((nowSeconds - it->second) < cooldownSeconds);
     }
 
+    uint32_t GeneralSpeakerTracker::GetRemainingCooldown(uint64_t guid, uint32_t nowSeconds, uint32_t cooldownSeconds) const
+    {
+        if (!cooldownSeconds)
+            return 0;
+        auto it = m_lastSpokeAt.find(guid);
+        if (it == m_lastSpokeAt.end())
+            return 0;
+        if (nowSeconds >= it->second && (nowSeconds - it->second) < cooldownSeconds)
+            return cooldownSeconds - (nowSeconds - it->second);
+        return 0;
+    }
+
     void GeneralSpeakerTracker::RecordSpeech(uint64_t guid, uint32_t nowSeconds)
     {
         m_lastSpokeAt[guid] = nowSeconds;

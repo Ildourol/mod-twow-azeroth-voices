@@ -8590,11 +8590,93 @@ namespace AzerothVoices
                 {
                     logicalPayloads.push_back(Addon::LogicalProfile(command.guid, botName, {}, ""));
                     logicalPayloads.push_back(Addon::LogicalBackstory(command.guid, ""));
-                    return true;
                 }
-                logicalPayloads.push_back(Addon::LogicalProfile(command.guid, botName,
-                    personality.traits, personality.tone));
-                logicalPayloads.push_back(Addon::LogicalBackstory(command.guid, personality.background));
+                else
+                {
+                    logicalPayloads.push_back(Addon::LogicalProfile(command.guid, botName,
+                        personality.traits, personality.tone));
+                    logicalPayloads.push_back(Addon::LogicalBackstory(command.guid, personality.background));
+                }
+
+                // 1. Live Sentiment Score
+                SentimentRecord sentiment;
+                LoadSentiment(SentimentKey{command.guid, playerGuid}, sentiment);
+                logicalPayloads.push_back(Addon::LogicalSentiment(command.guid, sentiment.score));
+
+                // 2. Real-time Dialogue Readiness & Live Tactical Mood
+                std::string readiness = "Offline";
+                uint32_t remCd = 0;
+                std::string mood = "Relaxed";
+                bool inCombat = false;
+                uint32_t const nowSeconds = static_cast<uint32_t>(time(nullptr));
+
+                Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(command.guid));
+                if (bot && bot->IsInWorld())
+                {
+                    inCombat = bot->IsInCombat();
+                    if (!bot->IsAlive())
+                    {
+                        readiness = "Defeated";
+                        mood = "Fallen";
+                    }
+                    else if (inCombat)
+                    {
+                        readiness = "In Combat";
+                        uint32_t const maxHp = bot->GetMaxHealth();
+                        uint32_t const hpPct = maxHp ? (bot->GetHealth() * 100 / maxHp) : 100;
+                        if (hpPct <= 25)
+                            mood = "Desperate";
+                        else if (hpPct <= 50)
+                            mood = "Hard-Pressed";
+                        else
+                            mood = "Combat Alert";
+                    }
+                    else
+                    {
+                        if (bot->GetGroup())
+                            remCd = m_groupSpeakerTracker.GetRemainingCooldown(command.guid, nowSeconds, m_config->groupBotSpeakerCooldownSeconds);
+                        else
+                            remCd = m_generalSpeakerTracker.GetRemainingCooldown(command.guid, nowSeconds, m_config->generalBotSpeakerCooldownSeconds);
+
+                        if (remCd > 0)
+                            readiness = "Resting";
+                        else
+                            readiness = "Ready";
+
+                        uint32_t const maxHp = bot->GetMaxHealth();
+                        uint32_t const hpPct = maxHp ? (bot->GetHealth() * 100 / maxHp) : 100;
+                        uint32_t const maxMana = bot->GetMaxPower(POWER_MANA);
+                        uint32_t const manaPct = maxMana ? (bot->GetPower(POWER_MANA) * 100 / maxMana) : 100;
+
+                        if (hpPct <= 50)
+                            mood = "Wounded";
+                        else if (maxMana > 0 && manaPct <= 20)
+                            mood = "Exhausted (Low Mana)";
+                        else if (sentiment.score >= 40)
+                            mood = "Warm / Cheerful";
+                        else if (sentiment.score <= -20)
+                            mood = "Reserved / Distant";
+                        else
+                            mood = "Relaxed";
+                    }
+                }
+                logicalPayloads.push_back(Addon::LogicalBotStatus(command.guid, readiness, remCd, mood, inCombat));
+
+                // 3. Shared Episodic Memories Log
+                MemoryKey memKey{command.guid, playerGuid};
+                LoadMemories(memKey);
+                std::vector<std::string> memorySummaries;
+                auto itMem = m_memories.find(memKey);
+                if (itMem != m_memories.end())
+                {
+                    for (size_t i = 0; i < itMem->second.size() && memorySummaries.size() < 4; ++i)
+                    {
+                        if (!itMem->second[i].summary.empty())
+                            memorySummaries.push_back(itMem->second[i].summary);
+                    }
+                }
+                logicalPayloads.push_back(Addon::LogicalMemories(command.guid, memorySummaries));
+
                 return true;
             }
 

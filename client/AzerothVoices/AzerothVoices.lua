@@ -34,6 +34,8 @@ AzerothVoices.serverFeatures = nil
 AzerothVoices.multiAddressedState = nil
 AzerothVoices.gossipState = nil
 AzerothVoices.emotesState = nil
+AzerothVoices.botStatus = {}
+AzerothVoices.botMemories = {}
 
 local SEND_INTERVAL = 0.3
 local SAVE_LOCK_TIMEOUT = 20
@@ -401,6 +403,158 @@ function AzerothVoices:ResetSentiment()
     end
 end
 
+function AzerothVoices:UpdateBotStatusUI()
+    local p = self.frame
+    if not p then return end
+    local rBadge = p.readinessBadge
+    local mBadge = p.moodBadge
+    if not rBadge and not mBadge then return end
+
+    local guid = self.selectedGuid
+    local st = guid and self.botStatus and self.botStatus[guid]
+
+    if not guid or not st then
+        if rBadge then rBadge:SetText("|cff888888Select a bot|r") end
+        if mBadge then mBadge:SetText("|cff888888Tactical Mood: -|r") end
+        return
+    end
+
+    if rBadge then
+        if st.readiness == "Ready" then
+            rBadge:SetText("|cff00ff00● Ready to Chat|r")
+        elseif st.readiness == "Resting" then
+            local cd = tonumber(st.cooldown) or 0
+            if cd > 0 then
+                rBadge:SetText("|cffffd100⏱ Resting (" .. cd .. "s)|r")
+            else
+                rBadge:SetText("|cff00ff00● Ready to Chat|r")
+            end
+        elseif st.readiness == "In Combat" then
+            rBadge:SetText("|cffff4444⚔ In Combat (Suppressed)|r")
+        elseif st.readiness == "Defeated" then
+            rBadge:SetText("|cff888888✝ Defeated / Dead|r")
+        else
+            rBadge:SetText("|cffaaaaaa" .. (st.readiness or "Offline") .. "|r")
+        end
+    end
+
+    if mBadge then
+        local mood = st.mood or "Relaxed"
+        mBadge:SetText("|cffffd100Tactical Mood:|r |cffffffff" .. mood .. "|r")
+    end
+end
+
+function AzerothVoices:UpdateBotStatusTimer()
+    if not self.botStatus then return end
+    local changed = false
+    for guid, st in pairs(self.botStatus) do
+        if st.readiness == "Resting" and st.cooldown and st.cooldown > 0 then
+            st.cooldown = st.cooldown - 1
+            if st.cooldown <= 0 then
+                st.cooldown = 0
+                st.readiness = "Ready"
+            end
+            if guid == self.selectedGuid then
+                changed = true
+            end
+        end
+    end
+    if changed and self.frame and self.frame:IsShown() then
+        self:UpdateBotStatusUI()
+    end
+end
+
+function AzerothVoices:UpdateMemoriesUI()
+    local p = self.frame
+    if not p then return end
+    local l1 = p.memory1
+    local l2 = p.memory2
+    local l3 = p.memory3
+    if not l1 then return end
+
+    local guid = self.selectedGuid
+    if not guid then
+        l1:SetText("|cff888888Select a bot to view shared episodic memories.|r")
+        if l2 then l2:SetText("") end
+        if l3 then l3:SetText("") end
+        return
+    end
+
+    local mems = self.botMemories and self.botMemories[guid]
+    local count = (mems and table.getn(mems)) or 0
+    if count == 0 then
+        l1:SetText("|cff888888• No shared episodic memories recorded yet.|r")
+        if l2 then l2:SetText("") end
+        if l3 then l3:SetText("") end
+        return
+    end
+
+    l1:SetText("|cffffd100•|r " .. (mems[1] or ""))
+    if l2 then
+        if count >= 2 and mems[2] then
+            l2:SetText("|cffffd100•|r " .. mems[2])
+        else
+            l2:SetText("")
+        end
+    end
+    if l3 then
+        if count >= 3 and mems[3] then
+            l3:SetText("|cffffd100•|r " .. mems[3])
+        else
+            l3:SetText("")
+        end
+    end
+end
+
+function AzerothVoices:GetNearbyPartyBot()
+    if not GetNumPartyMembers or not UnitName then return nil end
+    local num = GetNumPartyMembers() or 0
+    if num == 0 or not self.roster then return nil end
+    local rosterCount = table.getn(self.roster)
+    for i = 1, num do
+        local name = UnitName("party" .. i)
+        if name then
+            local lowerName = string.lower(name)
+            for j = 1, rosterCount do
+                local b = self.roster[j]
+                if b and b.name and string.lower(b.name) == lowerName then
+                    return b.name
+                end
+            end
+        end
+    end
+    return nil
+end
+
+function AzerothVoices:UpdateTargetSeamUI()
+    local p = self.frame
+    if not p or not p.targetSeamText then return end
+
+    if not UnitExists or not UnitExists("target") then
+        p.targetSeamText:SetText("|cff888888Target:|r |cff666666None|r")
+        return
+    end
+
+    local name = (UnitName and UnitName("target")) or "Target"
+    if UnitIsPlayer and UnitIsPlayer("target") then
+        p.targetSeamText:SetText("|cff888888Target:|r |cff00ccff[" .. name .. "]|r")
+        return
+    end
+
+    local reaction = (UnitReaction and UnitReaction("target", "player")) or 4
+    if reaction < 4 then
+        p.targetSeamText:SetText("|cff888888Target:|r |cffff4444[" .. name .. "] (Hostile)|r")
+        return
+    end
+
+    local obs = self:GetNearbyPartyBot()
+    if obs then
+        p.targetSeamText:SetText("|cffffd100NPC:|r |cff00ff00[" .. name .. "]|r Ready |cff888888(|rObs: |cff00ccff" .. obs .. "|cff888888)|r")
+    else
+        p.targetSeamText:SetText("|cffffd100NPC:|r |cff00ff00[" .. name .. "]|r Ready (/say)")
+    end
+end
+
 function AzerothVoices:SetSaveEnabled(enabled)
     if self.frame and self.frame.saveBtn then
         if enabled then
@@ -667,6 +821,8 @@ function AzerothVoices:SelectBot(guid)
 
     local savedScore = (AzerothVoicesDB and AzerothVoicesDB.sentiments and AzerothVoicesDB.sentiments[guid]) or 0
     self:UpdateSentimentBar(savedScore)
+    self:UpdateBotStatusUI()
+    self:UpdateMemoriesUI()
 
     local empty = { trait1 = "", trait2 = "", trait3 = "", tone = "", backstory = "" }
     self:ApplyProfileToPanel(self.frame, empty)
@@ -984,6 +1140,8 @@ function AzerothVoices:FinishRoster()
         self:StopTonePoll()
         self:StopBackstoryPoll()
         self:UpdateSentimentBar(0)
+        self:UpdateBotStatusUI()
+        self:UpdateMemoriesUI()
         self:SetSaveEnabled(false)
         self:SetRegenStoryEnabled(false)
         self:UpdateRosterViews()
@@ -1610,6 +1768,67 @@ function AzerothVoices:HandlePayload(payload)
 
     if command == "ERROR" then
         self:HandleErrorPayload(rest)
+        return
+    end
+
+    if command == "SENTIMENT" then
+        local _, _, guidStr, scoreStr = string.find(rest, "^(%d+)%s+([%-%d]+)")
+        if guidStr and scoreStr then
+            local guid = tonumber(guidStr)
+            local score = tonumber(scoreStr) or 0
+            if guid == self.selectedGuid then
+                self:UpdateSentimentBar(score)
+            end
+            if AzerothVoicesDB then
+                AzerothVoicesDB.sentiments = AzerothVoicesDB.sentiments or {}
+                AzerothVoicesDB.sentiments[guid] = score
+            end
+        end
+        return
+    end
+
+    if command == "BOT_STATUS" then
+        local _, _, guidStr, readinessEnc, cdStr, moodEnc, combatStr =
+            string.find(rest, "^(%d+)%s+(%S+)%s+(%d+)%s+(%S+)%s+(%d+)")
+        if guidStr and readinessEnc then
+            local guid = tonumber(guidStr)
+            local readiness = self:Decode(readinessEnc)
+            local cd = tonumber(cdStr) or 0
+            local mood = self:Decode(moodEnc)
+            local inCombat = (combatStr == "1")
+            self.botStatus = self.botStatus or {}
+            self.botStatus[guid] = {
+                readiness = readiness,
+                cooldown = cd,
+                mood = mood,
+                inCombat = inCombat,
+                updatedAt = GetTime()
+            }
+            if guid == self.selectedGuid then
+                self:UpdateBotStatusUI()
+            end
+        end
+        return
+    end
+
+    if command == "MEMORIES" then
+        local _, _, guidStr, countStr, memTokens = string.find(rest, "^(%d+)%s+(%d+)%s*(.*)$")
+        if guidStr and countStr then
+            local guid = tonumber(guidStr)
+            local count = tonumber(countStr) or 0
+            local memList = {}
+            if count > 0 and memTokens and memTokens ~= "" then
+                for token in string.gfind(memTokens, "%S+") do
+                    table.insert(memList, self:Decode(token))
+                end
+            end
+            self.botMemories = self.botMemories or {}
+            self.botMemories[guid] = memList
+            if guid == self.selectedGuid then
+                self:UpdateMemoriesUI()
+            end
+        end
+        return
     end
 end
 
@@ -1768,6 +1987,12 @@ AzerothVoices:SetScript("OnUpdate", function()
     self:HandleTonePoll(elapsed)
     self:HandleBackstoryPoll(elapsed)
     self:HandleGenerateAll(elapsed)
+
+    self.statusElapsed = (self.statusElapsed or 0) + elapsed
+    if self.statusElapsed >= 1.0 then
+        self.statusElapsed = 0
+        self:UpdateBotStatusTimer()
+    end
 end)
 
 function AzerothVoices:HandleSystemMessage(msg)
@@ -1817,6 +2042,13 @@ AzerothVoices:SetScript("OnEvent", function()
         if self.rosterFilter == "party" and self.frame and self.frame:IsShown() then
             self:UpdateRosterViews()
         end
+        if self.frame and self.frame:IsShown() then
+            self:UpdateTargetSeamUI()
+        end
+    elseif currentEvent == "PLAYER_TARGET_CHANGED" then
+        if self.frame and self.frame:IsShown() then
+            self:UpdateTargetSeamUI()
+        end
     end
 end)
 
@@ -1826,3 +2058,4 @@ AzerothVoices:RegisterEvent("CHAT_MSG_ADDON")
 AzerothVoices:RegisterEvent("CHAT_MSG_SYSTEM")
 AzerothVoices:RegisterEvent("PARTY_MEMBERS_CHANGED")
 AzerothVoices:RegisterEvent("RAID_ROSTER_UPDATE")
+AzerothVoices:RegisterEvent("PLAYER_TARGET_CHANGED")

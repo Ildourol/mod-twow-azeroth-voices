@@ -322,6 +322,29 @@ function AzerothVoices:BuildEditor(panel)
     local title = createLabel(panel, "Azeroth Voices", 16, -12)
     title:SetFontObject(GameFontNormalLarge)
 
+    local targetSeamText = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    targetSeamText:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -36, -14)
+    targetSeamText:SetWidth(320)
+    targetSeamText:SetHeight(16)
+    targetSeamText:SetJustifyH("RIGHT")
+    targetSeamText:SetText("|cff888888Target:|r |cff666666None|r")
+    panel.targetSeamText = targetSeamText
+    w.targetSeamText = targetSeamText
+
+    local targetSeamBtn = CreateFrame("Button", nil, panel)
+    targetSeamBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -36, -10)
+    targetSeamBtn:SetWidth(320)
+    targetSeamBtn:SetHeight(20)
+    targetSeamBtn:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_BOTTOMRIGHT")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("Targeted NPC Dialogue Seam", 1, 0.82, 0)
+        GameTooltip:AddLine("When you target a friendly NPC and speak in /say, the LLM engine engages that NPC directly in dialogue.", 1, 1, 1, 1)
+        GameTooltip:AddLine("Nearby companion bots will listen and contribute as conversational observers.", 0.2, 0.85, 0.5, 1)
+        GameTooltip:Show()
+    end)
+    targetSeamBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     local hint = createLabel(panel,
         "Click a bot name to edit traits. Check bots to forget memories.", 16, -28)
     hint:SetFontObject(GameFontHighlightSmall)
@@ -716,15 +739,120 @@ function AzerothVoices:BuildEditor(panel)
     panel.sentimentScaleHigh = scaleHigh
     w.scaleHigh = scaleHigh
 
-    content:SetHeight(488)
+    content:SetHeight(840)
+
+    -- Dialogue Readiness & Live Tactical Mood Strip
+    local statusStrip = CreateFrame("Frame", nil, content)
+    statusStrip:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -494)
+    statusStrip:SetWidth(contentWidth)
+    statusStrip:SetHeight(22)
+    statusStrip:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 8,
+        edgeSize = 8,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 }
+    })
+    statusStrip:SetBackdropColor(0.06, 0.06, 0.08, 0.9)
+    statusStrip:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
+
+    local readinessBadge = statusStrip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    readinessBadge:SetPoint("LEFT", statusStrip, "LEFT", 8, 0)
+    readinessBadge:SetText("|cff00ff00● Ready to Chat|r")
+    panel.readinessBadge = readinessBadge
+    w.readinessBadge = readinessBadge
+
+    local moodBadge = statusStrip:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    moodBadge:SetPoint("RIGHT", statusStrip, "RIGHT", -8, 0)
+    moodBadge:SetText("|cffffd100Tactical Mood:|r |cffffffffRelaxed|r")
+    panel.moodBadge = moodBadge
+    w.moodBadge = moodBadge
+
+    statusStrip:EnableMouse(true)
+    statusStrip:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("Live Tactical Mood & Dialogue Readiness", 1, 0.82, 0)
+        GameTooltip:AddLine("Dialogue Readiness: Shows whether this bot is ready to chat, resting on cooldown, or suppressed in combat.", 1, 1, 1, 1)
+        GameTooltip:AddLine("Tactical Mood: Emotional state dynamically derived from party health, mana latches, wipes, and affinity.", 0.8, 0.8, 0.8, 1)
+        GameTooltip:Show()
+    end)
+    statusStrip:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    statusStrip:EnableMouseWheel(true)
+    statusStrip:SetScript("OnMouseWheel", onEditorMouseWheel)
+    panel.statusStrip = statusStrip
+    w.statusStrip = statusStrip
+
+    -- Shared Episodic Memories Log
+    local lMemories = createLabel(content, "Shared Episodic Memories", 0, -522)
+    panel.memoriesLabel = lMemories
+    w.lMemories = lMemories
+
+    local memoryHolder = CreateFrame("Frame", nil, content)
+    memoryHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -540)
+    memoryHolder:SetWidth(contentWidth)
+    memoryHolder:SetHeight(62)
+    memoryHolder:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 8,
+        edgeSize = 10,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 }
+    })
+    memoryHolder:SetBackdropColor(0.04, 0.04, 0.06, 0.9)
+    memoryHolder:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
+
+    local memory1 = memoryHolder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    memory1:SetPoint("TOPLEFT", memoryHolder, "TOPLEFT", 8, -6)
+    memory1:SetWidth(contentWidth - 16)
+    memory1:SetHeight(16)
+    memory1:SetJustifyH("LEFT")
+    memory1:SetText("|cff888888• No shared episodic memories recorded yet.|r")
+    panel.memory1 = memory1
+    w.memory1 = memory1
+
+    local memory2 = memoryHolder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    memory2:SetPoint("TOPLEFT", memoryHolder, "TOPLEFT", 8, -24)
+    memory2:SetWidth(contentWidth - 16)
+    memory2:SetHeight(16)
+    memory2:SetJustifyH("LEFT")
+    memory2:SetText("")
+    panel.memory2 = memory2
+    w.memory2 = memory2
+
+    local memory3 = memoryHolder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    memory3:SetPoint("TOPLEFT", memoryHolder, "TOPLEFT", 8, -42)
+    memory3:SetWidth(contentWidth - 16)
+    memory3:SetHeight(16)
+    memory3:SetJustifyH("LEFT")
+    memory3:SetText("")
+    panel.memory3 = memory3
+    w.memory3 = memory3
+
+    memoryHolder:EnableMouse(true)
+    memoryHolder:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("Shared Episodic Memories Log", 1, 0.82, 0)
+        GameTooltip:AddLine("Verified factual milestones (boss kills, dungeon clears, notable quest turn-ins, wipes) recorded between you and this bot.", 1, 1, 1, 1)
+        GameTooltip:AddLine("These memories are permanently stored by the C++ engine and actively injected into LLM prompts for deep roleplay continuity.", 0.2, 0.85, 0.5, 1)
+        GameTooltip:Show()
+    end)
+    memoryHolder:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    memoryHolder:EnableMouseWheel(true)
+    memoryHolder:SetScript("OnMouseWheel", onEditorMouseWheel)
+    panel.memoryHolder = memoryHolder
+    w.memoryHolder = memoryHolder
 
     -- Server-wide language capability (read only).
-    local lLanguage = createLabel(content, "Server languages", 0, -488)
+    local lLanguage = createLabel(content, "Server languages", 0, -610)
     panel.languageLabel = lLanguage
     w.lLanguage = lLanguage
 
     local langHeaderBtn = CreateFrame("Button", nil, content)
-    langHeaderBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -486)
+    langHeaderBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -608)
     langHeaderBtn:SetWidth(180)
     langHeaderBtn:SetHeight(20)
     langHeaderBtn:SetBackdrop({
@@ -761,16 +889,16 @@ function AzerothVoices:BuildEditor(panel)
     end)
 
     local lLangSource = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    lLangSource:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -508)
+    lLangSource:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -630)
     lLangSource:SetWidth(contentWidth)
-    lLangSource:SetHeight(66)
+    lLangSource:SetHeight(40)
     lLangSource:SetJustifyH("LEFT")
     lLangSource:SetText(AzerothVoices.serverLanguageSummary or "Waiting for server language settings...")
     panel.languageSourceText = lLangSource
     w.lLangSource = lLangSource
 
     -- Stateful Conversation Threads (Energy, Drift & Callbacks)
-    local lThread = createLabel(content, "Conversation Threads", 0, -580)
+    local lThread = createLabel(content, "Conversation Threads", 0, -676)
     lThread:SetWidth(contentWidth - 80)
     panel.threadLabel = lThread
     w.lThread = lThread
@@ -778,13 +906,16 @@ function AzerothVoices:BuildEditor(panel)
     local threadRefreshBtn = button(content, "Refresh", 72, function()
         AzerothVoices:RequestThreadStatus()
     end, 22)
-    threadRefreshBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -576)
-    threadRefreshBtn:SetFrameLevel(content:GetFrameLevel() + 5)
+    threadRefreshBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -672)
+    if threadRefreshBtn.SetFrameLevel then
+        local lvl = (content.GetFrameLevel and content:GetFrameLevel()) or 1
+        threadRefreshBtn:SetFrameLevel(lvl + 5)
+    end
     panel.threadRefreshBtn = threadRefreshBtn
     w.threadRefreshBtn = threadRefreshBtn
 
     local threadBarHolder = CreateFrame("Frame", nil, content)
-    threadBarHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -604)
+    threadBarHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -700)
     threadBarHolder:SetWidth(contentWidth)
     threadBarHolder:SetHeight(18)
     threadBarHolder:SetBackdrop({
@@ -871,25 +1002,25 @@ function AzerothVoices:BuildEditor(panel)
     w.threadScaleHigh = threadScaleHigh
 
     local threadTopicText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    threadTopicText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -638)
+    threadTopicText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -738)
     threadTopicText:SetWidth(contentWidth)
-    threadTopicText:SetHeight(28)
+    threadTopicText:SetHeight(26)
     threadTopicText:SetJustifyH("LEFT")
     threadTopicText:SetText("|cffffd100Active Topic:|r None (Idle banter)")
     panel.threadTopicText = threadTopicText
     w.threadTopicText = threadTopicText
 
     local threadOpenPointText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    threadOpenPointText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -668)
+    threadOpenPointText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -766)
     threadOpenPointText:SetWidth(contentWidth)
-    threadOpenPointText:SetHeight(28)
+    threadOpenPointText:SetHeight(26)
     threadOpenPointText:SetJustifyH("LEFT")
     threadOpenPointText:SetText("|cffffd100Open Question / Point:|r None")
     panel.threadOpenPointText = threadOpenPointText
     w.threadOpenPointText = threadOpenPointText
 
     local threadCallbacksText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    threadCallbacksText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -698)
+    threadCallbacksText:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -794)
     threadCallbacksText:SetWidth(contentWidth)
     threadCallbacksText:SetHeight(38)
     threadCallbacksText:SetJustifyH("LEFT")
@@ -942,13 +1073,17 @@ function AzerothVoices:BuildEditor(panel)
             w.barHolder:ClearAllPoints(); w.barHolder:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -236); w.barHolder:Show()
             w.scaleLow:Show(); w.scaleMid:Show(); w.scaleHigh:Show()
 
+            w.statusStrip:ClearAllPoints(); w.statusStrip:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -276); w.statusStrip:Show()
+            w.lMemories:ClearAllPoints(); w.lMemories:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -304); w.lMemories:Show()
+            w.memoryHolder:ClearAllPoints(); w.memoryHolder:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -322); w.memoryHolder:Show()
+
             w.lLanguage:Hide(); w.lLangSource:Hide()
             if w.langHeaderButton then w.langHeaderButton:Hide() end
             w.lThread:Hide(); w.threadRefreshBtn:Hide(); w.threadBarHolder:Hide()
             w.threadScaleLow:Hide(); w.threadScaleMid:Hide(); w.threadScaleHigh:Hide()
             w.threadTopicText:Hide(); w.threadOpenPointText:Hide(); w.threadCallbacksText:Hide()
 
-            w.content:SetHeight(280)
+            w.content:SetHeight(396)
         elseif mode == "stories" then
             w.l1:Hide(); w.t1.holder:Hide()
             w.l2:Hide(); w.t2.holder:Hide()
@@ -966,6 +1101,7 @@ function AzerothVoices:BuildEditor(panel)
 
             w.lSentiment:Hide(); w.barHolder:Hide(); w.resetSentimentBtn:Hide()
             w.scaleLow:Hide(); w.scaleMid:Hide(); w.scaleHigh:Hide()
+            w.statusStrip:Hide(); w.lMemories:Hide(); w.memoryHolder:Hide()
 
             w.lLanguage:Hide(); w.lLangSource:Hide()
             if w.langHeaderButton then w.langHeaderButton:Hide() end
@@ -983,6 +1119,7 @@ function AzerothVoices:BuildEditor(panel)
             w.lStory:Hide(); panel.backstory:Hide(); w.regenStoryBtn:Hide(); w.regenAllBtn:Hide()
             w.lSentiment:Hide(); w.barHolder:Hide(); w.resetSentimentBtn:Hide()
             w.scaleLow:Hide(); w.scaleMid:Hide(); w.scaleHigh:Hide()
+            w.statusStrip:Hide(); w.lMemories:Hide(); w.memoryHolder:Hide()
 
             w.lLanguage:ClearAllPoints(); w.lLanguage:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, 0); w.lLanguage:Show()
             if w.langHeaderButton then
@@ -1020,21 +1157,25 @@ function AzerothVoices:BuildEditor(panel)
             w.barHolder:ClearAllPoints(); w.barHolder:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -450); w.barHolder:Show()
             w.scaleLow:Show(); w.scaleMid:Show(); w.scaleHigh:Show()
 
-            w.lLanguage:ClearAllPoints(); w.lLanguage:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -488); w.lLanguage:Show()
+            w.statusStrip:ClearAllPoints(); w.statusStrip:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -494); w.statusStrip:Show()
+            w.lMemories:ClearAllPoints(); w.lMemories:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -522); w.lMemories:Show()
+            w.memoryHolder:ClearAllPoints(); w.memoryHolder:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -540); w.memoryHolder:Show()
+
+            w.lLanguage:ClearAllPoints(); w.lLanguage:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -610); w.lLanguage:Show()
             if w.langHeaderButton then
-                w.langHeaderButton:ClearAllPoints(); w.langHeaderButton:SetPoint("TOPRIGHT", w.content, "TOPLEFT", contentWidth, -486); w.langHeaderButton:Show()
+                w.langHeaderButton:ClearAllPoints(); w.langHeaderButton:SetPoint("TOPRIGHT", w.content, "TOPLEFT", contentWidth, -608); w.langHeaderButton:Show()
             end
-            w.lLangSource:ClearAllPoints(); w.lLangSource:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -508); w.lLangSource:Show()
+            w.lLangSource:ClearAllPoints(); w.lLangSource:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -630); w.lLangSource:Show()
 
-            w.lThread:ClearAllPoints(); w.lThread:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -580); w.lThread:Show()
-            w.threadRefreshBtn:ClearAllPoints(); w.threadRefreshBtn:SetPoint("TOPRIGHT", w.content, "TOPLEFT", contentWidth, -576); w.threadRefreshBtn:Show()
-            w.threadBarHolder:ClearAllPoints(); w.threadBarHolder:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -604); w.threadBarHolder:Show()
+            w.lThread:ClearAllPoints(); w.lThread:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -676); w.lThread:Show()
+            w.threadRefreshBtn:ClearAllPoints(); w.threadRefreshBtn:SetPoint("TOPRIGHT", w.content, "TOPLEFT", contentWidth, -672); w.threadRefreshBtn:Show()
+            w.threadBarHolder:ClearAllPoints(); w.threadBarHolder:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -700); w.threadBarHolder:Show()
             w.threadScaleLow:Show(); w.threadScaleMid:Show(); w.threadScaleHigh:Show()
-            w.threadTopicText:ClearAllPoints(); w.threadTopicText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -638); w.threadTopicText:Show()
-            w.threadOpenPointText:ClearAllPoints(); w.threadOpenPointText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -668); w.threadOpenPointText:Show()
-            w.threadCallbacksText:ClearAllPoints(); w.threadCallbacksText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -698); w.threadCallbacksText:Show()
+            w.threadTopicText:ClearAllPoints(); w.threadTopicText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -738); w.threadTopicText:Show()
+            w.threadOpenPointText:ClearAllPoints(); w.threadOpenPointText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -766); w.threadOpenPointText:Show()
+            w.threadCallbacksText:ClearAllPoints(); w.threadCallbacksText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -794); w.threadCallbacksText:Show()
 
-            w.content:SetHeight(750)
+            w.content:SetHeight(840)
         end
 
         w.scroll:SetVerticalScroll(0)
@@ -1044,6 +1185,9 @@ function AzerothVoices:BuildEditor(panel)
         w.updateEditorScroll()
         AzerothVoices:UpdateFeaturesUI()
         AzerothVoices:UpdateThreadUI()
+        AzerothVoices:UpdateBotStatusUI()
+        AzerothVoices:UpdateMemoriesUI()
+        AzerothVoices:UpdateTargetSeamUI()
         AzerothVoices:UpdateSaveButton()
     end
 

@@ -158,6 +158,7 @@ namespace AzerothVoices
     {
     public:
         bool IsOnCooldown(uint64_t guid, uint32_t nowSeconds, uint32_t cooldownSeconds) const;
+        uint32_t GetRemainingCooldown(uint64_t guid, uint32_t nowSeconds, uint32_t cooldownSeconds) const;
         void RecordSpeech(uint64_t guid, uint32_t nowSeconds);
         void Prune(uint32_t nowSeconds, uint32_t maxTtlSeconds);
         void Clear();
