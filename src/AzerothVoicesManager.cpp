@@ -8516,7 +8516,7 @@ namespace AzerothVoices
             case Addon::CommandKind::Status:
             {
                 // LANGUAGE_INFO is already pushed at the top of HandleAddonCommandLogical
-                break;
+                return true;
             }
 
             case Addon::CommandKind::Roster:

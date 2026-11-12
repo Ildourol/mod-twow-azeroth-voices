@@ -63,7 +63,8 @@
 25. [Emotes and conversation facing](#25-emotes-and-conversation-facing) (6 settings)
 25B. [Interactive 0-Token Emotes & Social Spread](#25b-interactive-0-token-emotes--social-spread) (7 settings)
 26. [Deployment recommendations](#deployment-recommendations)
-27. [Maintenance and updates](#maintenance-and-updates)
+27. [LLM Call Lifecycle & Multi-Call Conversational Dynamics](#llm-call-lifecycle--multi-call-conversational-dynamics)
+28. [Maintenance and updates](#maintenance-and-updates)
 
 
 ---
@@ -4704,6 +4705,96 @@ AzerothVoices.Emotes.Interactive.PvPSpectatorEnable = 0
 
 Start with the defaults in `conf/mod-azeroth-voices.conf.dist`. Adjust provider credentials and request limits for your environment, then tune the relevant proximity, group, guild, and random chatter settings directly in your live configuration. Keep a copy of local overrides before updating the module.
 
-## 27. Maintenance and updates
+---
+
+## 27. LLM Call Lifecycle & Multi-Call Conversational Dynamics
+
+Understanding how and when HTTP LLM calls are generated is essential for tuning token budgets, concurrency pools, and provider rate limits (such as OpenAI RPM / TPM or local Ollama / vLLM thread counts).
+
+### A. Single-Turn Call Frequency
+
+When an event or message triggers an actor to speak, `AzerothVoicesManager` dispatches a request to the provider (`Provider::Execute`):
+
+| Condition | LLM Calls for that Turn | Technical Lifecycle & Reason |
+| :--- | :---: | :--- |
+| **Standard Turn** | **1 call** | Bot generates response text and extracts sentiment/emotes/intent within a single round-trip. |
+| **Provider Thinking / Reasoning Fallback** | **2 calls** | If the configured LLM endpoint rejects the reasoning parameter (`o1`/`o3`/`DeepSeek-R1`/`Gemini-Thinking`), `AzerothVoicesManager` automatically retries the exact same prompt immediately with `suppressReasoning = true`. |
+| **Language Protocol Violation Repair** | **2 calls** | If `AzerothVoices.Language.Repair = 1` and the LLM responds in the wrong alphabet/language format, the module executes a second repair call (`repair.systemPrompt += "\nYour previous response violated the language protocol..."`). |
+| **Intent & Sentiment Extraction** | **0 extra calls** | Intent analysis (`AzerothVoicesIntent.cpp`) is computed locally in C++ with rule heuristics; Sentiment score adjustment is returned inside the same response JSON or delta tag (`ExtractSentimentDelta`). Zero extra API calls. |
+
+---
+
+### B. Multi-Call Conversational Dynamics (Between Conversations & Scenes)
+
+Across broader interactions, multiple LLM calls chain together depending on the conversation scope and configuration:
+
+#### 1. 1-on-1 Whisper Dialogue (Direct Conversation)
+* **Calls**: **1 LLM call per message exchange**
+* **Example**:
+  1. Player whispers Bot: *"Where are we heading next?"*
+  2. Server queues 1 request $\rightarrow$ **LLM Call #1** generated $\rightarrow$ Bot whispers back: *"Heading to Redridge Mountains."*
+  3. Player replies: *"Sounds good, let's buy rations first."*
+  4. Server queues 1 request $\rightarrow$ **LLM Call #2** generated (context includes prior exchange).
+
+#### 2. Multi-Addressed Party Chat (e.g. "Hey everyone / team / guys")
+When addressing multiple bots or group chat with `AzerothVoices.MultiAddressed.Party.Enable = 1`:
+* **Calls**: **2 to 3 LLM calls per single player chat line**
+* **Example**:
+  1. Player says in Party: *"Hey team, should we pull the boss or wait for mana?"*
+  2. Intent engine detects `isMultiAddressed = true` and selects up to `MultiAddressedPartyMaxBots = 3`.
+  3. **LLM Call #1** (Healer Bot): Answers first: *"I only have 20% mana, drink first!"*
+  4. **LLM Call #2** (Tank Bot, staggered with pacing delay): *"Ready when healer is."*
+  *Result*: **2 separate LLM calls for a single player chat line.**
+
+#### 3. Bot-to-Bot Follow-Up (Automatic Question & Answer)
+When a bot speaks and ends in an open question (`MaybeQueueFollowup` / `MaybeQueueBotQuestionAnswer`):
+* **Calls**: **2 sequential LLM calls**
+* **Example**:
+  1. Player says: *"What do you think of this zone?"*
+  2. **LLM Call #1** (Bot A): *"It's dangerous here. What do you think, @RogueBot?"*
+  3. The manager detects the question directed at a bot in the party $\rightarrow$ queues an answer event.
+  4. **LLM Call #2** (RogueBot, triggered automatically after a short delay): *"Too many spiders. Keep your daggers sharp."*
+
+#### 4. Observer / Eavesdropper Bot Comments
+When a player talks to an NPC or another bot with a nearby companion bot watching (`MaybeQueueTargetedNpcObserverComment` / `MaybeQueueTargetedBotObserverComment`):
+* **Calls**: **2 LLM calls**
+* **Example**:
+  1. Player talks to NPC or target bot: *"Can you repair my armor?"*
+  2. **LLM Call #1**: NPC or target bot replies: *"That will be 4 silver."*
+  3. Companion bot rolls observer chance $\rightarrow$ **LLM Call #2**: Companion bot interjects: *"About time, your shield was looking like scrap metal!"*
+
+#### 5. Group Ambient Multi-Turn Scene (`MaybeQueueGroupTurn`)
+When bots engage in group storytelling or camp dialogue:
+* **Calls**: **3 to 5 sequential LLM calls** (1 call per turn, up to configured max turns)
+* **Example**:
+  - Turn 0: **LLM Call #1** (Bot A starts topic)
+  - Turn 1: **LLM Call #2** (Bot B replies / disagrees)
+  - Turn 2: **LLM Call #3** (Bot C chimes in or concludes topic)
+
+#### 6. Barrens World Chat AI Topics (`AzerothVoicesBarrens.cpp`)
+If Barrens chat AI topic generation is active:
+* **Calls**: **Up to 4–6 LLM calls** per scene
+  1. **LLM Call #0** (Optional): AI Topic Generation (`RequestKind::BarrensTopicGeneration`) to brainstorm an in-character Barrens topic seed.
+  2. **LLM Call #1**: Bot 1 opens the scene with a hot take or troll comment.
+  3. **LLM Call #2**: Bot 2 reacts or counters.
+  4. **LLM Call #3**: Bot 3 or Bot 1 delivers the punchline.
+
+---
+
+### C. Conversational Call Overview Reference
+
+| Interaction Pattern | Total LLM Calls | Trigger / Subsystem |
+| :--- | :---: | :--- |
+| **Standard 1-on-1 Whisper / Say** | **1** | Single direct reply (`ChatScope::Whisper`, `ChatScope::Say`) |
+| **Turn with Repair / Fallback** | **2** | 1 failed/malformed + 1 correction retry |
+| **Multi-Addressed Group Chat** | **2 – 3** | Parallel/staggered bot responses to 1 player prompt |
+| **Bot Question $\rightarrow$ Bot Answer** | **2** | Bot A asks question $\rightarrow$ Bot B automatically responds |
+| **Targeted Dialogue + Observer Comment** | **2** | Primary actor replies $\rightarrow$ observer bot comments |
+| **Group Scene / Dungeon Lore** | **3 – 5** | Multi-turn sequence across participants |
+| **Barrens Scene (+ AI Topic Gen)** | **3 – 6** | 1 topic generator + 2–4 discussion turns |
+
+---
+
+## 28. Maintenance and updates
 
 The canonical default values are the assignments in [`conf/mod-azeroth-voices.conf.dist`](../conf/mod-azeroth-voices.conf.dist), not the examples in this guide. When upgrading, compare your live configuration with that template, preserve local overrides, and check new/retired keys. This reference includes the category 24 language and category 25 emote settings reviewed on 11 November 2026; runtime validation and fallback behavior depend on the installed module revision.
