@@ -770,14 +770,16 @@ function AzerothVoices:BuildEditor(panel)
     w.lLangSource = lLangSource
 
     -- Stateful Conversation Threads (Energy, Drift & Callbacks)
-    local lThread = createLabel(content, "Conversation Threads (Energy, Drift & Callbacks)", 0, -580)
+    local lThread = createLabel(content, "Conversation Threads", 0, -580)
+    lThread:SetWidth(contentWidth - 80)
     panel.threadLabel = lThread
     w.lThread = lThread
 
-    local threadRefreshBtn = button(content, "Refresh", 60, function()
+    local threadRefreshBtn = button(content, "Refresh", 72, function()
         AzerothVoices:RequestThreadStatus()
-    end, 18)
-    threadRefreshBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -578)
+    end, 22)
+    threadRefreshBtn:SetPoint("TOPRIGHT", content, "TOPLEFT", contentWidth, -576)
+    threadRefreshBtn:SetFrameLevel(content:GetFrameLevel() + 5)
     panel.threadRefreshBtn = threadRefreshBtn
     w.threadRefreshBtn = threadRefreshBtn
 
@@ -989,7 +991,7 @@ function AzerothVoices:BuildEditor(panel)
             w.lLangSource:ClearAllPoints(); w.lLangSource:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -20); w.lLangSource:Show()
 
             w.lThread:ClearAllPoints(); w.lThread:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -92); w.lThread:Show()
-            w.threadRefreshBtn:ClearAllPoints(); w.threadRefreshBtn:SetPoint("TOPRIGHT", w.content, "TOPLEFT", contentWidth, -90); w.threadRefreshBtn:Show()
+            w.threadRefreshBtn:ClearAllPoints(); w.threadRefreshBtn:SetPoint("TOPRIGHT", w.content, "TOPLEFT", contentWidth, -88); w.threadRefreshBtn:Show()
             w.threadBarHolder:ClearAllPoints(); w.threadBarHolder:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -116); w.threadBarHolder:Show()
             w.threadScaleLow:Show(); w.threadScaleMid:Show(); w.threadScaleHigh:Show()
             w.threadTopicText:ClearAllPoints(); w.threadTopicText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -150); w.threadTopicText:Show()
@@ -1025,7 +1027,7 @@ function AzerothVoices:BuildEditor(panel)
             w.lLangSource:ClearAllPoints(); w.lLangSource:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -508); w.lLangSource:Show()
 
             w.lThread:ClearAllPoints(); w.lThread:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -580); w.lThread:Show()
-            w.threadRefreshBtn:ClearAllPoints(); w.threadRefreshBtn:SetPoint("TOPRIGHT", w.content, "TOPLEFT", contentWidth, -578); w.threadRefreshBtn:Show()
+            w.threadRefreshBtn:ClearAllPoints(); w.threadRefreshBtn:SetPoint("TOPRIGHT", w.content, "TOPLEFT", contentWidth, -576); w.threadRefreshBtn:Show()
             w.threadBarHolder:ClearAllPoints(); w.threadBarHolder:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -604); w.threadBarHolder:Show()
             w.threadScaleLow:Show(); w.threadScaleMid:Show(); w.threadScaleHigh:Show()
             w.threadTopicText:ClearAllPoints(); w.threadTopicText:SetPoint("TOPLEFT", w.content, "TOPLEFT", 0, -638); w.threadTopicText:Show()

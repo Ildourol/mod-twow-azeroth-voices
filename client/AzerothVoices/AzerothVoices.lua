@@ -1228,12 +1228,32 @@ function AzerothVoices:UpdateThreadUI()
     if not p then return end
 
     local s = self.threadState
-    if not s or not s.enabled then
+    if not s then
         if p.threadEnergyBar then
             p.threadEnergyBar:SetValue(0)
             p.threadEnergyBar:SetStatusBarColor(0.5, 0.5, 0.5)
             if p.threadEnergyBar.text then
-                p.threadEnergyBar.text:SetText("Threads: Disabled")
+                p.threadEnergyBar.text:SetText("Threads: Idle / Ready")
+            end
+        end
+        if p.threadTopicText then
+            p.threadTopicText:SetText("|cffffd100Active Topic:|r None (Idle banter)")
+        end
+        if p.threadOpenPointText then
+            p.threadOpenPointText:SetText("|cffffd100Open Question / Point:|r None")
+        end
+        if p.threadCallbacksText then
+            p.threadCallbacksText:SetText("|cffffd100Recent Discussion History (Callbacks):|r None")
+        end
+        return
+    end
+
+    if not s.enabled then
+        if p.threadEnergyBar then
+            p.threadEnergyBar:SetValue(0)
+            p.threadEnergyBar:SetStatusBarColor(0.5, 0.5, 0.5)
+            if p.threadEnergyBar.text then
+                p.threadEnergyBar.text:SetText("Threads: Disabled on Server")
             end
         end
         if p.threadTopicText then
@@ -1294,7 +1314,8 @@ function AzerothVoices:UpdateThreadUI()
 end
 
 function AzerothVoices:RequestThreadStatus()
-    self:QueueCommand("status")
+    self:SetStatus("Refreshing conversation threads...", 1, 0.82, 0)
+    self:SendCommand("status")
 end
 
 function AzerothVoices:UpdateFeaturesUI()
@@ -1397,6 +1418,7 @@ function AzerothVoices:HandlePayload(payload)
         }
 
         self:UpdateThreadUI()
+        self:SetStatus("Conversation thread status updated.", 0.2, 0.85, 0.5)
         return
     end
     if command == "ROSTER_BEGIN" then
