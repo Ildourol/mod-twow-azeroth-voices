@@ -934,6 +934,9 @@ namespace AzerothVoices
             Positive("AzerothVoices.Environment.MaximumItems", 8));
         c.environmentIncludeEquipment = sConfig.GetBoolDefault("AzerothVoices.Environment.IncludeEquipment", true);
         c.environmentIncludeBackpack = sConfig.GetBoolDefault("AzerothVoices.Environment.IncludeBackpack", false);
+        c.environmentIncludeWeather = sConfig.GetBoolDefault("AzerothVoices.Environment.IncludeWeather", true);
+        c.environmentIncludeTimeOfDay = sConfig.GetBoolDefault("AzerothVoices.Environment.IncludeTimeOfDay", true);
+        c.environmentIncludeSubNames = sConfig.GetBoolDefault("AzerothVoices.Environment.IncludeSubNames", true);
 
         c.eventChatterEnabled = sConfig.GetBoolDefault("AzerothVoices.Events.Enable", true);
         c.eventAllowNpcSay = sConfig.GetBoolDefault("AzerothVoices.Events.AllowNpcSay", true);

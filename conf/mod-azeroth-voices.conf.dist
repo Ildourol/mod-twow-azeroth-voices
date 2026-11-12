@@ -2705,6 +2705,21 @@ AzerothVoices.Environment.IncludeEquipment = 1
 #     Default:     0
 AzerothVoices.Environment.IncludeBackpack = 0
 
+# AzerothVoices.Environment.IncludeWeather
+#     Description: Includes zone weather conditions (e.g. clear, rain, snow, sandstorm).
+#     Default:     1
+AzerothVoices.Environment.IncludeWeather = 1
+
+# AzerothVoices.Environment.IncludeTimeOfDay
+#     Description: Includes game/server time of day and cycle (e.g. dawn, day, dusk, night).
+#     Default:     1
+AzerothVoices.Environment.IncludeTimeOfDay = 1
+
+# AzerothVoices.Environment.IncludeSubNames
+#     Description: Includes NPC titles/subnames and roles (e.g. <Innkeeper>, <Flight Master>).
+#     Default:     1
+AzerothVoices.Environment.IncludeSubNames = 1
+
 # --------------------------------------------
 # 18. EVENT CHATTER
 # --------------------------------------------

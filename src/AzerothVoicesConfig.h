@@ -499,6 +499,9 @@ namespace AzerothVoices
         uint32_t environmentMaximumItems = 8;
         bool environmentIncludeEquipment = true;
         bool environmentIncludeBackpack = false;
+        bool environmentIncludeWeather = true;
+        bool environmentIncludeTimeOfDay = true;
+        bool environmentIncludeSubNames = true;
 
         bool eventChatterEnabled = true;
         bool eventAllowNpcSay = true;
