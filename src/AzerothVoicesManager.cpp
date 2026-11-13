@@ -2585,11 +2585,32 @@ namespace AzerothVoices
             request.userPrompt = "Create one natural line now. Situation or topic: " + message;
         else if (trigger.compare(0, 6, "event:") == 0)
         {
-            std::string cat = SampleCategory(m_config->eventCategoryWeights, "entertainment");
-            std::string tone = GetRandomPromptForCategory(cat, "event");
-            if (tone.empty())
-                tone = "React naturally to this in-game event";
-            request.userPrompt = tone + ": " + message;
+            if (trigger == "event:game_event_started")
+            {
+                std::string eventName = message;
+                std::string const prefix = "game event started: ";
+                if (eventName.compare(0, prefix.size(), prefix) == 0)
+                    eventName = eventName.substr(prefix.size());
+
+                request.userPrompt = "A major world event known as '" + eventName + "' has just begun. Speak about '" + eventName + "' in character as an adventurer. Refer to it specifically by name and do not refer to it generically as 'an in-game event' or 'another event'.";
+            }
+            else if (trigger == "event:game_event_stopped")
+            {
+                std::string eventName = message;
+                std::string const prefix = "game event stopped: ";
+                if (eventName.compare(0, prefix.size(), prefix) == 0)
+                    eventName = eventName.substr(prefix.size());
+
+                request.userPrompt = "The world event known as '" + eventName + "' has just concluded. Speak about '" + eventName + "' in character as an adventurer. Refer to it specifically by name and do not refer to it generically as 'an in-game event' or 'another event'.";
+            }
+            else
+            {
+                std::string cat = SampleCategory(m_config->eventCategoryWeights, "entertainment");
+                std::string tone = GetRandomPromptForCategory(cat, "event");
+                if (tone.empty())
+                    tone = "React naturally to this in-game event";
+                request.userPrompt = tone + ": " + message;
+            }
         }
         else if (trigger == "targeted-npc-observer")
         {
@@ -10719,6 +10740,34 @@ namespace AzerothVoices
         }
     }
 
+    void Manager::EnsureGameEventMapsLoaded()
+    {
+        std::lock_guard<std::mutex> lock(m_gameEventMapsMutex);
+        if (m_gameEventMapsLoaded)
+            return;
+        m_gameEventMapsLoaded = true;
+        m_gameEventMaps.clear();
+
+        std::string const query =
+            "SELECT gec.event, c.map FROM game_event_creature gec JOIN creature c ON gec.guid = c.guid "
+            "UNION "
+            "SELECT gego.event, go.map FROM game_event_gameobject gego JOIN gameobject go ON gego.guid = go.guid";
+        std::unique_ptr<QueryResult> result(WorldDatabase.Query(query.c_str()));
+        if (result)
+        {
+            do
+            {
+                Field* fields = result->Fetch();
+                int16_t ev = fields[0].GetInt16();
+                if (ev > 0)
+                {
+                    uint32_t mapId = fields[1].GetUInt32();
+                    m_gameEventMaps[static_cast<uint16_t>(ev)].insert(mapId);
+                }
+            } while (result->NextRow());
+        }
+    }
+
     void Manager::HandleGameEventState(uint16_t eventId, bool started, std::string const& description)
     {
         if (!m_started || !m_config || !m_config->enabled || m_paused)
@@ -10734,29 +10783,47 @@ namespace AzerothVoices
         if (desc.empty())
             desc = "event " + std::to_string(eventId);
 
+        EnsureGameEventMapsLoaded();
+
+        std::set<uint32_t> eventMaps;
+        bool hasSpecificMaps = false;
+        {
+            std::lock_guard<std::mutex> lock(m_gameEventMapsMutex);
+            auto const it = m_gameEventMaps.find(eventId);
+            if (it != m_gameEventMaps.end() && !it->second.empty())
+            {
+                eventMaps = it->second;
+                hasSpecificMaps = true;
+            }
+        }
+
         std::vector<Player*> targets;
         {
             HashMapHolder<Player>::ReadGuard guard(HashMapHolder<Player>::GetLock());
             for (auto const& entry : sObjectAccessor.GetPlayers())
             {
                 Player* player = entry.second;
-                if (player && player->IsInWorld() && player->IsAlive())
-                {
-                    if (!Script_IsAIControlled(player))
-                        targets.push_back(player);
-                }
-            }
-            if (targets.empty())
-            {
-                for (auto const& entry : sObjectAccessor.GetPlayers())
-                {
-                    Player* player = entry.second;
-                    if (player && player->IsInWorld() && player->IsAlive())
-                    {
-                        targets.push_back(player);
-                        break;
-                    }
-                }
+                if (!player || !player->IsInWorld() || !player->IsAlive())
+                    continue;
+
+                if (Script_IsAIControlled(player))
+                    continue;
+
+                Map* map = player->GetMap();
+                if (!map)
+                    continue;
+
+                // 1. Dungeon, Raid, Battleground & Arena Isolation:
+                // Skip players running inside any instanced content (dungeon, raid, battleground, arena)
+                if (map->IsDungeon() || map->IsBattleGround() || map->Instanceable() || player->InBattleGround() || player->InArena())
+                    continue;
+
+                // 2. Proximity / Continent Filtering:
+                // If the game event is tied to specific maps, only trigger for players on matching maps
+                if (hasSpecificMaps && eventMaps.find(player->GetMapId()) == eventMaps.end())
+                    continue;
+
+                targets.push_back(player);
             }
         }
 

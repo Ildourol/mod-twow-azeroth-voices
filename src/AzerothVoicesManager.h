@@ -129,6 +129,7 @@ namespace AzerothVoices
         void HandleCombatStart(Player* player, Creature* creature);
         void HandlePlayerMapChanged(Player* player);
         void HandleGameEventState(uint16_t eventId, bool started, std::string const& description = "");
+        void EnsureGameEventMapsLoaded();
 
         bool ForceAmbient(Player* anchor, std::string const& instruction = "");
         bool QueueTest(Player* requester, std::string const& actorName, std::string const& instruction);
@@ -772,6 +773,11 @@ namespace AzerothVoices
         std::atomic<uint64_t> m_thinkingFallbacks{ 0 };
         std::array<uint64_t, static_cast<size_t>(PreflightReason::Count)> m_preflightRejections{};
         std::atomic<bool> m_started;
+
+        // Game Event spatial mapping
+        std::mutex m_gameEventMapsMutex;
+        std::unordered_map<uint16_t, std::set<uint32_t>> m_gameEventMaps;
+        bool m_gameEventMapsLoaded = false;
 
         // Section 25: Emotes and Conversation Facing
         struct FacingLease
