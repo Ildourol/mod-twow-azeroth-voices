@@ -564,7 +564,7 @@ namespace AzerothVoices
         c.maxResponders.chanceDelta = Percent("AzerothVoices.ResponderFalloff.Delta", 20);
         c.sayDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.SayDistance", 25.0f));
         c.yellDistance = std::max(c.sayDistance, sConfig.GetFloatDefault("AzerothVoices.YellDistance", 100.0f));
-        c.npcDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.NPC.Distance", 10.0f));
+        c.npcDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.NPC.Distance", 25.0f));
         c.npcAllowedTypes = UnsignedSet("AzerothVoices.NPC.AllowedTypes", "2,3,4,5,6,7,9", 11);
         c.npcAllowNeutralAndHostile = sConfig.GetBoolDefault(
             "AzerothVoices.NPC.AllowNeutralAndHostile", true);
@@ -637,8 +637,8 @@ namespace AzerothVoices
 
         c.proximityEnabled = sConfig.GetBoolDefault("AzerothVoices.Proximity.Enable", true);
         c.proximityPacingEnabled = sConfig.GetBoolDefault("AzerothVoices.Proximity.Pacing.Enable", true);
-        c.proximityPlayerDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.Proximity.PlayerDistance", 10.0f));
-        c.proximityInterNpcDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.Proximity.InterNpcDistance", 10.0f));
+        c.proximityPlayerDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.Proximity.PlayerDistance", 25.0f));
+        c.proximityInterNpcDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.Proximity.InterNpcDistance", 25.0f));
         c.proximityReplyDelayMinSeconds = Bounded("AzerothVoices.Proximity.Pacing.ReplyDelayMinSeconds", 4, 1, 120);
         c.proximityReplyDelayMaxSeconds = Bounded("AzerothVoices.Proximity.Pacing.ReplyDelayMaxSeconds", 9, c.proximityReplyDelayMinSeconds, 120);
         c.proximityMinimumGapSeconds = Bounded("AzerothVoices.Proximity.Pacing.MinimumGapSeconds", 45, 0, 86400);
@@ -669,7 +669,7 @@ namespace AzerothVoices
         c.npcRandomMinimumIntervalSeconds = Positive("AzerothVoices.NPC.Random.MinimumIntervalSeconds", 300, 10);
         c.npcRandomMaximumIntervalSeconds = Positive("AzerothVoices.NPC.Random.MaximumIntervalSeconds", 600, c.npcRandomMinimumIntervalSeconds);
         c.npcRandomChance = Percent("AzerothVoices.NPC.Random.Chance", 25);
-        c.npcRandomDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.NPC.Random.Distance", 10.0f));
+        c.npcRandomDistance = std::max(1.0f, sConfig.GetFloatDefault("AzerothVoices.NPC.Random.Distance", 25.0f));
         c.npcRandomEntityCooldownSeconds = Positive("AzerothVoices.NPC.Random.EntityCooldownSeconds", 900, 0);
         c.npcRandomExcludeGuardsAndServices = sConfig.GetBoolDefault("AzerothVoices.NPC.Random.ExcludeGuardsAndServices", false);
         c.npcRandomCategoryWeights = ParseCategoryWeights(sConfig.GetStringDefault(

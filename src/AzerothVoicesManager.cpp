@@ -3966,7 +3966,7 @@ namespace AzerothVoices
         Player* anchor = nullptr;
         std::vector<Creature*> eligible;
 
-        float const dist = m_config->npcRandomDistance > 0.0f ? m_config->npcRandomDistance : 10.0f;
+        float const dist = m_config->npcRandomDistance > 0.0f ? m_config->npcRandomDistance : 25.0f;
         auto const now = Clock::now();
 
         if (m_npcRandomCooldowns.size() > 512)
@@ -10960,7 +10960,7 @@ namespace AzerothVoices
             return false;
 
         float const playerDist = m_config->proximityPlayerDistance > 0.0f
-            ? m_config->proximityPlayerDistance : 10.0f;
+            ? m_config->proximityPlayerDistance : 25.0f;
         MaNGOS::AllCreaturesInRange check(anchor, playerDist);
         std::list<Creature*> creatures;
         MaNGOS::CreatureListSearcher<MaNGOS::AllCreaturesInRange> searcher(creatures, check);
@@ -11002,7 +11002,7 @@ namespace AzerothVoices
         if (wantsConversation)
         {
             float const interNpcDist = m_config->proximityInterNpcDistance > 0.0f
-                ? m_config->proximityInterNpcDistance : 10.0f;
+                ? m_config->proximityInterNpcDistance : 25.0f;
             MaNGOS::AllCreaturesInRange secondCheck(first, interNpcDist);
             std::list<Creature*> secondCreatures;
             MaNGOS::CreatureListSearcher<MaNGOS::AllCreaturesInRange> secondSearcher(secondCreatures, secondCheck);
@@ -11161,7 +11161,7 @@ namespace AzerothVoices
                     continue;
 
                 float const maxDist = m_config->proximityPlayerDistance > 0.0f
-                    ? m_config->proximityPlayerDistance : 10.0f;
+                    ? m_config->proximityPlayerDistance : 25.0f;
                 if (!creature->IsWithinDist(anchor, maxDist, false))
                     continue;
 

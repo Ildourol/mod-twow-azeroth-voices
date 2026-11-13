@@ -204,7 +204,7 @@ namespace AzerothVoices
         ResponderLimit maxResponders;
         float sayDistance = 25.0f;
         float yellDistance = 100.0f;
-        float npcDistance = 10.0f;
+        float npcDistance = 25.0f;
         std::set<uint32_t> npcAllowedTypes = { 2, 3, 4, 5, 6, 7, 9 };
         bool npcAllowNeutralAndHostile = true;
         uint32_t npcFriendlyReplyChance = 100;
@@ -254,8 +254,8 @@ namespace AzerothVoices
 
         bool proximityEnabled = true;
         bool proximityPacingEnabled = true;
-        float proximityPlayerDistance = 10.0f;
-        float proximityInterNpcDistance = 10.0f;
+        float proximityPlayerDistance = 25.0f;
+        float proximityInterNpcDistance = 25.0f;
         uint32_t proximityReplyDelayMinSeconds = 4;
         uint32_t proximityReplyDelayMaxSeconds = 9;
         uint32_t proximityMinimumGapSeconds = 60;
@@ -285,7 +285,7 @@ namespace AzerothVoices
         uint32_t npcRandomMinimumIntervalSeconds = 300;
         uint32_t npcRandomMaximumIntervalSeconds = 600;
         uint32_t npcRandomChance = 25;
-        float npcRandomDistance = 10.0f;
+        float npcRandomDistance = 25.0f;
         uint32_t npcRandomEntityCooldownSeconds = 900;
         bool npcRandomExcludeGuardsAndServices = false;
         std::vector<CategoryWeight> npcRandomCategoryWeights;

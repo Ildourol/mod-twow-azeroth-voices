@@ -955,8 +955,8 @@ AzerothVoices.NPC.Enable = 1
 #                  maximum actor-to-actor distance for every generated follow-up pair
 #                  containing an NPC. Both follow-up actors must share one real-human
 #                  observer within SayDistance. (Decimal yards, minimum 1.)
-#     Default:     10
-AzerothVoices.NPC.Distance = 10
+#     Default:     25
+AzerothVoices.NPC.Distance = 25
 
 # AzerothVoices.NPC.AllowedTypes
 #     Description: Creature types eligible for generated NPC speech. Defaults to
@@ -1145,13 +1145,13 @@ AzerothVoices.Proximity.IncludeInstances = 1
 
 # AzerothVoices.Proximity.PlayerDistance
 #     Description: Maximum distance from the anchor player to the first NPC to trigger proximity chat.
-#     Default:     10.0
-AzerothVoices.Proximity.PlayerDistance = 10.0
+#     Default:     25.0
+AzerothVoices.Proximity.PlayerDistance = 25.0
 
 # AzerothVoices.Proximity.InterNpcDistance
 #     Description: Maximum distance between NPCs for multi-NPC dialogue.
-#     Default:     10.0
-AzerothVoices.Proximity.InterNpcDistance = 10.0
+#     Default:     25.0
+AzerothVoices.Proximity.InterNpcDistance = 25.0
 
 # AzerothVoices.Proximity.Pacing.Enable
 #     Description: Enables per-area pacing timeline reservation for proximity conversations.
@@ -2258,8 +2258,8 @@ AzerothVoices.NPC.Random.Chance = 25
 # AzerothVoices.NPC.Random.Distance
 #     Description: Maximum radius around a real player to find an eligible speaking NPC.
 #                  (Yards, minimum 1.0.)
-#     Default:     10.0
-AzerothVoices.NPC.Random.Distance = 10.0
+#     Default:     25.0
+AzerothVoices.NPC.Random.Distance = 25.0
 
 # AzerothVoices.NPC.Random.EntityCooldownSeconds
 #     Description: Repeat cooldown for an NPC that spoke random chatter. Also syncs with
