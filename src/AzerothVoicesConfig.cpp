@@ -944,9 +944,9 @@ namespace AzerothVoices
         c.eventResponderChance = Percent("AzerothVoices.Events.ResponderChance", 15);
         c.eventSelfCommentChance = Percent("AzerothVoices.Events.SelfCommentChance", 5);
         c.eventMaximumResponders = Positive("AzerothVoices.Events.MaximumResponders", 2, 1);
-        c.eventCooldownSeconds = Positive("AzerothVoices.Events.CooldownSeconds", 90);
+        c.eventCooldownSeconds = Positive("AzerothVoices.Events.CooldownSeconds", 300);
         c.eventExcludeGuardsAndServices = sConfig.GetBoolDefault("AzerothVoices.Events.ExcludeGuardsAndServices", false);
-        c.eventNpcCooldownSeconds = Positive("AzerothVoices.Events.NpcCooldownSeconds", 180, 0);
+        c.eventNpcCooldownSeconds = Positive("AzerothVoices.Events.NpcCooldownSeconds", 600, 0);
         c.eventChances = {
             { "creature_defeated", Percent("AzerothVoices.Events.Chance.CreatureDefeated", 8) },
             { "player_defeated", Percent("AzerothVoices.Events.Chance.PlayerDefeated", 40) },

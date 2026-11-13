@@ -509,9 +509,9 @@ namespace AzerothVoices
         uint32_t eventResponderChance = 15;
         uint32_t eventSelfCommentChance = 5;
         uint32_t eventMaximumResponders = 2;
-        uint32_t eventCooldownSeconds = 90;
+        uint32_t eventCooldownSeconds = 300;
         bool eventExcludeGuardsAndServices = false;
-        uint32_t eventNpcCooldownSeconds = 180;
+        uint32_t eventNpcCooldownSeconds = 600;
         std::map<std::string, uint32_t> eventChances;
         std::vector<CategoryWeight> eventCategoryWeights;
 

@@ -2773,8 +2773,8 @@ AzerothVoices.Events.MaximumSayNpcResponders = 1
 
 # AzerothVoices.Events.CooldownSeconds
 #     Description: Per-subject/per-event repeat cooldown. (Seconds, minimum 0.)
-#     Default:     90
-AzerothVoices.Events.CooldownSeconds = 90
+#     Default:     300
+AzerothVoices.Events.CooldownSeconds = 300
 
 # AzerothVoices.Events.ExcludeGuardsAndServices
 #     Description: Excludes guards, vendors, quest-givers, innkeepers, armorers, gossips, and
@@ -2789,8 +2789,8 @@ AzerothVoices.Events.ExcludeGuardsAndServices = 0
 #                  to double the PlayerBot event cooldown (180 seconds vs 90 seconds) to keep
 #                  event chatter paced and prevent repetitive NPC commentary. (Seconds, minimum 0.)
 #     Accepted:    0-86400
-#     Default:     180
-AzerothVoices.Events.NpcCooldownSeconds = 180
+#     Default:     600
+AzerothVoices.Events.NpcCooldownSeconds = 600
 
 # AzerothVoices.Events.CategoryWeights
 #     Description: Percentage chance distribution for reactions to in-game events (kills, deaths, wipes, level-ups):
